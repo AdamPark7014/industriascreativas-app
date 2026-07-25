@@ -27,19 +27,22 @@
                 <div class="col w-33">
                     <div class="field-group">
                         <label for="nombre">*Nombre</label>
-                        <input type="text" id="nombre" name="nombre" required>
+                        <input type="text" id="nombre" name="nombre" required
+                        style="text-transform: uppercase;" oninput="this.value = this.value.toUpperCase()">
                     </div>
                 </div>
                 <div class="col w-33">
                     <div class="field-group">
                         <label for="apellido_paterno">*Apellido Paterno</label>
-                        <input type="text" id="apellido_paterno" name="apellido_paterno" required>
+                        <input type="text" id="apellido_paterno" name="apellido_paterno" required
+                        style="text-transform: uppercase;" oninput="this.value = this.value.toUpperCase()">
                     </div>
                 </div>
                 <div class="col w-33">
                     <div class="field-group">
                         <label for="apellido_materno">Apellido Materno</label>
-                        <input type="text" id="apellido_materno" name="apellido_materno">
+                        <input type="text" id="apellido_materno" name="apellido_materno"
+                        style="text-transform: uppercase;" oninput="this.value = this.value.toUpperCase()">
                     </div>
                 </div>
             </div>
@@ -48,13 +51,15 @@
                 <div class="col w-33">
                     <div class="field-group">
                         <label for="cargo">Cargo</label>
-                        <input type="text" id="cargo" name="cargo">
+                        <input type="text" id="cargo" name="cargo"
+                        style="text-transform: uppercase;" oninput="this.value = this.value.toUpperCase()">
                     </div>
                 </div>
                 <div class="col w-33">
                     <div class="field-group">
                         <label for="empresa">*Empresa</label>
-                        <input type="text" id="empresa" name="empresa" required>
+                        <input type="text" id="empresa" name="empresa" required
+                        style="text-transform: uppercase;" oninput="this.value = this.value.toUpperCase()">
                     </div>
                 </div>
                 <div class="col w-33">
@@ -75,7 +80,10 @@
                 <div class="col w-33">
                     <div class="field-group">
                         <label for="telefono">*Teléfono</label>
-                        <input type="tel" id="telefono" name="telefono" required>
+                        <input type="tel" id="telefono" name="telefono" required
+                        inputmode="numeric" 
+                        maxlength="10" pattern="[0-9]{10}"
+                        oninput="this.value = this.value.replace(/[^0-9]/g, '')">
                     </div>
                 </div>
                 <div class="col w-33">
@@ -92,7 +100,10 @@
                 <div class="col w-33">
                     <div class="field-group">
                         <label for="codigo_postal">*Código Postal (Seleccione su código postal)</label>
-                        <input type="text" id="codigo_postal" name="codigo_postal" required>
+                        <input type="text" id="codigo_postal" name="codigo_postal" required
+                        inputmode="numeric" 
+                        maxlength="5" pattern="[0-9]{5}"
+                        oninput="this.value = this.value.replace(/[^0-9]/g, '')">
                     </div>
                 </div>
             </div>
@@ -101,13 +112,15 @@
                 <div class="col w-50">
                     <div class="field-group">
                         <label for="ciudad">*Ciudad</label>
-                        <input type="text" id="ciudad" name="ciudad" required>
+                        <input type="text" id="ciudad" name="ciudad" required
+                        style="text-transform: uppercase;" oninput="this.value = this.value.toUpperCase()">
                     </div>
                 </div>
                 <div class="col w-50">
                     <div class="field-group">
                         <label for="calle_numero">Calle y número</label>
-                        <input type="text" id="calle_numero" name="calle_numero">
+                        <input type="text" id="calle_numero" name="calle_numero"
+                        style="text-transform: uppercase;" oninput="this.value = this.value.toUpperCase()">
                     </div>
                 </div>
             </div>

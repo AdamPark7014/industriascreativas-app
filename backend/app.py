@@ -1,16 +1,17 @@
 import os
 import io
 import re
-import threading
-import subprocess
 import qrcode 
-
+from reportlab.lib.pagesizes import portrait
+from reportlab.lib.units import cm
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
+from PIL import Image, ImageDraw, ImageFont
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.dialects.postgresql import ARRAY
 from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadTimeSignature
-from PIL import Image, ImageDraw, ImageFont
 
 app = Flask(__name__, template_folder='../frontend', static_folder='../css')
 
@@ -48,6 +49,20 @@ class Alumno(db.Model):
     asistencias = db.Column(db.Integer, default=0)      
 
 
+class eventlisa(db.Model):
+    __tablename__ = 'Registro_elisaCarrillo'
+    __table_args__ = {'schema': 'public'}
+
+    idEmpresario = db.Column('idUsuario', db.Integer, primary_key=True)
+    Nombre = db.Column('Nombre', db.String(100), nullable=False)
+    Telefono = db.Column('Telefono', db.String(20), nullable=False)
+    CodigoPostal = db.Column('CodigoPostal', db.String(20), nullable=False)
+    Correo = db.Column('Correo', db.String(150), nullable=False, unique=True)
+    confirmado = db.Column('confirmado', db.Boolean, default=False)
+    qr_code = db.Column('qr_code', db.LargeBinary, nullable=True)
+    asistencias = db.Column(db.Integer, default=0)
+
+
 class Empresario(db.Model):
     __tablename__ = 'Registro_Empresarios'
     __table_args__ = {'schema': 'public'}
@@ -66,7 +81,6 @@ class Empresario(db.Model):
     CalleNumero = db.Column('CalleNumero', db.String(150), nullable=True)
     Correo = db.Column('Correo', db.String(150), nullable=False, unique=True)
     
-    # Datos del perfil empresarial / encuesta
     PosicionEmpresa = db.Column('PosicionEmpresa', db.String(150), nullable=True)
     AreaResponsabilidad = db.Column('AreaResponsabilidad', db.String(150), nullable=True)
     SectorIndustria = db.Column('SectorIndustria', ARRAY(db.String(100)), nullable=True)
@@ -82,17 +96,15 @@ class Empresario(db.Model):
 
 
 # ==========================================
-# FUNCIONES AUXILIARES
+# FUNCIONES AUXILIARES & GENERACIÓN DE PDF
 # ==========================================
 
 def es_correo_valido(correo):
-    """ Valida si la cadena tiene un formato de correo electrónico correcto """
     patron = r'^[\w\.-]+@[\w\.-]+\.\w+$'
     return re.match(patron, correo) is not None
 
 
 def generar_bytes_qr(contenido):
-    """ Genera solo el QR binario para la base de datos """
     qr = qrcode.QRCode(
         version=1,
         error_correction=qrcode.constants.ERROR_CORRECT_L,
@@ -108,132 +120,297 @@ def generar_bytes_qr(contenido):
     return buffer.getvalue()
 
 
-def crear_diseno_gafete(bytes_qr, id_usuario, nombre_usuario):
-    """ Crea un ticket adaptado para rollo térmico de 62mm con texto auto-ajustable """
+# ---------------------------------------------------------
+# GAFETE EXCLUSIVO PARA EVENTO ELISA CARRILLO (Imagen a 7cm)
+# ---------------------------------------------------------
+def crear_pdf_gafete_elisa(usuario):
+    """ Genera gafete para Elisa Carrillo: Imagen a 7cm, texto grande a la izquierda y QR a la derecha """
+    ANCHO = 9.0 * cm
+    ALTO = 14.0 * cm
+
+    buffer_pdf = io.BytesIO()
+    c = canvas.Canvas(buffer_pdf, pagesize=(ANCHO, ALTO))
+
+    # 1. Imagen fijada EXACTAMENTE a 7 cm de alto
+    alto_imagen = 7.0 * cm
+    ruta_cartel = "backend/GALA DE ESTELLAS.png"
     
-    ANCHO, ALTO = 600, 900
-    gafete = Image.new('RGB', (ANCHO, ALTO), 'white')
-    draw = ImageDraw.Draw(gafete)
+    pos_y_actual = ALTO - alto_imagen - (0.3 * cm)
 
-    # 1. Cargar Logo
-    ruta_logo = "backend/logo-nexara-lockup.png"
-    if os.path.exists(ruta_logo):
+    if os.path.exists(ruta_cartel):
         try:
-            logo = Image.open(ruta_logo)
-            logo_ancho, logo_alto = 300, 300
-            logo = logo.resize((logo_ancho, logo_alto))
-            pos_logo_x = (ANCHO - logo_ancho) // 2
-            pos_logo_y = 30
+            cartel_img = ImageReader(ruta_cartel)
+            img_w, img_h = cartel_img.getSize()
+            ancho_proporcional = alto_imagen * (img_w / img_h)
+            
+            if ancho_proporcional > (ANCHO - 0.4 * cm):
+                ancho_proporcional = ANCHO - 0.4 * cm
 
-            if logo.mode == 'RGBA':
-                gafete.paste(logo, (pos_logo_x, pos_logo_y), logo)
-            else:
-                gafete.paste(logo.convert('RGB'), (pos_logo_x, pos_logo_y))
-        except Exception as err_img:
-            print(f"⚠️ Error cargando logo: {err_img}")
+            pos_x = (ANCHO - ancho_proporcional) / 2
+            c.drawImage(cartel_img, pos_x, pos_y_actual, width=ancho_proporcional, height=alto_imagen, mask='auto')
+        except Exception as e:
+            print(f"⚠️ Error cargando cartel Elisa: {e}")
 
-    # 2. Cargar Fuentes
-    try:
-        fnt_titulo = ImageFont.truetype("arial.ttf", 32)
-        fnt_texto = ImageFont.truetype("arial.ttf", 26)
-    except:
-        fnt_titulo = ImageFont.load_default()
-        fnt_texto = ImageFont.load_default()
+    # =========================================================
+    # SECCIÓN INFERIOR: Texto a la izquierda | QR a la derecha
+    # =========================================================
+    c.setFillColorRGB(0, 0, 0)
+    
+    # Coordenadas base
+    margen_izq = 0.5 * cm
+    y_texto = pos_y_actual - 0.7 * cm
 
-    # 3. Dibujar Encabezado y Folio
-    draw.text((30, 350), "BALLETE ELISA CARRILLO ", fill="black", font=fnt_titulo)
-    draw.text((30, 400), f"Folio: {id_usuario}", fill="black", font=fnt_texto)
+    # 2. Datos del usuario ALINEADOS A LA IZQUIERDA (Fuentes más grandes)
+    nombre = usuario.Nombre.upper()
+    c.setFont("Helvetica-Bold", 11)
+    
+    # Dividir el nombre si es muy largo para que no invada el QR
+    if len(nombre) > 18:
+        partes = nombre.split(' ')
+        mitad = len(partes) // 2
+        c.drawString(margen_izq, y_texto, " ".join(partes[:mitad]))
+        y_texto -= 0.45 * cm
+        c.drawString(margen_izq, y_texto, " ".join(partes[mitad:]))
+    else:
+        c.drawString(margen_izq, y_texto, nombre)
 
-    # 4. Manejo Inteligente del Nombre Completo (Salto de línea si es largo)
+    y_texto -= 0.5 * cm
+    c.setFont("Helvetica", 9)
+    c.drawString(margen_izq, y_texto, f"Correo: {usuario.Correo}")
+
+    y_texto -= 0.45 * cm
+    c.drawString(margen_izq, y_texto, f"Tel: {usuario.Telefono}")
+
+    y_texto -= 0.45 * cm
+    c.drawString(margen_izq, y_texto, f"C.P.: {usuario.CodigoPostal}")
+
+    # 3. Código QR ALINEADO A LA DERECHA
+    qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=10, border=1)
+    qr.add_data(f"ELISA_CARRILLO-{usuario.idEmpresario}")
+    qr.make(fit=True)
+    
+    qr_img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
+    qr_buffer = io.BytesIO()
+    qr_img.save(qr_buffer, format="PNG")
+    qr_buffer.seek(0)
+    
+    qr_reader = ImageReader(qr_buffer)
+    
+    tamano_qr = 3.3 * cm
+    pos_qr_x = ANCHO - tamano_qr - (0.5 * cm)  # Ubicado en la esquina derecha
+    pos_qr_y = pos_y_actual - tamano_qr - 0.4 * cm
+    
+    c.drawImage(qr_reader, pos_qr_x, pos_qr_y, width=tamano_qr, height=tamano_qr)
+
+    # 4. Folio DEBAJO del código QR (Centrado con respecto al QR)
+    pos_y_folio = pos_qr_y - 0.4 * cm
+    c.setFont("Helvetica-Bold", 9)
+    c.drawCentredString(pos_qr_x + (tamano_qr / 2), pos_y_folio, f"Folio: {usuario.idEmpresario}")
+
+    c.showPage()
+    c.save()
+
+    pdf_data = buffer_pdf.getvalue()
+    buffer_pdf.close()
+
+    # Guardar copia local
+    carpeta_destino = "gafetes_guardados"
+    os.makedirs(carpeta_destino, exist_ok=True)
+    nombre_limpio = usuario.Nombre.replace(' ', '_')
+    ruta_guardado = os.path.join(carpeta_destino, f"Gafete_ELISA_{usuario.idEmpresario}_{nombre_limpio}.pdf")
+
+    with open(ruta_guardado, "wb") as f:
+        f.write(pdf_data)
+
+    return pdf_data
+    """ Genera gafete para Elisa Carrillo con la imagen fijada a 9 cm de alto """
+    ANCHO = 9.0 * cm
+    ALTO = 14.0 * cm
+
+    buffer_pdf = io.BytesIO()
+    c = canvas.Canvas(buffer_pdf, pagesize=(ANCHO, ALTO))
+
+    # 1. Imagen fijada EXACTAMENTE a 9 cm de alto
+    alto_imagen = 6.0 * cm
+    ruta_cartel = "backend/GALA DE ESTELLAS.png"
+    
+    pos_y_actual = ALTO - alto_imagen - (0.2 * cm)
+
+    if os.path.exists(ruta_cartel):
+        try:
+            cartel_img = ImageReader(ruta_cartel)
+            img_w, img_h = cartel_img.getSize()
+            ancho_proporcional = alto_imagen * (img_w / img_h)
+            
+            if ancho_proporcional > (ANCHO - 0.4 * cm):
+                ancho_proporcional = ANCHO - 0.4 * cm
+
+            pos_x = (ANCHO - ancho_proporcional) / 2
+            c.drawImage(cartel_img, pos_x, pos_y_actual, width=ancho_proporcional, height=alto_imagen, mask='auto')
+        except Exception as e:
+            print(f"⚠️ Error cargando cartel Elisa: {e}")
+
+    # 2. Datos del usuario (Nombre, Correo, Teléfono, CP)
+    c.setFillColorRGB(0, 0, 0)
+    pos_y_actual -= 0.4 * cm
+
+    c.setFont("Helvetica-Bold", 9)
+    c.drawCentredString(ANCHO / 2, pos_y_actual, f"{usuario.Nombre.upper()}")
+    pos_y_actual -= 0.35 * cm
+
+    c.setFont("Helvetica", 7)
+    c.drawCentredString(ANCHO / 2, pos_y_actual, f"{usuario.Correo}")
+    pos_y_actual -= 0.3 * cm
+    c.drawCentredString(ANCHO / 2, pos_y_actual, f"Tel: {usuario.Telefono} | CP: {usuario.CodigoPostal}")
+    pos_y_actual -= 0.3 * cm
+
+    # 3. Código QR
+    qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=10, border=1)
+    qr.add_data(f"ELISA_CARRILLO-{usuario.idEmpresario}")
+    qr.make(fit=True)
+    
+    qr_img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
+    qr_buffer = io.BytesIO()
+    qr_img.save(qr_buffer, format="PNG")
+    qr_buffer.seek(0)
+    
+    qr_reader = ImageReader(qr_buffer)
+    tamano_qr = 1.8 * cm
+    pos_qr_x = (ANCHO - tamano_qr) / 2
+    pos_qr_y = pos_y_actual - tamano_qr
+    
+    c.drawImage(qr_reader, pos_qr_x, pos_qr_y, width=tamano_qr, height=tamano_qr)
+
+    # 4. Folio DEBAJO del código QR
+    pos_y_folio = pos_qr_y - (0.3 * cm)
+    c.setFont("Helvetica-Bold", 8)
+    c.drawCentredString(ANCHO / 2, pos_y_folio, f"Folio: {usuario.idEmpresario}")
+
+    c.showPage()
+    c.save()
+
+    pdf_data = buffer_pdf.getvalue()
+    buffer_pdf.close()
+
+    carpeta_destino = "gafetes_guardados"
+    os.makedirs(carpeta_destino, exist_ok=True)
+    nombre_limpio = usuario.Nombre.replace(' ', '_')
+    ruta_guardado = os.path.join(carpeta_destino, f"Gafete_ELISA_{usuario.idEmpresario}_{nombre_limpio}.pdf")
+
+    with open(ruta_guardado, "wb") as f:
+        f.write(pdf_data)
+
+    return pdf_data
+
+
+# ---------------------------------------------------------
+# GAFETE ESTÁNDAR (Para Alumnos y Empresarios)
+# ---------------------------------------------------------
+def crear_pdf_gafete(id_usuario, nombre_usuario, tipo_usuario="ALUMNO"):
+    nombre_usuario = str(nombre_usuario).upper() if nombre_usuario else ""
+    tipo_usuario = str(tipo_usuario).upper()
+
+    ANCHO = 6.0 * 72
+    ALTO = 9.0 * 72
+
+    buffer_pdf = io.BytesIO()
+    c = canvas.Canvas(buffer_pdf, pagesize=(ANCHO, ALTO))
+    pos_y_disponible = ALTO - 15
+
+    ruta_cartel = "backend/GALA DE ESTELLAS.png"
+    if os.path.exists(ruta_cartel):
+        try:
+            cartel_img = ImageReader(ruta_cartel)
+            img_w, img_h = cartel_img.getSize()
+            cartel_ancho = 5.6 * 72
+            cartel_alto = cartel_ancho * (img_h / img_w)
+            
+            pos_x = (ANCHO - cartel_ancho) / 2
+            pos_y = ALTO - cartel_alto - 15
+            
+            c.drawImage(cartel_img, pos_x, pos_y, width=cartel_ancho, height=cartel_alto, mask='auto')
+            pos_y_disponible = pos_y - 25
+        except Exception as e:
+            pos_y_disponible = ALTO - 100
+
+    c.setFillColorRGB(0, 0, 0)
+    c.setFont("Helvetica-Bold", 18)
+    c.drawCentredString(ANCHO / 2, pos_y_disponible, f"TIPO: {tipo_usuario}")
+    
+    c.setFont("Helvetica", 15)
+    c.drawCentredString(ANCHO / 2, pos_y_disponible - 25, f"Folio: {id_usuario}")
+
+    c.setFont("Helvetica-Bold", 15)
     if len(nombre_usuario) > 22:
         partes = nombre_usuario.split(' ')
         mitad = len(partes) // 2
         linea1 = " ".join(partes[:mitad])
         linea2 = " ".join(partes[mitad:])
-        
-        draw.text((30, 440), f"Nombre: {linea1}", fill="black", font=fnt_texto)
-        draw.text((30, 475), f"        {linea2}", fill="black", font=fnt_texto)
+        c.drawCentredString(ANCHO / 2, pos_y_disponible - 55, f"Nombre: {linea1}")
+        c.drawCentredString(ANCHO / 2, pos_y_disponible - 75, linea2)
+        ultimo_y_texto = pos_y_disponible - 75
     else:
-        draw.text((30, 440), f"Nombre: {nombre_usuario}", fill="black", font=fnt_texto)
+        c.drawCentredString(ANCHO / 2, pos_y_disponible - 55, f"Nombre: {nombre_usuario}")
+        ultimo_y_texto = pos_y_disponible - 55
 
-    # 5. Código QR
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_M,
-        box_size=10,
-        border=1,
-    )
-    qr.add_data(str(id_usuario))
+    qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=10, border=1)
+    qr.add_data(f"{tipo_usuario}-{id_usuario}")
     qr.make(fit=True)
     
     qr_img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
-    qr_ancho, qr_alto = qr_img.size
-    pos_qr_x = (ANCHO - qr_ancho) // 2
-    pos_qr_y = 530
+    qr_buffer = io.BytesIO()
+    qr_img.save(qr_buffer, format="PNG")
+    qr_buffer.seek(0)
     
-    gafete.paste(qr_img, (pos_qr_x, pos_qr_y))
-    draw.text((pos_qr_x + 10, pos_qr_y + qr_alto + 15), "", fill="black", font=fnt_texto)
+    qr_reader = ImageReader(qr_buffer)
+    qr_tamano = 1.4 * 72
+    pos_qr_x = (ANCHO - qr_tamano) / 2
+    pos_qr_y = max(15, ultimo_y_texto - qr_tamano - 15)
+    
+    c.drawImage(qr_reader, pos_qr_x, pos_qr_y, width=qr_tamano, height=qr_tamano)
 
-    buffer_gafete = io.BytesIO()
-    gafete.save(buffer_gafete, format="PNG")
-    return buffer_gafete.getvalue()
+    c.showPage()
+    c.save()
+
+    pdf_data = buffer_pdf.getvalue()
+    buffer_pdf.close()
+    return pdf_data
 
 
-def _imprimir_proceso(bytes_qr, id_usuario, nombre_usuario):
-    """ Impresión silenciosa mediante PowerShell """
+def enviar_correo_gafete(email_destino, nombre_usuario, id_usuario, tipo_usuario="ALUMNO", objeto_usuario=None):
     try:
-        bytes_diseno_final = crear_diseno_gafete(bytes_qr, id_usuario, nombre_usuario)
+        if tipo_usuario.upper() == "ELISA_CARRILLO" and objeto_usuario is not None:
+            bytes_pdf = crear_pdf_gafete_elisa(objeto_usuario)
+        else:
+            bytes_pdf = crear_pdf_gafete(id_usuario, nombre_usuario, tipo_usuario)
 
-        carpeta_temp = os.path.abspath("temp_print")
-        os.makedirs(carpeta_temp, exist_ok=True)
-        nombre_limpio = nombre_usuario.replace(" ", "_")
-        ruta_archivo = os.path.join(carpeta_temp, f"Ticket_{id_usuario}_{nombre_limpio}.png")
-
-        with open(ruta_archivo, 'wb') as f:
-            f.write(bytes_diseno_final)
-
-        ps_script = f"""
-        [System.Reflection.Assembly]::LoadWithPartialName("System.Drawing") | Out-Null
-        [System.Reflection.Assembly]::LoadWithPartialName("System.Printing") | Out-Null
-
-        $ImagePath = "{ruta_archivo.replace('\\', '/')}"
-        $printDoc = New-Object System.Drawing.Printing.PrintDocument
+        nombre_mayus = nombre_usuario.upper()
         
-        $printDoc.OriginAtMargins = $true
-        $printDoc.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0, 0, 0, 0)
+        if tipo_usuario.upper() == "EMPRESARIO":
+            asunto = f"Gafete Empresarial - Ballet Elisa Carrillo (Folio: {id_usuario})"
+            cuerpo = f"Estimado(a) {nombre_mayus},\n\nAdjunto a este correo encontrará su Gafete de Acceso en PDF.\nFolio: {id_usuario}\n\nAtentamente,\nComité Organizador"
+        elif tipo_usuario.upper() == "ELISA_CARRILLO":
+            asunto = f"Gafete de Acceso - Evento Elisa Carrillo (Folio: {id_usuario})"
+            cuerpo = f"Estimado(a) {nombre_mayus},\n\nTu registro para el Evento Elisa Carrillo ha sido exitoso.\nAdjunto encontrarás tu Gafete PDF.\nFolio: {id_usuario}\n\n¡Te esperamos!"
+        else:
+            asunto = f"Gafete de Alumno - Ballet Elisa Carrillo (Folio: {id_usuario})"
+            cuerpo = f"¡Hola {nombre_mayus}!\n\nAdjunto encontrarás tu Gafete de Alumno en PDF.\nFolio: {id_usuario}\n\n¡Nos vemos pronto!"
 
-        $printDoc.add_PrintPage({{
-            param($sender, $e)
-            $img = [System.Drawing.Image]::FromFile($ImagePath)
-            $printableWidth = $e.PageBounds.Width
-            $scale = $printableWidth / $img.Width
-            $printableHeight = [int]($img.Height * $scale)
-
-            $e.Graphics.DrawImage($img, 0, 0, $printableWidth, $printableHeight)
-        }})
-
-        $printDoc.Print()
-        """
-
-        subprocess.run(
-            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
-            creationflags=subprocess.CREATE_NO_WINDOW,
-            check=True
+        msg = Message(subject=asunto, recipients=[email_destino])
+        msg.body = cuerpo
+        nombre_clean = nombre_mayus.replace(' ', '_')
+        msg.attach(
+            filename=f"Gafete_{tipo_usuario.upper()}_{id_usuario}_{nombre_clean}.pdf",
+            content_type="application/pdf",
+            data=bytes_pdf
         )
 
-        print(f"✅ Ticket impreso con éxito para {nombre_usuario}")
+        mail.send(msg)
+        return True
 
     except Exception as e:
-        print(f"❌ Error al intentar imprimir: {e}")
-
-
-def imprimir_qr_en_segundo_plano(bytes_qr, id_usuario, nombre_usuario):
-    """ Lanza el proceso de impresión en un hilo secundario """
-    hilo = threading.Thread(
-        target=_imprimir_proceso,
-        args=(bytes_qr, id_usuario, nombre_usuario)
-    )
-    hilo.start()
+        print(f"❌ Error enviando correo: {e}")
+        return False
 
 
 # ==========================================
@@ -251,20 +428,92 @@ def empresarios():
     return render_template('empresarios.html')
 
 
+@app.route('/eventoelisa')
+def eventoelisa():
+    return render_template("eventoelisa.html")
+
+
+@app.route('/registro_eventlisa', methods=['POST'])
+def registro_eventlisa():
+    try:
+        nombre = request.form.get('nombre', '').strip().upper()
+        email = request.form.get('email', '').strip().lower()
+        telefono = request.form.get('telefono', '').strip()
+        cp = request.form.get('cp', '').strip()
+
+        if not email or not es_correo_valido(email) or not nombre or not telefono or not cp:
+            return "<h1>Por favor llena todos los campos correctamente.</h1>", 400
+
+        existente = eventlisa.query.filter_by(Correo=email).first()
+        if existente:
+            return """
+            <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 60px auto; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; background-color: #ffffff;">
+                <div style="font-size: 48px; margin-bottom: 15px;">⚠️</div>
+                <h2 style="color: #e74c3c; margin-bottom: 15px; font-size: 22px;">Correo ya registrado</h2>
+                <p style="color: #666; font-size: 15px; margin-bottom: 25px;">Este correo electrónico ya fue registrado previamente para este evento.</p>
+                <a href="/eventoelisa" style="display: inline-block; padding: 12px 24px; background-color: #3498db; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Volver al formulario</a>
+            </div>
+            """, 400
+
+        nuevo = eventlisa(
+            Nombre=nombre,
+            Telefono=telefono,
+            CodigoPostal=cp,
+            Correo=email,
+            confirmado=False
+        )
+
+        db.session.add(nuevo)
+        db.session.commit()
+
+        payload = {'email': email, 'tipo': 'eventlisa'}
+        token_url = serializer.dumps(payload, salt='email-confirm-salt')
+        url_confirmacion = url_for('confirmar_email_generico', token=token_url, _external=True)
+
+        msg = Message(
+            subject="Confirma tu registro - Evento Elisa Carrillo",
+            recipients=[email]
+        )
+        msg.html = f"""
+            <h3>¡Hola {nombre}!</h3>
+            <p>Gracias por registrarte para el Evento Elisa Carrillo.</p>
+            <p>Haz clic en el siguiente enlace para confirmar tu asistencia y recibir tu Gafete PDF:</p>
+            <p>
+                <a href="{url_confirmacion}" style="background-color: #28a745; color: white; padding: 12px 22px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                    Confirmar Registro y Recibir Gafete
+                </a>
+            </p>
+        """
+        mail.send(msg)
+
+        return """
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 60px auto; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; background-color: #ffffff;">
+            <div style="font-size: 48px; margin-bottom: 15px;">✉️</div>
+            <h2 style="color: #2c3e50; margin-bottom: 15px; font-size: 22px;">Te hemos enviado un correo de confirmación.</h2>
+            <p style="color: #666; font-size: 15px; margin-bottom: 25px;">Por favor revisa tu bandeja de entrada para activar tu registro y recibir tu Gafete PDF.</p>
+            <a href="/eventoelisa" style="display: inline-block; padding: 12px 24px; background-color: #3498db; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Volver</a>
+        </div>
+        """
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ ERROR EN REGISTRO EVENTLISA: {e}")
+        return f"<h1>Ocurrió un error al procesar el registro: {e}</h1>", 500
+
+
 @app.route('/registro_alumno', methods=['POST'])
 def registro():
     try:
-        Nombre = request.form['nombre']
-        Correo = request.form['email']
+        Nombre = request.form.get('nombre', '').strip().upper()
+        Correo = request.form.get('email', '').strip().lower()
 
-        # Verificar si el correo ya está registrado en alumnos
         alumno_existente = Alumno.query.filter(Alumno.Correo.any(Correo)).first()
         if alumno_existente:
             return """
             <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 60px auto; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; background-color: #ffffff;">
                 <div style="font-size: 48px; margin-bottom: 15px;">⚠️</div>
                 <h2 style="color: #e74c3c; margin-bottom: 15px; font-size: 22px;">Correo ya registrado</h2>
-                <p style="color: #666; font-size: 15px; margin-bottom: 25px;">Este correo electrónico ya se encuentra registrado. Revisa tu bandeja de entrada para confirmar tu registro.</p>
+                <p style="color: #666; font-size: 15px; margin-bottom: 25px;">Este correo electrónico ya se encuentra registrado.</p>
                 <a href="/" style="display: inline-block; padding: 12px 24px; background-color: #3498db; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Volver al inicio</a>
             </div>
             """, 400
@@ -272,7 +521,6 @@ def registro():
         nuevo = Alumno(Nombre=Nombre, Correo=[Correo], confirmado=False)
         db.session.add(nuevo)
         db.session.commit()
-        print("✅ Alumno guardado en la Base de Datos con éxito")
 
         token_url = serializer.dumps(Correo, salt='email-confirm-salt')
         url_confirmacion = url_for('confirmar_email', token=token_url, _external=True)
@@ -283,28 +531,14 @@ def registro():
         )
         msg.html = f"""
             <h3>¡Hola {Nombre}!</h3>
-            <p>Gracias por registrarte. Haz clic en el enlace para activar tu cuenta:</p>
-            <p>
-                <a href="{url_confirmacion}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
-                    Aceptar y Confirmar Registro
-                </a>
-            </p>
+            <p>Haz clic en el enlace para activar tu cuenta y recibir tu Gafete PDF:</p>
+            <p><a href="{url_confirmacion}">Confirmar Registro</a></p>
         """
         
         mail.send(msg)
-        print("✅ Correo enviado con éxito desde Gmail")
-
-        return """
-        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 60px auto; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; background-color: #ffffff;">
-            <div style="font-size: 48px; margin-bottom: 15px;">✉️</div>
-            <h2 style="color: #2c3e50; margin-bottom: 15px; font-size: 22px;">Te hemos enviado un correo de confirmación.</h2>
-            <p style="color: #666; font-size: 15px; margin-bottom: 25px;">Por favor revisa tu bandeja de entrada (y la carpeta de spam por si acaso).</p>
-            <a href="/" style="display: inline-block; padding: 12px 24px; background-color: #3498db; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Volver al inicio</a>
-        </div>
-        """
+        return "<h2>Correo enviado correctamente. Revisa tu bandeja de entrada.</h2>"
 
     except Exception as e:
-        print(f"❌ ERROR CRÍTICO EN REGISTRO: {e}")
         db.session.rollback()
         return f"<h1>Ocurrió un error: {e}</h1>", 500
 
@@ -322,23 +556,20 @@ def confirmar_email(token):
 
     if alumno:
         if alumno.confirmado:
-            return """
-            <div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #f4f6f9; margin: 0; padding: 20px; box-sizing: border-box; font-family: Arial, sans-serif;">
-                <div style="width: 100%; max-width: 450px; padding: 40px 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); text-align: center; background-color: #ffffff;">
-                    <div style="font-size: 52px; margin-bottom: 20px;">ℹ️</div>
-                    <h2 style="color: #2c3e50; margin: 0 0 25px 0; font-size: 22px; line-height: 1.4;">Tu cuenta ya había sido confirmada previamente.</h2>
-                </div>
-            </div>
-            """
+            return "<h2>Tu cuenta ya había sido confirmada previamente.</h2>"
         
         alumno.confirmado = True
-        qr_bytes = generar_bytes_qr(alumno.idAlumno)
-        alumno.qr_code = qr_bytes
+        alumno.qr_code = generar_bytes_qr(alumno.idAlumno)
 
-        imprimir_qr_en_segundo_plano(qr_bytes, alumno.idAlumno, alumno.Nombre)
+        enviar_correo_gafete(
+            email_destino=correo_validado,
+            nombre_usuario=alumno.Nombre,
+            id_usuario=alumno.idAlumno,
+            tipo_usuario="ALUMNO"
+        )
 
         db.session.commit()
-        return redirect(url_for('alumnos'))
+        return f"<h1>¡Registro Confirmado para {alumno.Nombre}! Revisa tu correo para ver tu gafete.</h1>"
 
     return "<h1>Alumno no encontrado.</h1>"
 
@@ -346,43 +577,26 @@ def confirmar_email(token):
 @app.route('/registro_empresario', methods=['POST'])
 def registro_empresario():
     try:
-        email = request.form.get('email', '').strip()
+        email = request.form.get('email', '').strip().lower()
 
         if not email or not es_correo_valido(email):
             return "<h1>Correo electrónico no válido.</h1>", 400
 
-        # 🔍 VERIFICAR SI EL CORREO YA EXISTE EN LA BASE DE DATOS
         empresario_existente = Empresario.query.filter_by(Correo=email).first()
         if empresario_existente:
-            return """
-            <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 60px auto; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; background-color: #ffffff;">
-                <div style="font-size: 48px; margin-bottom: 15px;">⚠️</div>
-                <h2 style="color: #e74c3c; margin-bottom: 15px; font-size: 22px;">Este correo ya está registrado</h2>
-                <p style="color: #666; font-size: 15px; margin-bottom: 25px;">El correo electrónico ingresado ya se encuentra registrado en nuestro sistema. Por favor revisa tu correo para confirmar tu registro o utiliza un correo diferente.</p>
-                <a href="/empresarios" style="display: inline-block; padding: 12px 24px; background-color: #0b2c70; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Volver al formulario</a>
-            </div>
-            """, 400
+            return "<h1>Este correo ya está registrado.</h1>", 400
 
-        nombre = request.form.get('nombre', '').strip()
-        apellido_paterno = request.form.get('apellido_paterno', '').strip()
-        apellido_materno = request.form.get('apellido_materno', '').strip()
-        cargo = request.form.get('cargo', '').strip()
-        empresa = request.form.get('empresa', '').strip()
+        nombre = request.form.get('nombre', '').strip().upper()
+        apellido_paterno = request.form.get('apellido_paterno', '').strip().upper()
+        apellido_materno = request.form.get('apellido_materno', '').strip().upper()
+        cargo = request.form.get('cargo', '').strip().upper()
+        empresa = request.form.get('empresa', '').strip().upper()
         lada_pais = request.form.get('lada_pais', '').strip()
         telefono = request.form.get('telefono', '').strip()
-        pais = request.form.get('pais', '').strip()
+        pais = request.form.get('pais', '').strip().upper()
         codigo_postal = request.form.get('codigo_postal', '').strip()
-        ciudad = request.form.get('ciudad', '').strip()
-        calle_numero = request.form.get('calle_numero', '').strip()
-
-        posicion_empresa = request.form.get('posicion_empresa')
-        area_responsabilidad = request.form.get('area_responsabilidad')
-        sector_industria = request.form.getlist('sector_industria') 
-        num_empleados = request.form.get('num_empleados')
-        decisiones_compra = request.form.get('decisiones_compra')
-        presupuesto = request.form.get('presupuesto')
-        tiempo_inversion = request.form.get('tiempo_inversion')
-        productos_interes = request.form.getlist('productos_interes')
+        ciudad = request.form.get('ciudad', '').strip().upper()
+        calle_numero = request.form.get('calle_numero', '').strip().upper()
 
         nuevo_empresario = Empresario(
             Nombre=nombre,
@@ -397,14 +611,6 @@ def registro_empresario():
             Ciudad=ciudad,
             CalleNumero=calle_numero,
             Correo=email,
-            PosicionEmpresa=posicion_empresa,
-            AreaResponsabilidad=area_responsabilidad,
-            SectorIndustria=sector_industria,
-            NumEmpleados=num_empleados,
-            DecisionesCompra=decisiones_compra,
-            Presupuesto=presupuesto,
-            TiempoInversion=tiempo_inversion,
-            ProductosInteres=productos_interes,
             confirmado=False
         )
 
@@ -416,34 +622,21 @@ def registro_empresario():
         url_confirmacion = url_for('confirmar_email_generico', token=token_url, _external=True)
 
         msg = Message(
-            subject="Confirmación de Registro - FESPA Mexico 2026",
+            subject="Confirmación de Registro - Ballet Elisa Carrillo",
             recipients=[email]
         )
         msg.html = f"""
             <h3>¡Hola {nombre} {apellido_paterno}!</h3>
-            <p>Gracias por registrarte para el evento <strong>FESPA Mexico 2026</strong>.</p>
-            <p>Para confirmar tu asistencia e imprimir tu gafete de acceso, haz clic en el siguiente enlace:</p>
-            <p>
-                <a href="{url_confirmacion}" style="background-color: #0b2c70; color: white; padding: 12px 22px; text-decoration: none; border-radius: 5px; display: inline-block;">
-                    Confirmar mi Registro y Generar Gafete
-                </a>
-            </p>
+            <p>Haz clic para confirmar tu asistencia y recibir tu Gafete PDF Empresarial:</p>
+            <p><a href="{url_confirmacion}">Confirmar Registro</a></p>
         """
         mail.send(msg)
 
-        return """
-        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 60px auto; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; background-color: #ffffff;">
-            <div style="font-size: 48px; margin-bottom: 15px;">✉️</div>
-            <h2 style="color: #0b2c70; margin-bottom: 15px; font-size: 22px;">¡Registro recibido con éxito!</h2>
-            <p style="color: #666; font-size: 15px; margin-bottom: 25px;">Te hemos enviado un correo de confirmación a tu email. Por favor revísalo para activar tu acceso.</p>
-            <a href="/empresarios" style="display: inline-block; padding: 12px 24px; background-color: #0b2c70; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Volver al registro</a>
-        </div>
-        """
+        return "<h2>¡Registro recibido con éxito! Revisa tu correo.</h2>"
 
     except Exception as e:
-        print(f"❌ ERROR EN REGISTRO DE EMPRESARIO: {e}")
         db.session.rollback()
-        return f"<h1>Ocurrió un error al procesar tu registro: {e}</h1>", 500
+        return f"<h1>Ocurrió un error: {e}</h1>", 500
 
 
 @app.route('/confirmar_generico/<token>')
@@ -451,7 +644,7 @@ def confirmar_email_generico(token):
     try:
         data = serializer.loads(token, salt='email-confirm-salt', max_age=3600)
     except (SignatureExpired, BadTimeSignature):
-        return '<h1>El enlace de confirmación ha expirado o no es válido.</h1>'
+        return '<h1>El enlace ha expirado o no es válido.</h1>'
 
     if isinstance(data, dict):
         email = data.get('email')
@@ -462,77 +655,80 @@ def confirmar_email_generico(token):
 
     if tipo == 'empresario':
         usuario = Empresario.query.filter_by(Correo=email).first()
-        if usuario:
-            ap_materno = f" {usuario.ApellidoMaterno}" if usuario.ApellidoMaterno else ""
-            nombre_completo = f"{usuario.Nombre} {usuario.ApellidoPaterno}{ap_materno}".strip()
-        else:
-            nombre_completo = ""
+        nombre_completo = f"{usuario.Nombre} {usuario.ApellidoPaterno}" if usuario else ""
+        id_reg = usuario.idEmpresario if usuario else 0
+        tipo_tag = "EMPRESARIO"
+    elif tipo == 'eventlisa':
+        usuario = eventlisa.query.filter_by(Correo=email).first()
+        nombre_completo = usuario.Nombre if usuario else ""
+        id_reg = usuario.idEmpresario if usuario else 0
+        tipo_tag = "ELISA_CARRILLO"
     else:
         usuario = Alumno.query.filter(Alumno.Correo.any(email)).first()
         nombre_completo = usuario.Nombre if usuario else ""
+        id_reg = usuario.idAlumno if usuario else 0
+        tipo_tag = "ALUMNO"
 
     if usuario:
         if usuario.confirmado:
-            return """
-            <div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #f4f6f9; margin: 0; padding: 20px; box-sizing: border-box; font-family: Arial, sans-serif;">
-                <div style="width: 100%; max-width: 450px; padding: 40px 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); text-align: center; background-color: #ffffff;">
-                    <div style="font-size: 52px; margin-bottom: 20px;">ℹ️</div>
-                    <h2 style="color: #2c3e50; margin: 0 0 25px 0; font-size: 22px; line-height: 1.4;">Tu cuenta ya había sido confirmada previamente.</h2>
-                </div>
-            </div>
-            """
+            return "<h2>Tu cuenta ya había sido confirmada previamente.</h2>"
         
         usuario.confirmado = True
-        
-        id_registro = getattr(usuario, 'idEmpresario', getattr(usuario, 'idAlumno', 0))
-        qr_bytes = generar_bytes_qr(id_registro)
-        usuario.qr_code = qr_bytes
+        usuario.qr_code = generar_bytes_qr(id_reg)
 
-        imprimir_qr_en_segundo_plano(qr_bytes, id_registro, nombre_completo)
+        enviar_correo_gafete(
+            email_destino=email,
+            nombre_usuario=nombre_completo,
+            id_usuario=id_reg,
+            tipo_usuario=tipo_tag,
+            objeto_usuario=usuario
+        )
 
         db.session.commit()
-        return f"""
-        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 60px auto; padding: 30px; border-radius: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
-            <h1 style="color: #27ae60;">¡Registro Confirmado!</h1>
-            <p>Hola <strong>{nombre_completo}</strong>, tu gafete de acceso ha sido enviado a imprimir.</p>
-        </div>
-        """
+        return f"<h1>¡Registro Confirmado para {nombre_completo}! Tu gafete ha sido enviado al correo.</h1>"
 
     return "<h1>Usuario no encontrado.</h1>"
 
-@app.route('/validar_qr', methods=['POST'])
-def validar_qr():
-    qr_data = request.form.get('qr_data', '').strip()
-    
-    # Supongamos que el QR contiene el id del Empresario o Alumno
-    # Buscar si existe en Alumnos o Empresarios
-    empresario = Empresario.query.get(qr_data) if qr_data.isdigit() else None
-    
-    if empresario:
-        return f"<h1 style='color:green;'>ENTRADA PERMITIDA: {empresario.Nombre} {empresario.ApellidoPaterno}</h1><a href='/escanear'>Siguiente</a>"
-    else:
-        return "<h1 style='color:red;'>ACCESO DENEGADO / NO ENCONTRADO</h1><a href='/escanear'>Reintentar</a>"
 
+# ==========================================
+# ESCÁNER Y CONTROL DE ACCESO
+# ==========================================
 
 @app.route('/escanear', methods=['GET', 'POST'])
 def escanear():
     if request.method == 'POST':
         qr_data = request.form.get('qr_data', '').strip()
-        modo = request.form.get('modo', 'entrada') # 'entrada' o 'salida'
+        modo = request.form.get('modo', 'entrada')
         
         asistente = None
         tipo_usuario = ""
         
-        if qr_data.isdigit():
+        if '-' in qr_data:
+            partes = qr_data.split('-')
+            if partes[-1].isdigit():
+                id_num = int(partes[-1])
+                tag = partes[0].upper()
+                
+                if tag == "EMPRESARIO":
+                    asistente = Empresario.query.get(id_num)
+                    tipo_usuario = "Empresario"
+                elif tag == "ELISA_CARRILLO":
+                    asistente = eventlisa.query.get(id_num)
+                    tipo_usuario = "Elisa Carrillo"
+                else:
+                    asistente = Alumno.query.get(id_num)
+                    tipo_usuario = "Alumno"
+        elif qr_data.isdigit():
             id_num = int(qr_data)
             asistente = Empresario.query.get(id_num)
             tipo_usuario = "Empresario"
-            
+            if not asistente:
+                asistente = eventlisa.query.get(id_num)
+                tipo_usuario = "Elisa Carrillo"
             if not asistente:
                 asistente = Alumno.query.get(id_num)
                 tipo_usuario = "Alumno"
 
-        # 1. Si NO existe el usuario
         if not asistente:
             return responder_escaneo(
                 exito=False, 
@@ -544,7 +740,6 @@ def escanear():
         nombre = f"{asistente.Nombre} {getattr(asistente, 'ApellidoPaterno', '')}".strip()
         asistencias_actuales = getattr(asistente, 'asistencias', 0) or 0
 
-        # 2. Lógica para ENTRADA
         if modo == 'entrada':
             if asistencias_actuales >= 1:
                 return responder_escaneo(
@@ -554,7 +749,6 @@ def escanear():
                     pitido="error"
                 )
             
-            # Incrementar conteo
             asistente.asistencias = asistencias_actuales + 1
             db.session.commit()
             
@@ -565,7 +759,6 @@ def escanear():
                 pitido="exito"
             )
 
-        # 3. Lógica para SALIDA
         elif modo == 'salida':
             if asistencias_actuales <= 0:
                 return responder_escaneo(
@@ -575,7 +768,6 @@ def escanear():
                     pitido="error"
                 )
             
-            # Decrementar conteo
             asistente.asistencias = asistencias_actuales - 1
             db.session.commit()
             
@@ -586,7 +778,6 @@ def escanear():
                 pitido="exito"
             )
 
-    # Vista GET (Formulario principal)
     return """
     <!DOCTYPE html>
     <html lang="es">
@@ -614,7 +805,7 @@ def escanear():
 
             <form action="/escanear" method="POST" style="margin-top: 15px;">
                 <input type="hidden" name="modo" id="input_modo" value="entrada">
-                <input type="text" name="qr_data" id="qr_input" placeholder="Escanea con la TC21..." autofocus autocomplete="off">
+                <input type="text" name="qr_data" id="qr_input" placeholder="Escanea el QR..." autofocus autocomplete="off">
             </form>
         </div>
 
@@ -661,180 +852,39 @@ def responder_escaneo(exito, mensaje, detalles, pitido):
         <a href="/escanear" id="btnSiguiente" style="display: inline-block; padding: 18px 35px; background-color: #007bff; color: white; text-decoration: none; font-size: 22px; border-radius: 10px; font-weight: bold;">Escanear Siguiente</a>
 
         <script>
-            // Sintetizador de audio Web Audio API
             function reproducirPitido() {{
                 try {{
                     const AudioContext = window.AudioContext || window.webkitAudioContext;
                     const ctx = new AudioContext();
-                    
                     const osc = ctx.createOscillator();
                     const gain = ctx.createGain();
                     osc.connect(gain);
                     gain.connect(ctx.destination);
 
                     if ("{pitido}" === "exito") {{
-                        // Bip corto y agudo (Éxito)
                         osc.type = 'sine';
-                        osc.frequency.setValueAtTime(880, ctx.currentTime); // Nota A5
+                        osc.frequency.setValueAtTime(880, ctx.currentTime);
                         gain.gain.setValueAtTime(0.5, ctx.currentTime);
                         osc.start();
                         osc.stop(ctx.currentTime + 0.15);
                     }} else {{
-                        // Doble pitido grave (Error/Denegado)
                         osc.type = 'sawtooth';
                         osc.frequency.setValueAtTime(150, ctx.currentTime);
                         gain.gain.setValueAtTime(0.8, ctx.currentTime);
-                        
                         osc.start(ctx.currentTime);
                         osc.stop(ctx.currentTime + 0.25);
-
-                        // Segundo tono de error
-                        setTimeout(() => {{
-                            const ctx2 = new AudioContext();
-                            const osc2 = ctx2.createOscillator();
-                            const gain2 = ctx2.createGain();
-                            osc2.connect(gain2);
-                            gain2.connect(ctx2.destination);
-                            osc2.type = 'sawtooth';
-                            osc2.frequency.setValueAtTime(120, ctx2.currentTime);
-                            gain2.gain.setValueAtTime(0.8, ctx2.currentTime);
-                            osc2.start();
-                            osc2.stop(ctx2.currentTime + 0.3);
-                        }}, 300);
                     }}
                 }} catch(e) {{
-                    console.log("Audio no soportado o bloqueado:", e);
+                    console.log("Audio bloqueado:", e);
                 }}
             }}
-
-            // Reproducir inmediatamente
-            window.onload = function() {{
-                reproducirPitido();
-            }};
+            window.onload = function() {{ reproducirPitido(); }};
         </script>
     </body>
     </html>
     """
-    # Generador de sonidos vía sintetizador Web Audio API (No requiere archivos .mp3)
-    script_audio = """
-    <script>
-        function emitirSonido(tipo) {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain);
-            gain.connect(ctx.destination);
 
-            if (tipo === 'exito') {
-                osc.frequency.setValueAtTime(800, ctx.currentTime);
-                osc.type = 'sine';
-                gain.gain.setValueAtTime(0.3, ctx.currentTime);
-                osc.start();
-                osc.stop(ctx.currentTime + 0.15);
-            } else {
-                // Pitido de Error (Grave y más largo)
-                osc.frequency.setValueAtTime(180, ctx.currentTime);
-                osc.type = 'sawtooth';
-                gain.gain.setValueAtTime(0.5, ctx.currentTime);
-                osc.start();
-                osc.stop(ctx.currentTime + 0.5);
-            }
-        }
-        window.onload = function() {
-            emitirSonido('""" + pitido + """');
-        };
-    </script>
-    """
 
-    color_bg = "#d4edda" if exito else "#f8d7da"
-    color_texto = "#155724" if exito else "#721c24"
-    color_borde = "#c3e6cb" if exito else "#f5c6cb"
-
-    return f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Resultado Escaneo</title>
-        {script_audio}
-    </head>
-    <body style="font-family: Arial; text-align: center; padding: 20px; background: #f0f2f5;">
-        <div style="background-color: {color_bg}; color: {color_texto}; padding: 30px 20px; border-radius: 12px; border: 2px solid {color_borde}; max-width: 400px; margin: auto;">
-            <h1 style="margin: 0; font-size: 26px;">{mensaje}</h1>
-            <p style="font-size: 18px; margin-top: 15px;">{detalles}</p>
-        </div>
-        <br>
-        <a href="/escanear" style="display: inline-block; padding: 15px 30px; background-color: #007bff; color: white; text-decoration: none; font-size: 20px; border-radius: 8px; font-weight: bold;">Siguiente Escaneo</a>
-    </body>
-    </html>
-    """
-    # Si la Zebra (o el navegador) manda un código por POST:
-    if request.method == 'POST':
-        qr_data = request.form.get('qr_data', '').strip()
-        
-        # Buscar en Alumno o Empresario
-        asistente = None
-        tipo_usuario = ""
-        
-        if qr_data.isdigit():
-            id_num = int(qr_data)
-            asistente = Empresario.query.get(id_num)
-            tipo_usuario = "Empresario"
-            
-            if not asistente:
-                asistente = Alumno.query.get(id_num)
-                tipo_usuario = "Alumno"
-
-        if asistente:
-            nombre = f"{asistente.Nombre} {getattr(asistente, 'ApellidoPaterno', '')}".strip()
-            return f"""
-            <div style="font-family: Arial; text-align: center; padding: 40px; max-width: 500px; margin: auto;">
-                <div style="background-color: #d4edda; color: #155724; padding: 20px; border-radius: 10px; border: 2px solid #c3e6cb;">
-                    <h1 style="margin: 0; font-size: 32px;">✅ ACCESO PERMITIDO</h1>
-                    <h2 style="color: #333; margin-top: 15px;">{nombre}</h2>
-                    <p style="font-size: 18px; color: #555;">Tipo: <strong>{tipo_usuario}</strong> | ID: <strong>{qr_data}</strong></p>
-                </div>
-                <br>
-                <a href="/escanear" style="display: inline-block; padding: 15px 30px; background-color: #007bff; color: white; text-decoration: none; font-size: 20px; border-radius: 8px; font-weight: bold;">Escanear Siguiente</a>
-            </div>
-            """
-        else:
-            return f"""
-            <div style="font-family: Arial; text-align: center; padding: 40px; max-width: 500px; margin: auto;">
-                <div style="background-color: #f8d7da; color: #721c24; padding: 20px; border-radius: 10px; border: 2px solid #f5c6cb;">
-                    <h1 style="margin: 0; font-size: 32px;">❌ ACCESO DENEGADO</h1>
-                    <p style="font-size: 18px; color: #555;">El ID <strong>"{qr_data}"</strong> no se encuentra en la base de datos.</p>
-                </div>
-                <br>
-                <a href="/escanear" style="display: inline-block; padding: 15px 30px; background-color: #dc3545; color: white; text-decoration: none; font-size: 20px; border-radius: 8px; font-weight: bold;">Reintentar</a>
-            </div>
-            """
-
-    # Si entras a la URL desde el navegador (GET), muestra la pantalla del escáner:
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Control de Acceso Zebra</title>
-    </head>
-    <body style="font-family: Arial; text-align: center; padding: 20px; background-color: #f4f6f9;">
-        <h2 style="color: #0b2c70;">📷 Control de Acceso Zebra</h2>
-        <p style="color: #666;">Apunta con la TC21 y presiona el botón de escaneo</p>
-        
-        <form action="/escanear" method="POST" style="margin-top: 30px;">
-            <input type="text" name="qr_data" id="qr_input" placeholder="Listo para escanear..." autofocus autocomplete="off" style="font-size: 20px; padding: 15px; width: 80%; border-radius: 8px; border: 2px solid #0b2c70; text-align: center;">
-        </form>
-
-        <script>
-            // Asegura que el cuadro de texto nunca pierda el foco
-            const input = document.getElementById('qr_input');
-            input.focus();
-            document.addEventListener('click', () => input.focus());
-        </script>
-    </body>
-    </html>
-    """
 # ==========================================
 # PUNTO DE ENTRADA
 # ==========================================
