@@ -1,0 +1,179 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    /* Fondo oscuro dramático inspirado en el póster */
+    background: #fdfdfd; /* Fondo oscuro profundo */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.form-container {
+    /* Tarjeta en tono oscuro con borde fino brillante */
+    background-color: #1a0818;
+    border: 1px solid rgba(227, 56, 120, 0.2);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+    width: 100%;
+    max-width: 450px;
+    padding: 35px 30px;
+}
+
+.form-header {
+    text-align: center;
+    margin-bottom: 25px;
+}
+
+.form-header h2 {
+    color: #e33878; /* Magenta vibrante */
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+}
+
+.form-header p {
+    color: #f4d142; /* Amarillo/Dorado del banner promocional */
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.form-group {
+    margin-bottom: 20px;
+    position: relative;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #e2cad8; /* Texto suave */
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 12px 16px;
+    background-color: #271025; /* Fondo del input oscuro */
+    border: 1.5px solid #441a40;
+    border-radius: 6px;
+    font-size: 15px;
+    color: #ffffff; /* Texto del usuario en blanco */
+    transition: all 0.3s ease;
+    outline: none;
+}
+
+/* Color del placeholder dentro del input */
+.form-group input::placeholder {
+    color: #8c6885;
+}
+
+/* Enfoque al escribir */
+.form-group input:focus {
+    border-color: #e33878;
+    box-shadow: 0 0 10px rgba(227, 56, 120, 0.4);
+}
+
+/* Validación nativa CSS */
+.form-group input:placeholder-shown {
+    border-color: #441a40;
+}
+
+/* Si es inválido */
+.form-group input:not(:placeholder-shown):invalid {
+    border-color: #ff4d4d;
+    background-color: #331015;
+}
+
+/* Si es válido */
+.form-group input:not(:placeholder-shown):valid {
+    border-color: #2e7d32;
+    background-color: #122615;
+}
+
+.error-message {
+    display: none;
+    color: #ff6b6b;
+    font-size: 12px;
+    margin-top: 5px;
+}
+
+.form-group input:not(:placeholder-shown):invalid~.error-message {
+    display: block;
+}
+
+.form-options {
+    display: flex;
+    align-items: center;
+    margin-bottom: 25px;
+}
+
+.form-options input[type="checkbox"] {
+    margin-right: 10px;
+    width: 16px;
+    height: 16px;
+    accent-color: #e33878; /* Color magenta para la casilla */
+    cursor: pointer;
+}
+
+.form-options label {
+    font-size: 13px;
+    color: #d6b2c8;
+    cursor: pointer;
+}
+
+.form-options a {
+    color: #f4d142;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.form-options a:hover {
+    text-decoration: underline;
+}
+
+.btn-submit {
+    width: 100%;
+    padding: 14px;
+    background-color: #e33878; /* Botón magenta principal */
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-submit:hover {
+    background-color: #f4d142; /* Transición a dorado al pasar el cursor */
+    color: #140513; /* Texto oscuro para buen contraste */
+    box-shadow: 0 0 15px rgba(244, 209, 66, 0.4);
+}
+
+.form-footer {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 14px;
+    color: #d6b2c8;
+}
+
+.form-footer a {
+    color: #e33878;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.form-footer a:hover {
+    color: #f4d142;
+    text-decoration: underline;
+}

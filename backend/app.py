@@ -1,16 +1,21 @@
-import os
 import io
 import re
+import base64
 import qrcode 
+import sib_api_v3_sdk
+import os
+from dotenv import load_dotenv
+from sib_api_v3_sdk.rest import ApiException
 from reportlab.lib.pagesizes import portrait
 from reportlab.lib.units import cm
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
 from PIL import Image, ImageDraw, ImageFont
+from reportlab.platypus import Paragraph
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.dialects.postgresql import ARRAY
-from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadTimeSignature
 
 app = Flask(__name__, template_folder='../frontend', static_folder='../css')
@@ -20,15 +25,19 @@ app.config['SECRET_KEY'] = 'rpxf ddbn cdbl otez'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:diego@127.0.0.1:5432/bd_pruebas'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Configuración de Flask-Mail para Gmail
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'rjdjs2715@gmail.com'
-app.config['MAIL_PASSWORD'] = 'rpxf ddbn cdbl otez'
-app.config['MAIL_DEFAULT_SENDER'] = 'rjdjs2715@gmail.com'
+# ==========================================
+# CONFIGURACIÓN DE BREVO (Transaccionales)
+# ==========================================
+load_dotenv(dotenv_path="backend/.env")
+BREVO_API_KEY = os.getenv('API_KEYY')  # 👈 Pon aquí tu API Key de Brevo
+REMITENTE_EMAIL = "myticket@experiencebt.com.mx"     # 👈 Correo verificado en Brevo
+REMITENTE_NOMBRE = "Ballet Elisa Carrillo"
 
-mail = Mail(app)
+configuration = sib_api_v3_sdk.Configuration()
+configuration.api_key['api-key'] = BREVO_API_KEY
+api_client = sib_api_v3_sdk.ApiClient(configuration)
+brevo_mail_api = sib_api_v3_sdk.TransactionalEmailsApi(api_client)
+
 db = SQLAlchemy(app)
 serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
 
@@ -123,8 +132,9 @@ def generar_bytes_qr(contenido):
 # ---------------------------------------------------------
 # GAFETE EXCLUSIVO PARA EVENTO ELISA CARRILLO (Imagen a 7cm)
 # ---------------------------------------------------------
+
 def crear_pdf_gafete_elisa(usuario):
-    """ Genera gafete para Elisa Carrillo: Imagen a 7cm, texto grande a la izquierda y QR a la derecha """
+    """ Genera gafete para Elisa Carrillo con correo multilínea automático a la izquierda del QR """
     ANCHO = 9.0 * cm
     ALTO = 14.0 * cm
 
@@ -152,119 +162,71 @@ def crear_pdf_gafete_elisa(usuario):
             print(f"⚠️ Error cargando cartel Elisa: {e}")
 
     # =========================================================
-    # SECCIÓN INFERIOR: Texto a la izquierda | QR a la derecha
+    # SECCIÓN INFERIOR: Configuración de espacios
     # =========================================================
     c.setFillColorRGB(0, 0, 0)
     
-    # Coordenadas base
-    margen_izq = 0.5 * cm
-    y_texto = pos_y_actual - 0.7 * cm
-
-    # 2. Datos del usuario ALINEADOS A LA IZQUIERDA (Fuentes más grandes)
-    nombre = usuario.Nombre.upper()
-    c.setFont("Helvetica-Bold", 11)
-    
-    # Dividir el nombre si es muy largo para que no invada el QR
-    if len(nombre) > 18:
-        partes = nombre.split(' ')
-        mitad = len(partes) // 2
-        c.drawString(margen_izq, y_texto, " ".join(partes[:mitad]))
-        y_texto -= 0.45 * cm
-        c.drawString(margen_izq, y_texto, " ".join(partes[mitad:]))
-    else:
-        c.drawString(margen_izq, y_texto, nombre)
-
-    y_texto -= 0.5 * cm
-    c.setFont("Helvetica", 9)
-    c.drawString(margen_izq, y_texto, f"Correo: {usuario.Correo}")
-
-    y_texto -= 0.45 * cm
-    c.drawString(margen_izq, y_texto, f"Tel: {usuario.Telefono}")
-
-    y_texto -= 0.45 * cm
-    c.drawString(margen_izq, y_texto, f"C.P.: {usuario.CodigoPostal}")
-
-    # 3. Código QR ALINEADO A LA DERECHA
-    qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=10, border=1)
-    qr.add_data(f"ELISA_CARRILLO-{usuario.idEmpresario}")
-    qr.make(fit=True)
-    
-    qr_img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
-    qr_buffer = io.BytesIO()
-    qr_img.save(qr_buffer, format="PNG")
-    qr_buffer.seek(0)
-    
-    qr_reader = ImageReader(qr_buffer)
-    
     tamano_qr = 3.3 * cm
-    pos_qr_x = ANCHO - tamano_qr - (0.5 * cm)  # Ubicado en la esquina derecha
+    pos_qr_x = ANCHO - tamano_qr - (0.4 * cm)
     pos_qr_y = pos_y_actual - tamano_qr - 0.4 * cm
+
+    margen_izq = 0.4 * cm
+    ancho_disponible_texto = pos_qr_x - margen_izq - (0.2 * cm)
+    y_texto = pos_y_actual - 0.6 * cm
+
+    styles = getSampleStyleSheet()
     
-    c.drawImage(qr_reader, pos_qr_x, pos_qr_y, width=tamano_qr, height=tamano_qr)
-
-    # 4. Folio DEBAJO del código QR (Centrado con respecto al QR)
-    pos_y_folio = pos_qr_y - 0.4 * cm
-    c.setFont("Helvetica-Bold", 9)
-    c.drawCentredString(pos_qr_x + (tamano_qr / 2), pos_y_folio, f"Folio: {usuario.idEmpresario}")
-
-    c.showPage()
-    c.save()
-
-    pdf_data = buffer_pdf.getvalue()
-    buffer_pdf.close()
-
-    # Guardar copia local
-    carpeta_destino = "gafetes_guardados"
-    os.makedirs(carpeta_destino, exist_ok=True)
-    nombre_limpio = usuario.Nombre.replace(' ', '_')
-    ruta_guardado = os.path.join(carpeta_destino, f"Gafete_ELISA_{usuario.idEmpresario}_{nombre_limpio}.pdf")
-
-    with open(ruta_guardado, "wb") as f:
-        f.write(pdf_data)
-
-    return pdf_data
-    """ Genera gafete para Elisa Carrillo con la imagen fijada a 9 cm de alto """
-    ANCHO = 9.0 * cm
-    ALTO = 14.0 * cm
-
-    buffer_pdf = io.BytesIO()
-    c = canvas.Canvas(buffer_pdf, pagesize=(ANCHO, ALTO))
-
-    # 1. Imagen fijada EXACTAMENTE a 9 cm de alto
-    alto_imagen = 6.0 * cm
-    ruta_cartel = "backend/GALA DE ESTELLAS.png"
+    style_nombre = ParagraphStyle(
+        'NombreStyle',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=10,
+        leading=11,
+        textColor='black'
+    )
     
-    pos_y_actual = ALTO - alto_imagen - (0.2 * cm)
+    style_correo = ParagraphStyle(
+        'CorreoStyle',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7.5,
+        leading=8.5,
+        textColor='black',
+        wordWrap='CJK'
+    )
 
-    if os.path.exists(ruta_cartel):
-        try:
-            cartel_img = ImageReader(ruta_cartel)
-            img_w, img_h = cartel_img.getSize()
-            ancho_proporcional = alto_imagen * (img_w / img_h)
-            
-            if ancho_proporcional > (ANCHO - 0.4 * cm):
-                ancho_proporcional = ANCHO - 0.4 * cm
+    style_info = ParagraphStyle(
+        'InfoStyle',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=8,
+        leading=10,
+        textColor='black'
+    )
 
-            pos_x = (ANCHO - ancho_proporcional) / 2
-            c.drawImage(cartel_img, pos_x, pos_y_actual, width=ancho_proporcional, height=alto_imagen, mask='auto')
-        except Exception as e:
-            print(f"⚠️ Error cargando cartel Elisa: {e}")
+    # --- 1. NOMBRE ---
+    nombre_txt = usuario.Nombre.upper()
+    p_nombre = Paragraph(nombre_txt, style_nombre)
+    w_n, h_n = p_nombre.wrap(ancho_disponible_texto, 3 * cm)
+    p_nombre.drawOn(c, margen_izq, y_texto - h_n)
+    y_texto -= (h_n + 0.15 * cm)
 
-    # 2. Datos del usuario (Nombre, Correo, Teléfono, CP)
-    c.setFillColorRGB(0, 0, 0)
-    pos_y_actual -= 0.4 * cm
+    # --- 2. CORREO ---
+    correo_txt = f"<b>Correo:</b><br/>{usuario.Correo}"
+    p_correo = Paragraph(correo_txt, style_correo)
+    w_c, h_c = p_correo.wrap(ancho_disponible_texto, 3 * cm)
+    p_correo.drawOn(c, margen_izq, y_texto - h_c)
+    y_texto -= (h_c + 0.15 * cm)
 
-    c.setFont("Helvetica-Bold", 9)
-    c.drawCentredString(ANCHO / 2, pos_y_actual, f"{usuario.Nombre.upper()}")
-    pos_y_actual -= 0.35 * cm
+    # --- 3. TELÉFONO Y CP ---
+    info_txt = f"<b>Tel:</b> {usuario.Telefono}<br/><b>C.P.:</b> {usuario.CodigoPostal}"
+    p_info = Paragraph(info_txt, style_info)
+    w_i, h_i = p_info.wrap(ancho_disponible_texto, 3 * cm)
+    p_info.drawOn(c, margen_izq, y_texto - h_i)
 
-    c.setFont("Helvetica", 7)
-    c.drawCentredString(ANCHO / 2, pos_y_actual, f"{usuario.Correo}")
-    pos_y_actual -= 0.3 * cm
-    c.drawCentredString(ANCHO / 2, pos_y_actual, f"Tel: {usuario.Telefono} | CP: {usuario.CodigoPostal}")
-    pos_y_actual -= 0.3 * cm
-
-    # 3. Código QR
+    # =========================================================
+    # CÓDIGO QR Y FOLIO
+    # =========================================================
     qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=10, border=1)
     qr.add_data(f"ELISA_CARRILLO-{usuario.idEmpresario}")
     qr.make(fit=True)
@@ -275,16 +237,11 @@ def crear_pdf_gafete_elisa(usuario):
     qr_buffer.seek(0)
     
     qr_reader = ImageReader(qr_buffer)
-    tamano_qr = 1.8 * cm
-    pos_qr_x = (ANCHO - tamano_qr) / 2
-    pos_qr_y = pos_y_actual - tamano_qr
-    
     c.drawImage(qr_reader, pos_qr_x, pos_qr_y, width=tamano_qr, height=tamano_qr)
 
-    # 4. Folio DEBAJO del código QR
-    pos_y_folio = pos_qr_y - (0.3 * cm)
-    c.setFont("Helvetica-Bold", 8)
-    c.drawCentredString(ANCHO / 2, pos_y_folio, f"Folio: {usuario.idEmpresario}")
+    pos_y_folio = pos_qr_y - 0.35 * cm
+    c.setFont("Helvetica-Bold", 8.5)
+    c.drawCentredString(pos_qr_x + (tamano_qr / 2), pos_y_folio, f"Folio: {usuario.idEmpresario}")
 
     c.showPage()
     c.save()
@@ -377,6 +334,37 @@ def crear_pdf_gafete(id_usuario, nombre_usuario, tipo_usuario="ALUMNO"):
     return pdf_data
 
 
+# ==========================================
+# ENVÍO DE CORREOS MEDIANTE BREVO API
+# ==========================================
+
+def enviar_correo_confirmacion(email_destino, nombre, url_confirmacion, titulo_evento="Evento"):
+    try:
+        html = f"""
+            <h3>¡Hola {nombre}!</h3>
+            <p>Gracias por registrarte para el <b>{titulo_evento}</b>.</p>
+            <p>Haz clic en el siguiente enlace para confirmar tu asistencia y recibir tu Boleto en PDF:</p>
+            <p>
+                <a href="{url_confirmacion}" style="background-color: #28a745; color: white; padding: 12px 22px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+                    Confirmar Registro y Recibir tu Boleto
+                </a>
+            </p>
+        """
+        
+        send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
+            to=[{"email": email_destino, "name": nombre}],
+            sender={"name": REMITENTE_NOMBRE, "email": REMITENTE_EMAIL},
+            subject=f"Confirma tu registro - {titulo_evento}",
+            html_content=html
+        )
+        
+        brevo_mail_api.send_transac_email(send_smtp_email)
+        return True
+    except Exception as e:
+        print(f"❌ Error enviando correo de confirmación: {e}")
+        return False
+
+
 def enviar_correo_gafete(email_destino, nombre_usuario, id_usuario, tipo_usuario="ALUMNO", objeto_usuario=None):
     try:
         if tipo_usuario.upper() == "ELISA_CARRILLO" and objeto_usuario is not None:
@@ -387,29 +375,41 @@ def enviar_correo_gafete(email_destino, nombre_usuario, id_usuario, tipo_usuario
         nombre_mayus = nombre_usuario.upper()
         
         if tipo_usuario.upper() == "EMPRESARIO":
-            asunto = f"Gafete Empresarial - Ballet Elisa Carrillo (Folio: {id_usuario})"
-            cuerpo = f"Estimado(a) {nombre_mayus},\n\nAdjunto a este correo encontrará su Gafete de Acceso en PDF.\nFolio: {id_usuario}\n\nAtentamente,\nComité Organizador"
+            asunto = f"Boleto Empresarial - Ballet Elisa Carrillo (Folio: {id_usuario})"
+            cuerpo = f"<p>Estimado(a) <b>{nombre_mayus}</b>,</p><p>Adjunto a este correo encontrará su Boleto de Acceso en PDF.</p><p><b>Folio:</b> {id_usuario}</p><br><p>Atentamente,<br>Comité Organizador</p>"
         elif tipo_usuario.upper() == "ELISA_CARRILLO":
-            asunto = f"Gafete de Acceso - Evento Elisa Carrillo (Folio: {id_usuario})"
-            cuerpo = f"Estimado(a) {nombre_mayus},\n\nTu registro para el Evento Elisa Carrillo ha sido exitoso.\nAdjunto encontrarás tu Gafete PDF.\nFolio: {id_usuario}\n\n¡Te esperamos!"
+            asunto = f"Boleto de Acceso - Gala Elisa y Amigos 2026 con orquesta en vivo (Folio: {id_usuario})"
+            cuerpo = f"<p>Estimado(a) <b>{nombre_mayus}</b>,</p><p>Tu registro para el Evento Gala Elisa y Amigos 2026 con orquesta en vivo ha sido exitoso.</p><p>Adjunto encontrarás tu Boleto en PDF.</p><p><b>Folio:</b> {id_usuario}</p><br><p>¡Te esperamos!</p>"
         else:
-            asunto = f"Gafete de Alumno - Ballet Elisa Carrillo (Folio: {id_usuario})"
-            cuerpo = f"¡Hola {nombre_mayus}!\n\nAdjunto encontrarás tu Gafete de Alumno en PDF.\nFolio: {id_usuario}\n\n¡Nos vemos pronto!"
+            asunto = f"Boleto de Alumno - Ballet Elisa Carrillo (Folio: {id_usuario})"
+            cuerpo = f"<p>¡Hola <b>{nombre_mayus}</b>!</p><p>Adjunto encontrarás tu Gafete de Alumno en PDF.</p><p><b>Folio:</b> {id_usuario}</p><br><p>¡Nos vemos pronto!</p>"
 
-        msg = Message(subject=asunto, recipients=[email_destino])
-        msg.body = cuerpo
+        # Convertir bytes de PDF a Base64
+        pdf_base64 = base64.b64encode(bytes_pdf).decode('utf-8')
         nombre_clean = nombre_mayus.replace(' ', '_')
-        msg.attach(
-            filename=f"Gafete_{tipo_usuario.upper()}_{id_usuario}_{nombre_clean}.pdf",
-            content_type="application/pdf",
-            data=bytes_pdf
+        nombre_archivo = f"Gafete_{tipo_usuario.upper()}_{id_usuario}_{nombre_clean}.pdf"
+
+        send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
+            to=[{"email": email_destino, "name": nombre_mayus}],
+            sender={"name": REMITENTE_NOMBRE, "email": REMITENTE_EMAIL},
+            subject=asunto,
+            html_content=cuerpo,
+            attachment=[
+                {
+                    "name": nombre_archivo,
+                    "content": pdf_base64
+                }
+            ]
         )
 
-        mail.send(msg)
+        brevo_mail_api.send_transac_email(send_smtp_email)
         return True
 
+    except ApiException as e:
+        print(f"❌ Error API Brevo enviando PDF: {e}")
+        return False
     except Exception as e:
-        print(f"❌ Error enviando correo: {e}")
+        print(f"❌ Error enviando correo con PDF: {e}")
         return False
 
 
@@ -447,12 +447,25 @@ def registro_eventlisa():
         existente = eventlisa.query.filter_by(Correo=email).first()
         if existente:
             return """
-            <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 60px auto; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; background-color: #ffffff;">
-                <div style="font-size: 48px; margin-bottom: 15px;">⚠️</div>
-                <h2 style="color: #e74c3c; margin-bottom: 15px; font-size: 22px;">Correo ya registrado</h2>
-                <p style="color: #666; font-size: 15px; margin-bottom: 25px;">Este correo electrónico ya fue registrado previamente para este evento.</p>
-                <a href="/eventoelisa" style="display: inline-block; padding: 12px 24px; background-color: #3498db; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Volver al formulario</a>
-            </div>
+            <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 500px; margin: 60px auto; padding: 40px 30px; border-radius: 12px; border: 1px solid rgba(227, 56, 120, 0.3); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15); text-align: center; background-color: #1a0818;">
+    <!-- Icono de advertencia -->
+    <div style="font-size: 52px; margin-bottom: 20px;">⚠️</div>
+    
+    <!-- Título de alerta en Dorado/Amarillo de la Gala -->
+    <h2 style="color: #f4d142; margin-bottom: 15px; font-size: 22px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+        Correo ya registrado
+    </h2>
+    
+    <!-- Texto informativo en rosa pastel suave -->
+    <p style="color: #d6b2c8; font-size: 15px; line-height: 1.5; margin-bottom: 30px;">
+        Este correo electrónico ya fue registrado previamente para este evento.
+    </p>
+    
+    <!-- Botón en Magenta principal -->
+    <a href="/eventoelisa" style="display: inline-block; padding: 12px 28px; background-color: #e33878; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; letter-spacing: 0.5px; transition: all 0.3s ease;">
+        Volver al formulario
+    </a>
+</div>
             """, 400
 
         nuevo = eventlisa(
@@ -470,29 +483,28 @@ def registro_eventlisa():
         token_url = serializer.dumps(payload, salt='email-confirm-salt')
         url_confirmacion = url_for('confirmar_email_generico', token=token_url, _external=True)
 
-        msg = Message(
-            subject="Confirma tu registro - Evento Elisa Carrillo",
-            recipients=[email]
-        )
-        msg.html = f"""
-            <h3>¡Hola {nombre}!</h3>
-            <p>Gracias por registrarte para el Evento Elisa Carrillo.</p>
-            <p>Haz clic en el siguiente enlace para confirmar tu asistencia y recibir tu Gafete PDF:</p>
-            <p>
-                <a href="{url_confirmacion}" style="background-color: #28a745; color: white; padding: 12px 22px; text-decoration: none; border-radius: 5px; display: inline-block;">
-                    Confirmar Registro y Recibir Gafete
-                </a>
-            </p>
-        """
-        mail.send(msg)
+        enviar_correo_confirmacion(email, nombre, url_confirmacion, "Evento Gala Elisa y Amigos 2026 con orquesta en vivo")
 
         return """
-        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 60px auto; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; background-color: #ffffff;">
-            <div style="font-size: 48px; margin-bottom: 15px;">✉️</div>
-            <h2 style="color: #2c3e50; margin-bottom: 15px; font-size: 22px;">Te hemos enviado un correo de confirmación.</h2>
-            <p style="color: #666; font-size: 15px; margin-bottom: 25px;">Por favor revisa tu bandeja de entrada para activar tu registro y recibir tu Gafete PDF.</p>
-            <a href="/eventoelisa" style="display: inline-block; padding: 12px 24px; background-color: #3498db; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Volver</a>
-        </div>
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 500px; margin: 60px auto; padding: 40px 30px; border-radius: 12px; border: 1px solid rgba(227, 56, 120, 0.3); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15); text-align: center; background-color: #1a0818;">
+    <!-- Icono de correo -->
+    <div style="font-size: 52px; margin-bottom: 20px;">✉️</div>
+    
+    <!-- Título principal en Magenta -->
+    <h2 style="color: #e33878; margin-bottom: 15px; font-size: 22px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+        Te hemos enviado un correo de confirmación.
+    </h2>
+    
+    <!-- Texto secundario en rosa pastel suave -->
+    <p style="color: #d6b2c8; font-size: 15px; line-height: 1.5; margin-bottom: 30px;">
+        Por favor revisa tu bandeja de entrada para activar tu registro y recibir tu Boleto en PDF.
+    </p>
+    
+    <!-- Botón en Magenta -->
+    <a href="/eventoelisa" style="display: inline-block; padding: 12px 28px; background-color: #e33878; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; letter-spacing: 0.5px; transition: all 0.3s ease;">
+        Volver
+    </a>
+</div>       
         """
 
     except Exception as e:
@@ -525,19 +537,16 @@ def registro():
         token_url = serializer.dumps(Correo, salt='email-confirm-salt')
         url_confirmacion = url_for('confirmar_email', token=token_url, _external=True)
 
-        msg = Message(
-            subject="Confirma tu registro de alumno",
-            recipients=[Correo]
-        )
-        msg.html = f"""
-            <h3>¡Hola {Nombre}!</h3>
-            <p>Haz clic en el enlace para activar tu cuenta y recibir tu Gafete PDF:</p>
-            <p><a href="{url_confirmacion}">Confirmar Registro</a></p>
-        """
-        
-        mail.send(msg)
-        return "<h2>Correo enviado correctamente. Revisa tu bandeja de entrada.</h2>"
+        enviar_correo_confirmacion(Correo, Nombre, url_confirmacion, "Ballet Elisa Carrillo - Alumno")
 
+        return """
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 60px auto; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; background-color: #ffffff;">
+            <div style="font-size: 48px; margin-bottom: 15px;">✉️</div>
+            <h2 style="color: #2c3e50; margin-bottom: 15px; font-size: 22px;">Te hemos enviado un correo de confirmación.</h2>
+            <p style="color: #666; font-size: 15px; margin-bottom: 25px;">Por favor revisa tu bandeja de entrada para activar tu registro y recibir tu Gafete PDF.</p>
+            <a href="/eventoelisa" style="display: inline-block; padding: 12px 24px; background-color: #3498db; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Volver</a>
+        </div>
+        """
     except Exception as e:
         db.session.rollback()
         return f"<h1>Ocurrió un error: {e}</h1>", 500
@@ -548,7 +557,27 @@ def confirmar_email(token):
     try:
         correo_validado = serializer.loads(token, salt='email-confirm-salt', max_age=3600)
     except SignatureExpired:
-        return '<h1>El enlace ha expirado. Realiza el registro de nuevo.</h1>'
+        return """
+<div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 500px; margin: 60px auto; padding: 40px 30px; border-radius: 12px; border: 1px solid rgba(227, 56, 120, 0.3); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15); text-align: center; background-color: #1a0818;">
+    <!-- Icono de información -->
+    <div style="font-size: 52px; margin-bottom: 20px;">ℹ️</div>
+    
+    <!-- Título principal en Magenta -->
+    <h2 style="color: #e33878; margin-bottom: 15px; font-size: 22px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+        Tu cuenta ya había sido confirmada previamente.
+    </h2>
+    
+    <!-- Texto secundario en rosa pastel suave -->
+    <p style="color: #d6b2c8; font-size: 15px; line-height: 1.5; margin-bottom: 30px;">
+        Ya no es necesario que vuelvas a validar este enlace. Puedes acceder directamente al sistema.
+    </p>
+    
+    <!-- Botón en Magenta principal -->
+    <a href="/eventoelisa" style="display: inline-block; padding: 12px 28px; background-color: #e33878; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; letter-spacing: 0.5px; transition: all 0.3s ease;">
+        Volver
+    </a>
+</div>
+"""
     except BadTimeSignature:
         return '<h1>El enlace de confirmación no es válido.</h1>'
 
@@ -621,16 +650,12 @@ def registro_empresario():
         token_url = serializer.dumps(payload, salt='email-confirm-salt')
         url_confirmacion = url_for('confirmar_email_generico', token=token_url, _external=True)
 
-        msg = Message(
-            subject="Confirmación de Registro - Ballet Elisa Carrillo",
-            recipients=[email]
+        enviar_correo_confirmacion(
+            email, 
+            f"{nombre} {apellido_paterno}", 
+            url_confirmacion, 
+            "Ballet Elisa Carrillo - Empresarios"
         )
-        msg.html = f"""
-            <h3>¡Hola {nombre} {apellido_paterno}!</h3>
-            <p>Haz clic para confirmar tu asistencia y recibir tu Gafete PDF Empresarial:</p>
-            <p><a href="{url_confirmacion}">Confirmar Registro</a></p>
-        """
-        mail.send(msg)
 
         return "<h2>¡Registro recibido con éxito! Revisa tu correo.</h2>"
 
@@ -644,8 +669,27 @@ def confirmar_email_generico(token):
     try:
         data = serializer.loads(token, salt='email-confirm-salt', max_age=3600)
     except (SignatureExpired, BadTimeSignature):
-        return '<h1>El enlace ha expirado o no es válido.</h1>'
-
+        return """
+<div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 500px; margin: 60px auto; padding: 40px 30px; border-radius: 12px; border: 1px solid rgba(227, 56, 120, 0.3); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15); text-align: center; background-color: #1a0818;">
+    <!-- Icono de información -->
+    <div style="font-size: 52px; margin-bottom: 20px;">ℹ️</div>
+    
+    <!-- Título principal en Magenta -->
+    <h2 style="color: #e33878; margin-bottom: 15px; font-size: 22px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+        Tu cuenta ya había sido confirmada previamente.
+    </h2>
+    
+    <!-- Texto secundario en rosa pastel suave -->
+    <p style="color: #d6b2c8; font-size: 15px; line-height: 1.5; margin-bottom: 30px;">
+        Ya no es necesario que vuelvas a validar este enlace. Puedes acceder directamente al sistema.
+    </p>
+    
+    <!-- Botón en Magenta principal -->
+    <a href="/eventoelisa" style="display: inline-block; padding: 12px 28px; background-color: #e33878; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; letter-spacing: 0.5px; transition: all 0.3s ease;">
+        Volver
+    </a>
+</div>
+"""
     if isinstance(data, dict):
         email = data.get('email')
         tipo = data.get('tipo')
@@ -671,7 +715,23 @@ def confirmar_email_generico(token):
 
     if usuario:
         if usuario.confirmado:
-            return "<h2>Tu cuenta ya había sido confirmada previamente.</h2>"
+            return """
+<div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width:    00px; margin: 90px auto; padding: 50px 40px; border-radius: 16px; border: 1px solid rgba(227, 56, 120, 0.3); box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2); text-align: center; background-color: #1a0818;">
+    <!-- Icono de información -->
+    <div style="font-size: 60px; margin-bottom: 25px;">ℹ️</div>
+    
+    <!-- Título principal en Magenta -->
+    <h2 style="color: #e33878; margin-bottom: 20px; font-size: 26px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; line-height: 1.3;">
+        Tu cuenta ya había sido confirmada previamente.
+    </h2>
+    
+    
+    <!-- Botón en Magenta principal -->
+    <a href="/eventoelisa" style="display: inline-block; padding: 14px 35px; background-color: #e33878; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 17px; letter-spacing: 0.5px; transition: all 0.3s ease;">
+        Volver
+    </a>
+</div>
+"""
         
         usuario.confirmado = True
         usuario.qr_code = generar_bytes_qr(id_reg)
@@ -685,8 +745,27 @@ def confirmar_email_generico(token):
         )
 
         db.session.commit()
-        return f"<h1>¡Registro Confirmado para {nombre_completo}! Tu gafete ha sido enviado al correo.</h1>"
-
+        return f"""
+<div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 80px auto; padding: 50px 40px; border-radius: 16px; border: 1px solid rgba(227, 56, 120, 0.3); box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2); text-align: center; background-color: #1a0818;">
+    <!-- Icono de fiesta -->
+    <div style="font-size: 60px; margin-bottom: 25px;">🎉</div>
+    
+    <!-- Título principal en Magenta con variable -->
+    <h2 style="color: #e33878; margin-bottom: 20px; font-size: 26px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; line-height: 1.3;">
+        ¡Registro Confirmado para {nombre_completo}!
+    </h2>
+    
+    <!-- Texto secundario en rosa pastel suave -->
+    <p style="color: #d6b2c8; font-size: 17px; line-height: 1.6; margin-bottom: 40px;">
+        Tu boleto ha sido enviado al correo.
+    </p>
+    
+    <!-- Botón en Magenta principal -->
+    <a href="/eventoelisa" style="display: inline-block; padding: 14px 35px; background-color: #e33878; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 17px; letter-spacing: 0.5px; transition: all 0.3s ease;">
+        Volver
+    </a>
+</div>
+"""
     return "<h1>Usuario no encontrado.</h1>"
 
 
