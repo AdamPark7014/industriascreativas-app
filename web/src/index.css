@@ -1,0 +1,19 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: #eef3f9;
+  font-family: 'Manrope', 'Segoe UI', sans-serif;
+  color: #132039;
+  -webkit-font-smoothing: antialiased;
+}

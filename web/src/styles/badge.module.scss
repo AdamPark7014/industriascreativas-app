@@ -1,0 +1,64 @@
+@use './tokens' as *;
+
+.badge {
+  width: 100%;
+  max-width: 260px;
+  margin: 0 auto;
+  padding: 18px 16px 14px;
+  border-radius: 16px;
+  color: #fff;
+  text-align: center;
+  box-shadow: 0 16px 28px rgba(7, 26, 58, 0.22);
+}
+
+.rosa {
+  background: linear-gradient(165deg, #e85a96 0%, $rosa-ficti 48%, #8e1048 100%);
+}
+
+.azul {
+  background: linear-gradient(165deg, #4d7be8 0%, $azul-ficti 50%, #071a3a 100%);
+}
+
+.logo {
+  display: block;
+  width: 148px;
+  height: auto;
+  margin: 0 auto 14px;
+  border-radius: 7px;
+}
+
+.qrPlaceholder {
+  width: 100px;
+  height: 100px;
+  margin: 0 auto 12px;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  color: $navy;
+  font-family: $font-display;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  border-radius: 10px;
+}
+
+.name {
+  margin: 0 0 4px;
+  font-family: $font-display;
+  font-size: 1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.meta {
+  margin: 0;
+  font-size: 0.82rem;
+  opacity: 0.95;
+  text-transform: uppercase;
+}
+
+.hint {
+  margin: 12px 0 0;
+  font-size: 0.66rem;
+  line-height: 1.35;
+  opacity: 0.9;
+}

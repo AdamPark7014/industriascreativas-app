@@ -1,0 +1,66 @@
+@use 'sass:color';
+
+// Gabor FICTI — corporate palette
+$navy: #071a3a;
+$navy-mid: #0f2d5c;
+$teal: #12b5b0;
+$teal-deep: #0d8f8b;
+$teal-dark: $teal-deep;
+$magenta: #c2186b;
+$rosa-ficti: #d81b70;
+$azul-ficti: #1a4fb8;
+$blue: #1a4fb8;
+$surface: #f5f7fb;
+$surface-2: #e8eef6;
+$card: #ffffff;
+$gray-50: #f0f2f5;
+$gray-100: #f4f6f9;
+$text: #132039;
+$text-muted: #5b6b82;
+$border: #d5deea;
+$border-strong: #b7c4d8;
+$error: #c62828;
+$ok: #1b7a45;
+$warning-bg: #fff8ef;
+$warning-border: #efd2a8;
+$warning-text: #7a4b12;
+
+// Legacy Elisa theme tokens
+$elisa-magenta: #e33878;
+$elisa-gold: #f4d142;
+$elisa-bg: #1a0818;
+$elisa-input: #271025;
+
+$font-display: 'Manrope', 'Segoe UI', sans-serif;
+$font-body: 'Manrope', 'Segoe UI', sans-serif;
+
+@mixin page-shell {
+  box-sizing: border-box;
+  min-height: 100vh;
+  margin: 0;
+  font-family: $font-body;
+  color: $text;
+}
+
+@mixin field-label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: $text-muted;
+}
+
+@mixin text-field {
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: 10px;
+  font-size: 0.98rem;
+  font-family: $font-body;
+  outline: none;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background-color 0.18s ease;
+}

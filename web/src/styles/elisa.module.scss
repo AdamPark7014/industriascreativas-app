@@ -1,0 +1,107 @@
+@use './tokens' as *;
+
+.page {
+  @include page-shell;
+  background:
+    radial-gradient(ellipse 70% 45% at 50% 0%, rgba($elisa-magenta, 0.12), transparent 50%),
+    linear-gradient(180deg, #120610 0%, #1c0c18 50%, #140813 100%);
+}
+
+.card {
+  width: 100%;
+  max-width: 450px;
+  padding: 36px 30px;
+  background: $elisa-bg;
+  border: 1px solid rgba($elisa-magenta, 0.28);
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 26px;
+
+  h2 {
+    margin: 0 0 8px;
+    color: $elisa-magenta;
+    font-size: 1.45rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  p {
+    margin: 0;
+    color: $elisa-gold;
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+}
+
+.group {
+  margin-bottom: 18px;
+  position: relative;
+}
+
+.label {
+  @include field-label;
+  color: #e2cad8;
+}
+
+.input {
+  @include text-field;
+  background: $elisa-input;
+  border: 1.5px solid #441a40;
+  color: #fff;
+
+  &::placeholder {
+    color: #8c6885;
+  }
+
+  &:focus {
+    border-color: $elisa-magenta;
+    box-shadow: 0 0 0 3px rgba($elisa-magenta, 0.25);
+  }
+
+  &:not(:placeholder-shown):invalid {
+    border-color: #ff4d4d;
+    background: #331015;
+  }
+
+  &:not(:placeholder-shown):valid {
+    border-color: #2e7d32;
+    background: #122615;
+  }
+
+  &:not(:placeholder-shown):invalid ~ .error {
+    display: block;
+  }
+}
+
+.error {
+  display: none;
+  margin-top: 6px;
+  color: #ff6b6b;
+  font-size: 12px;
+}
+
+.submit {
+  width: 100%;
+  margin-top: 8px;
+  padding: 14px;
+  border: none;
+  border-radius: 8px;
+  background: $elisa-magenta;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    background: $elisa-gold;
+    color: #140513;
+    box-shadow: 0 0 18px rgba($elisa-gold, 0.35);
+  }
+}

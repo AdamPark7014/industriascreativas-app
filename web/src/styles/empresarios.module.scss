@@ -1,0 +1,306 @@
+@use 'sass:color';
+@use './tokens' as *;
+
+.page {
+  box-sizing: border-box;
+  min-height: 100vh;
+  margin: 0;
+  padding: 24px 16px;
+  background: $gray-100;
+  color: #333;
+  line-height: 1.6;
+  font-family: 'Segoe UI', Arial, sans-serif;
+}
+
+.card {
+  max-width: 900px;
+  margin: 0 auto;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.banner {
+  background: linear-gradient(135deg, $teal 0%, color.adjust($teal, $lightness: -8%) 100%);
+  color: #fff;
+  padding: 28px 30px;
+  text-align: center;
+
+  h1 {
+    margin: 0 0 8px;
+    font-size: 1.55rem;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.9rem;
+    opacity: 0.92;
+  }
+}
+
+.notice {
+  background: $magenta;
+  color: #fff;
+  padding: 10px 20px;
+  font-size: 13px;
+  text-align: right;
+  font-weight: 700;
+}
+
+.form {
+  padding: 30px;
+}
+
+.section {
+  color: $navy;
+  font-size: 1.1rem;
+  font-weight: 700;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 8px;
+  margin: 28px 0 20px;
+
+  &:first-of-type {
+    margin-top: 0;
+  }
+}
+
+.row {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+  margin-bottom: 12px;
+}
+
+.col {
+  display: table-cell;
+  padding: 0 10px;
+  vertical-align: bottom;
+
+  &:first-child {
+    padding-left: 0;
+  }
+
+  &:last-child {
+    padding-right: 0;
+  }
+}
+
+.w33 {
+  width: 33.33%;
+}
+
+.w50 {
+  width: 50%;
+}
+
+.w100 {
+  width: 100%;
+  display: block;
+  padding: 0;
+}
+
+.field {
+  margin-bottom: 18px;
+
+  label {
+    display: block;
+    font-size: 13px;
+    color: #718096;
+    margin-bottom: 4px;
+  }
+
+  input[type='text'],
+  input[type='email'],
+  input[type='tel'] {
+    width: 100%;
+    border: none;
+    border-bottom: 1.5px solid #cbd5e1;
+    padding: 8px 0;
+    font-size: 15px;
+    outline: none;
+    background: transparent;
+    transition: border-color 0.2s;
+
+    &:focus {
+      border-bottom-color: $navy;
+    }
+  }
+
+  select {
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    padding: 10px;
+    font-size: 15px;
+    outline: none;
+    background: #fff;
+    color: #333;
+
+    &:focus {
+      border-color: $navy;
+    }
+  }
+}
+
+.emailLabel {
+  font-weight: 700;
+  color: $navy !important;
+}
+
+.question {
+  margin-bottom: 24px;
+}
+
+.questionLabel {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #044327;
+}
+
+.badge {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #edf2f7;
+  color: #4a5568;
+  font-size: 12px;
+}
+
+.options {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.optionsRow {
+  display: table-row;
+}
+
+.option {
+  display: table-cell;
+  padding: 6px 10px 6px 0;
+  font-size: 14px;
+  color: #4a5568;
+  vertical-align: top;
+
+  input {
+    margin-right: 8px;
+    transform: scale(1.1);
+    cursor: pointer;
+  }
+
+  label {
+    cursor: pointer;
+    vertical-align: middle;
+  }
+}
+
+.optionBlock {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.privacy {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 15px;
+  margin: 30px 0 25px;
+
+  input {
+    float: left;
+    margin: 4px 12px 0 0;
+    transform: scale(1.2);
+  }
+
+  label {
+    display: block;
+    overflow: hidden;
+    font-size: 14px;
+    color: #334155;
+  }
+
+  a {
+    color: $blue;
+    font-weight: 700;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.submit {
+  display: block;
+  width: 250px;
+  margin: 30px auto 10px;
+  padding: 14px;
+  border: none;
+  border-radius: 25px;
+  background: $blue;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  box-shadow: 0 4px 6px rgba($blue, 0.2);
+  transition: background 0.2s;
+
+  &:hover {
+    background: $navy;
+  }
+}
+
+.link {
+  display: inline-block;
+  margin-top: 8px;
+  color: $teal-dark;
+  font-weight: 600;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.support {
+  margin-top: 15px;
+  text-align: center;
+  font-size: 13px;
+  color: #718096;
+
+  a {
+    color: $blue;
+    text-decoration: none;
+  }
+}
+
+.limitError {
+  margin-top: 5px;
+  color: $error;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .row,
+  .col,
+  .w33,
+  .w50 {
+    display: block;
+    width: 100%;
+    padding: 0;
+  }
+
+  .options,
+  .optionsRow,
+  .option {
+    display: block;
+    width: 100%;
+  }
+}

@@ -1,0 +1,438 @@
+import { useMemo, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
+import { postForm } from '../api/registro'
+import AppShell from '../components/AppShell'
+import BadgePreview from '../components/BadgePreview'
+import PhoneField from '../components/PhoneField'
+import { RegistrationSuccess } from '../components/RegistrationSuccess'
+import {
+  AREAS_RESPONSABILIDAD,
+  emptyEmpresaForm,
+  LEYENDA_CANJE,
+  POSICIONES_EMPRESA,
+  PRODUCTOS_INTERES,
+  type EmpresaFormData,
+} from '../constants/registro'
+import { findDial, formatPhoneDisplay, validateLocalPhone } from '../constants/phone'
+import { toUpperCaseInput } from '../utils/forms'
+import styles from '../styles/flow.module.scss'
+
+type Step = 'form' | 'review' | 'done'
+
+export default function EmpresariosPage() {
+  const [step, setStep] = useState<Step>('form')
+  const [form, setForm] = useState<EmpresaFormData>(emptyEmpresaForm)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const nombreCompleto = useMemo(
+    () => `${form.nombre} ${form.apellidoPaterno}`.trim().toUpperCase(),
+    [form.nombre, form.apellidoPaterno],
+  )
+
+  const phoneDisplay = useMemo(
+    () => formatPhoneDisplay(findDial(form.phoneCountry).dial, form.telefono),
+    [form.phoneCountry, form.telefono],
+  )
+
+  const posicionFinal =
+    form.posicionEmpresa === 'Otro' && form.otroPosicion.trim()
+      ? `Otro: ${form.otroPosicion.trim()}`
+      : form.posicionEmpresa
+
+  function update<K extends keyof EmpresaFormData>(key: K, value: EmpresaFormData[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }))
+  }
+
+  function toggleProducto(value: string) {
+    setForm((prev) => {
+      const exists = prev.productosInteres.includes(value)
+      return {
+        ...prev,
+        productosInteres: exists
+          ? prev.productosInteres.filter((item) => item !== value)
+          : [...prev.productosInteres, value],
+      }
+    })
+  }
+
+  function validateForm() {
+    if (!form.email || !form.emailConfirm) return 'El correo y su verificación son obligatorios.'
+    if (form.email.trim().toLowerCase() !== form.emailConfirm.trim().toLowerCase()) {
+      return 'Los correos no coinciden.'
+    }
+    if (!form.nombre || !form.apellidoPaterno || !form.cargo || !form.empresa) {
+      return 'Completa nombre, apellido, cargo y empresa.'
+    }
+    const phoneError = validateLocalPhone(form.phoneCountry, form.telefono)
+    if (phoneError) return phoneError
+    if (!form.ciudad) return 'La ciudad es obligatoria.'
+    if (!form.posicionEmpresa) return 'Selecciona la posición en la empresa.'
+    if (form.posicionEmpresa === 'Otro' && !form.otroPosicion.trim()) {
+      return 'Describe la opción “Otro” en posición.'
+    }
+    if (!form.areaResponsabilidad) return 'Selecciona tu área de responsabilidad.'
+    if (form.productosInteres.length === 0) return 'Selecciona al menos un producto de interés.'
+    return ''
+  }
+
+  function goReview(event: FormEvent) {
+    event.preventDefault()
+    const message = validateForm()
+    if (message) {
+      setError(message)
+      return
+    }
+    setError('')
+    setStep('review')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  async function submitRegistro() {
+    setLoading(true)
+    setError('')
+    const result = await postForm('/registro_empresario', {
+      email: form.email.trim().toLowerCase(),
+      nombre: form.nombre.trim().toUpperCase(),
+      apellido_paterno: form.apellidoPaterno.trim().toUpperCase(),
+      cargo: form.cargo.trim().toUpperCase(),
+      empresa: form.empresa.trim().toUpperCase(),
+      lada_pais: findDial(form.phoneCountry).dial,
+      telefono: form.telefono.trim(),
+      ciudad: form.ciudad.trim().toUpperCase(),
+      posicion_empresa: posicionFinal,
+      area_responsabilidad: form.areaResponsabilidad,
+      productos_interes: form.productosInteres,
+      pais: form.phoneCountry === 'MX' ? 'MEXICO' : form.phoneCountry,
+      codigo_postal: '00000',
+    })
+    setLoading(false)
+    if (!result.ok) {
+      setError(result.message)
+      return
+    }
+    setStep('done')
+  }
+
+  if (step === 'done') {
+    return (
+      <AppShell>
+        <RegistrationSuccess title="Registro empresarial enviado">
+          <div className={styles.actions} style={{ justifyContent: 'center', border: 'none', background: 'transparent' }}>
+            <Link className={styles.btnGhost} to="/">
+              Volver al menú
+            </Link>
+          </div>
+        </RegistrationSuccess>
+      </AppShell>
+    )
+  }
+
+  return (
+    <AppShell>
+      <div className={styles.shell}>
+        <div className={styles.hero}>
+          <p className={styles.kicker}>Acreditación corporativa</p>
+          <h1 className={styles.title}>Registro Empresa</h1>
+          <p className={styles.subtitle}>
+            Completa la información oficial. En el siguiente paso podrás revisar tus datos y la
+            vista previa del gafete Rosa FICTI.
+          </p>
+        </div>
+
+        <div className={styles.card}>
+          <div className={styles.progress}>
+            <div className={`${styles.progressItem} ${step === 'form' ? styles.active : styles.done}`}>
+              01 Formulario
+            </div>
+            <div className={`${styles.progressItem} ${step === 'review' ? styles.active : ''}`}>
+              02 Revisa tu info
+            </div>
+            <div className={styles.progressItem}>03 Confirmación</div>
+          </div>
+
+          <div className={styles.cardBody}>
+            {error ? <p className={styles.error}>{error}</p> : null}
+
+            {step === 'form' ? (
+              <form onSubmit={goReview}>
+                <section className={styles.section}>
+                  <h2 className={styles.sectionTitle}>Datos de contacto</h2>
+                  <div className={styles.grid2}>
+                    <div className={styles.group}>
+                      <label className={styles.label} htmlFor="email">
+                        Email<span className={styles.required}>*</span>
+                      </label>
+                      <input
+                        className={styles.input}
+                        id="email"
+                        type="email"
+                        required
+                        placeholder="nombre@empresa.com"
+                        value={form.email}
+                        onChange={(e) => update('email', e.target.value)}
+                      />
+                    </div>
+                    <div className={styles.group}>
+                      <label className={styles.label} htmlFor="emailConfirm">
+                        Verificación de email<span className={styles.required}>*</span>
+                      </label>
+                      <input
+                        className={styles.input}
+                        id="emailConfirm"
+                        type="email"
+                        required
+                        placeholder="Confirma tu correo"
+                        value={form.emailConfirm}
+                        onChange={(e) => update('emailConfirm', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                <section className={styles.section}>
+                  <h2 className={styles.sectionTitle}>Identidad y empresa</h2>
+                  <div className={styles.grid2}>
+                    <div className={styles.group}>
+                      <label className={styles.label} htmlFor="nombre">
+                        Nombre<span className={styles.required}>*</span>
+                      </label>
+                      <input
+                        className={styles.input}
+                        id="nombre"
+                        required
+                        style={{ textTransform: 'uppercase' }}
+                        value={form.nombre}
+                        onInput={toUpperCaseInput}
+                        onChange={(e) => update('nombre', e.target.value)}
+                      />
+                    </div>
+                    <div className={styles.group}>
+                      <label className={styles.label} htmlFor="apellidoPaterno">
+                        Apellido paterno<span className={styles.required}>*</span>
+                      </label>
+                      <input
+                        className={styles.input}
+                        id="apellidoPaterno"
+                        required
+                        style={{ textTransform: 'uppercase' }}
+                        value={form.apellidoPaterno}
+                        onInput={toUpperCaseInput}
+                        onChange={(e) => update('apellidoPaterno', e.target.value)}
+                      />
+                    </div>
+                    <div className={styles.group}>
+                      <label className={styles.label} htmlFor="cargo">
+                        Cargo<span className={styles.required}>*</span>
+                      </label>
+                      <input
+                        className={styles.input}
+                        id="cargo"
+                        required
+                        style={{ textTransform: 'uppercase' }}
+                        value={form.cargo}
+                        onInput={toUpperCaseInput}
+                        onChange={(e) => update('cargo', e.target.value)}
+                      />
+                    </div>
+                    <div className={styles.group}>
+                      <label className={styles.label} htmlFor="empresa">
+                        Empresa<span className={styles.required}>*</span>
+                      </label>
+                      <input
+                        className={styles.input}
+                        id="empresa"
+                        required
+                        style={{ textTransform: 'uppercase' }}
+                        value={form.empresa}
+                        onInput={toUpperCaseInput}
+                        onChange={(e) => update('empresa', e.target.value)}
+                      />
+                    </div>
+                    <div className={styles.group}>
+                      <label className={styles.label} htmlFor="ciudad">
+                        Ciudad<span className={styles.required}>*</span>
+                      </label>
+                      <input
+                        className={styles.input}
+                        id="ciudad"
+                        required
+                        style={{ textTransform: 'uppercase' }}
+                        value={form.ciudad}
+                        onInput={toUpperCaseInput}
+                        onChange={(e) => update('ciudad', e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <PhoneField
+                    countryCode={form.phoneCountry}
+                    localNumber={form.telefono}
+                    onCountryChange={(code) => {
+                      update('phoneCountry', code)
+                      update('telefono', '')
+                    }}
+                    onNumberChange={(value) => update('telefono', value)}
+                  />
+
+                  <div className={styles.group}>
+                    <label className={styles.label} htmlFor="posicionEmpresa">
+                      Posición en la empresa
+                    </label>
+                    <select
+                      className={styles.select}
+                      id="posicionEmpresa"
+                      required
+                      value={form.posicionEmpresa}
+                      onChange={(e) => update('posicionEmpresa', e.target.value)}
+                    >
+                      <option value="" disabled>
+                        Seleccione una opción
+                      </option>
+                      {POSICIONES_EMPRESA.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {form.posicionEmpresa === 'Otro' ? (
+                    <div className={styles.group}>
+                      <label className={styles.label} htmlFor="otroPosicion">
+                        Especifica “Otro”
+                      </label>
+                      <input
+                        className={styles.input}
+                        id="otroPosicion"
+                        value={form.otroPosicion}
+                        onChange={(e) => update('otroPosicion', e.target.value)}
+                      />
+                    </div>
+                  ) : null}
+                </section>
+
+                <section className={styles.section}>
+                  <h2 className={styles.sectionTitle}>Responsabilidad en la empresa</h2>
+                  <div className={styles.options}>
+                    {AREAS_RESPONSABILIDAD.map((area) => (
+                      <label className={styles.option} key={area}>
+                        <input
+                          type="radio"
+                          name="area_responsabilidad"
+                          checked={form.areaResponsabilidad === area}
+                          onChange={() => update('areaResponsabilidad', area)}
+                        />
+                        {area}
+                      </label>
+                    ))}
+                  </div>
+                </section>
+
+                <section className={styles.section}>
+                  <h2 className={styles.sectionTitle}>Productos de interés</h2>
+                  <div className={styles.options}>
+                    {PRODUCTOS_INTERES.map((producto) => (
+                      <label className={styles.option} key={producto}>
+                        <input
+                          type="checkbox"
+                          checked={form.productosInteres.includes(producto)}
+                          onChange={() => toggleProducto(producto)}
+                        />
+                        {producto}
+                      </label>
+                    ))}
+                  </div>
+                </section>
+
+                <div className={styles.actions}>
+                  <Link className={styles.btnGhost} to="/">
+                    Cancelar
+                  </Link>
+                  <button className={styles.btnPrimary} type="submit">
+                    Continuar a revisión
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div>
+                <section className={styles.section}>
+                  <h2 className={styles.sectionTitle}>Resumen de tu registro</h2>
+                  <div className={styles.summary}>
+                    <div className={styles.summaryRow}>
+                      <strong>Email</strong>
+                      <span>{form.email}</span>
+                    </div>
+                    <div className={styles.summaryRow}>
+                      <strong>Nombre</strong>
+                      <span>{nombreCompleto}</span>
+                    </div>
+                    <div className={styles.summaryRow}>
+                      <strong>Cargo</strong>
+                      <span>{form.cargo}</span>
+                    </div>
+                    <div className={styles.summaryRow}>
+                      <strong>Empresa</strong>
+                      <span>{form.empresa}</span>
+                    </div>
+                    <div className={styles.summaryRow}>
+                      <strong>Teléfono</strong>
+                      <span>{phoneDisplay}</span>
+                    </div>
+                    <div className={styles.summaryRow}>
+                      <strong>Ciudad</strong>
+                      <span>{form.ciudad}</span>
+                    </div>
+                    <div className={styles.summaryRow}>
+                      <strong>Posición</strong>
+                      <span>{posicionFinal}</span>
+                    </div>
+                    <div className={styles.summaryRow}>
+                      <strong>Responsabilidad</strong>
+                      <span>{form.areaResponsabilidad}</span>
+                    </div>
+                    <div className={styles.summaryRow}>
+                      <strong>Productos</strong>
+                      <span>{form.productosInteres.join(', ')}</span>
+                    </div>
+                  </div>
+                </section>
+
+                <div className={styles.previewBlock}>
+                  <div className={styles.previewCopy}>
+                    <h3>Vista previa del gafete</h3>
+                    <p>
+                      Gafete Rosa FICTI con logo Gabor. Al confirmar recibirás el QR digital; el
+                      canje físico se realiza en taquilla.
+                    </p>
+                    <p className={styles.leyenda}>{LEYENDA_CANJE}</p>
+                  </div>
+                  <BadgePreview
+                    variant="empresa"
+                    nombre={nombreCompleto}
+                    empresa={form.empresa}
+                    cargo={form.cargo}
+                  />
+                </div>
+
+                <div className={styles.actions}>
+                  <button className={styles.btnGhost} type="button" onClick={() => setStep('form')}>
+                    Editar datos
+                  </button>
+                  <button
+                    className={styles.btnPrimary}
+                    type="button"
+                    disabled={loading}
+                    onClick={submitRegistro}
+                  >
+                    {loading ? 'Enviando…' : 'Confirmar registro'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </AppShell>
+  )
+}

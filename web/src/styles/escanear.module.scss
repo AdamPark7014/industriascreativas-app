@@ -1,0 +1,77 @@
+@use './tokens' as *;
+
+.page {
+  box-sizing: border-box;
+  min-height: 100vh;
+  margin: 0;
+  padding: 16px;
+  text-align: center;
+  background: $gray-50;
+  font-family: 'Segoe UI', Arial, sans-serif;
+}
+
+.card {
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 24px 20px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.1);
+}
+
+.title {
+  margin: 0 0 16px;
+  color: $navy;
+  font-size: 1.35rem;
+}
+
+.modes {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.modeBtn {
+  width: 45%;
+  padding: 14px 10px;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+
+  &.entrada {
+    background: #28a745;
+    color: #fff;
+  }
+
+  &.salida {
+    background: #dc3545;
+    color: #fff;
+  }
+
+  &.inactive {
+    opacity: 0.3;
+  }
+}
+
+.form {
+  margin-top: 12px;
+}
+
+.input {
+  width: 85%;
+  margin-top: 12px;
+  padding: 12px;
+  border: 2px solid $blue;
+  border-radius: 8px;
+  font-size: 1.25rem;
+  text-align: center;
+  outline: none;
+
+  &:focus {
+    box-shadow: 0 0 0 3px rgba($blue, 0.2);
+  }
+}
