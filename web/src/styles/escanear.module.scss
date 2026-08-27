@@ -4,74 +4,211 @@
   box-sizing: border-box;
   min-height: 100vh;
   margin: 0;
-  padding: 16px;
+  padding: 20px 16px 40px;
   text-align: center;
-  background: $gray-50;
-  font-family: 'Segoe UI', Arial, sans-serif;
+  background: linear-gradient(180deg, $dark-bg 0%, $dark-bg-2 55%, $dark-bg 100%);
+  color: $dark-text;
+  font-family: $font-body;
 }
 
 .card {
-  max-width: 400px;
+  max-width: 440px;
   margin: 0 auto;
-  padding: 24px 20px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.1);
+  padding: 24px 20px 20px;
+  background: $dark-surface;
+  border: 1px solid $dark-border;
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
 }
 
 .title {
-  margin: 0 0 16px;
-  color: $navy;
-  font-size: 1.35rem;
+  margin: 0 0 18px;
+  font-family: $font-display;
+  color: $dark-text;
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
 .modes {
   display: flex;
   justify-content: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 10px;
 }
 
 .modeBtn {
-  width: 45%;
+  flex: 1;
   padding: 14px 10px;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 700;
+  border: 1.5px solid transparent;
+  border-radius: 11px;
+  font-family: $font-body;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   cursor: pointer;
-  transition: opacity 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    background 0.15s ease;
 
   &.entrada {
-    background: #28a745;
-    color: #fff;
+    background: $verde-tech;
+    border-color: $verde-tech;
+    color: $dark-bg;
   }
 
   &.salida {
-    background: #dc3545;
+    background: $rosa-tech;
+    border-color: $rosa-tech;
     color: #fff;
   }
 
+  // El modo inactivo se vacía en vez de atenuarse: a un metro de distancia,
+  // una opacidad baja se confunde con el activo y se marca la entrada como
+  // salida.
   &.inactive {
-    opacity: 0.3;
+    background: transparent;
+    opacity: 1;
+
+    &.entrada {
+      color: $verde-tech;
+    }
+
+    &.salida {
+      color: $rosa-tech;
+    }
   }
 }
 
 .form {
-  margin-top: 12px;
+  margin-top: 16px;
 }
 
 .input {
-  width: 85%;
-  margin-top: 12px;
-  padding: 12px;
-  border: 2px solid $blue;
-  border-radius: 8px;
-  font-size: 1.25rem;
+  width: 100%;
+  padding: 14px 12px;
+  border: 1.5px solid $dark-border;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.04);
+  color: $dark-text;
+  font-family: $font-body;
+  font-size: 1.2rem;
+  letter-spacing: 0.06em;
   text-align: center;
   outline: none;
 
-  &:focus {
-    box-shadow: 0 0 0 3px rgba($blue, 0.2);
+  &::placeholder {
+    color: $dark-text-dim;
+    letter-spacing: 0.08em;
   }
+
+  &:focus {
+    border-color: $cyan-tech;
+    box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.18);
+  }
+}
+
+.hint {
+  margin: 10px 0 0;
+  font-size: 0.8rem;
+  color: $dark-text-dim;
+}
+
+.resultado {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 18px;
+  padding: 18px 16px;
+  border-radius: 12px;
+  border: 1.5px solid;
+  font-size: 0.98rem;
+  line-height: 1.4;
+
+  strong {
+    font-family: $font-display;
+    font-size: 1.2rem;
+    font-weight: 800;
+  }
+
+  &.exito {
+    border-color: $verde-tech;
+    background: rgba(53, 217, 92, 0.12);
+    color: $verde-tech-bright;
+  }
+
+  &.fallo {
+    border-color: $rosa-tech;
+    background: rgba(236, 30, 99, 0.12);
+    color: $rosa-tech-bright;
+  }
+}
+
+.conteo {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: $dark-text;
+}
+
+.historial {
+  max-width: 440px;
+  margin: 22px auto 0;
+  text-align: left;
+
+  h3 {
+    margin: 0 0 8px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: $dark-text-dim;
+  }
+
+  ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid $dark-border;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  li {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid $dark-border;
+    font-size: 0.88rem;
+    background: rgba(255, 255, 255, 0.02);
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+}
+
+.hora {
+  color: $dark-text-dim;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.quien {
+  color: $dark-text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.marca {
+  font-weight: 800;
+}
+
+.filaOk .marca {
+  color: $verde-tech;
+}
+
+.filaMal .marca {
+  color: $rosa-tech;
 }

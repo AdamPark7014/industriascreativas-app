@@ -34,7 +34,8 @@ export default function HomePage() {
               <Link className={`${styles.homeCard} ${styles.empresa}`} to="/empresarios">
                 <span className={styles.homeCardIcon} aria-hidden>
                   <svg viewBox="0 0 48 48" width="30" height="30" fill="currentColor">
-                    <path d="M6 42V16h13V6h11v10h12v26H6zm4-4h9v-6h-9v6zm0-10h9v-6h-9v6zm13 10h9v-6h-9v6zm0-10h9v-6h-9v6zm0-10h9v-6h-9v6zm13 20h8v-6h-8v6zm0-10h8v-6h-8v6z" />
+                    <path d="M6 44V10a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v34H6zm4-28h4v-4h-4v4zm8 0h4v-4h-4v4zm-8 8h4v-4h-4v4zm8 0h4v-4h-4v4zm-8 8h4v-4h-4v4zm8 0h4v-4h-4v4zm-4 12h4v-8h-4v8z" />
+                    <path d="M30 44V20h10a2 2 0 0 1 2 2v22H30zm4-14h4v-4h-4v4zm0 8h4v-4h-4v4z" />
                   </svg>
                 </span>
                 <span className={styles.homeCardText}>

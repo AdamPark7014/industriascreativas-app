@@ -1252,89 +1252,146 @@ def confirmar_email_generico(token):
 # ESCÁNER Y CONTROL DE ACCESO
 # ==========================================
 
+def buscar_asistente(qr_data):
+    """Resuelve el QR a (asistente, etiqueta). Todo son búsquedas por clave
+    primaria, así que la base de datos no es el cuello de botella aquí."""
+    qr_data = (qr_data or '').strip()
+
+    if '-' in qr_data:
+        partes = qr_data.split('-')
+        if partes[-1].isdigit():
+            id_num = int(partes[-1])
+            tag = partes[0].upper()
+            if tag == "EMPRESARIO":
+                return Empresario.query.get(id_num), "Empresario"
+            if tag == "ELISA_CARRILLO":
+                return eventlisa.query.get(id_num), "Elisa Carrillo"
+            return Alumno.query.get(id_num), "Alumno"
+    elif qr_data.isdigit():
+        id_num = int(qr_data)
+        asistente = Empresario.query.get(id_num)
+        if asistente:
+            return asistente, "Empresario"
+        asistente = eventlisa.query.get(id_num)
+        if asistente:
+            return asistente, "Elisa Carrillo"
+        return Alumno.query.get(id_num), "Alumno"
+
+    return None, ""
+
+
+def procesar_escaneo(qr_data, modo):
+    """Aplica el escaneo y devuelve un dict con el resultado.
+
+    La comparten la ruta de formulario y la de JSON, para que el escáner por
+    AJAX y el POST clásico no puedan divergir de comportamiento.
+    """
+    asistente, tipo_usuario = buscar_asistente(qr_data)
+
+    if not asistente:
+        return {
+            'ok': False,
+            'mensaje': '❌ ACCESO DENEGADO',
+            'detalles': f'El ID "{qr_data}" no se encuentra registrado.',
+            'pitido': 'error',
+            'nombre': '',
+            'tipo': '',
+            'asistencias': 0,
+        }
+
+    nombre = f"{asistente.Nombre} {getattr(asistente, 'ApellidoPaterno', '') or ''}".strip()
+    asistencias_actuales = getattr(asistente, 'asistencias', 0) or 0
+
+    if modo == 'salida':
+        if asistencias_actuales <= 0:
+            return {
+                'ok': False,
+                'mensaje': '⚠️ SALIDA DENEGADA',
+                'detalles': f'{nombre} no registra entradas activas.',
+                'pitido': 'error',
+                'nombre': nombre,
+                'tipo': tipo_usuario,
+                'asistencias': asistencias_actuales,
+            }
+        asistente.asistencias = asistencias_actuales - 1
+        db.session.commit()
+        return {
+            'ok': True,
+            'mensaje': '🚪 SALIDA REGISTRADA',
+            'detalles': f'{nombre} ({tipo_usuario})',
+            'pitido': 'exito',
+            'nombre': nombre,
+            'tipo': tipo_usuario,
+            'asistencias': asistente.asistencias,
+        }
+
+    if asistencias_actuales >= 1:
+        return {
+            'ok': False,
+            'mensaje': '❌ LÍMITE ALCANZADO',
+            'detalles': f'{nombre} ya ingresó {asistencias_actuales}/1 veces.',
+            'pitido': 'error',
+            'nombre': nombre,
+            'tipo': tipo_usuario,
+            'asistencias': asistencias_actuales,
+        }
+
+    asistente.asistencias = asistencias_actuales + 1
+    db.session.commit()
+    return {
+        'ok': True,
+        'mensaje': '✅ ENTRADA REGISTRADA',
+        'detalles': f'{nombre} ({tipo_usuario})',
+        'pitido': 'exito',
+        'nombre': nombre,
+        'tipo': tipo_usuario,
+        'asistencias': asistente.asistencias,
+    }
+
+
+@app.route('/api/escanear', methods=['POST'])
+def api_escanear():
+    """Escaneo sin recargar la página.
+
+    La ruta de formulario obligaba a dos navegaciones completas por boleto —
+    y una de ellas volvía a descargar y arrancar todo el SPA de React — más un
+    toque manual en "Escanear Siguiente". Aquí solo viaja el JSON.
+    """
+    datos = request.get_json(silent=True) or request.form
+    qr_data = (datos.get('qr_data') or '').strip()
+    modo = (datos.get('modo') or 'entrada').strip()
+
+    if not qr_data:
+        return jsonify({
+            'ok': False,
+            'mensaje': '❌ SIN DATOS',
+            'detalles': 'No se recibió ningún código.',
+            'pitido': 'error',
+            'nombre': '',
+            'tipo': '',
+            'asistencias': 0,
+        }), 400
+
+    return jsonify(procesar_escaneo(qr_data, modo))
+
+
 @app.route('/escanear', methods=['GET', 'POST'])
 def escanear():
     if request.method == 'POST':
-        qr_data = request.form.get('qr_data', '').strip()
-        modo = request.form.get('modo', 'entrada')
-        
-        asistente = None
-        tipo_usuario = ""
-        
-        if '-' in qr_data:
-            partes = qr_data.split('-')
-            if partes[-1].isdigit():
-                id_num = int(partes[-1])
-                tag = partes[0].upper()
-                
-                if tag == "EMPRESARIO":
-                    asistente = Empresario.query.get(id_num)
-                    tipo_usuario = "Empresario"
-                elif tag == "ELISA_CARRILLO":
-                    asistente = eventlisa.query.get(id_num)
-                    tipo_usuario = "Elisa Carrillo"
-                else:
-                    asistente = Alumno.query.get(id_num)
-                    tipo_usuario = "Alumno"
-        elif qr_data.isdigit():
-            id_num = int(qr_data)
-            asistente = Empresario.query.get(id_num)
-            tipo_usuario = "Empresario"
-            if not asistente:
-                asistente = eventlisa.query.get(id_num)
-                tipo_usuario = "Elisa Carrillo"
-            if not asistente:
-                asistente = Alumno.query.get(id_num)
-                tipo_usuario = "Alumno"
-
-        if not asistente:
-            return responder_escaneo(
-                exito=False, 
-                mensaje="❌ ACCESO DENEGADO", 
-                detalles=f'El ID "{qr_data}" no se encuentra registrado.', 
-                pitido="error"
-            )
-
-        nombre = f"{asistente.Nombre} {getattr(asistente, 'ApellidoPaterno', '')}".strip()
-        asistencias_actuales = getattr(asistente, 'asistencias', 0) or 0
-
-        if modo == 'entrada':
-            if asistencias_actuales >= 1:
-                return responder_escaneo(
-                    exito=False, 
-                    mensaje="❌ LÍMITE ALCANZADO", 
-                    detalles=f"{nombre} ya ingresó {asistencias_actuales}/1 veces.", 
-                    pitido="error"
-                )
-            
-            asistente.asistencias = asistencias_actuales + 1
-            db.session.commit()
-            
-            return responder_escaneo(
-                exito=True, 
-                mensaje="✅ ENTRADA REGISTRADA", 
-                detalles=f"{nombre} ({tipo_usuario})<br><br><strong style='font-size:22px;'>Entradas: {asistente.asistencias}/1</strong>", 
-                pitido="exito"
-            )
-
-        elif modo == 'salida':
-            if asistencias_actuales <= 0:
-                return responder_escaneo(
-                    exito=False, 
-                    mensaje="⚠️ SALIDA DENEGADA", 
-                    detalles=f"{nombre} no registra entradas activas.", 
-                    pitido="error"
-                )
-            
-            asistente.asistencias = asistencias_actuales - 1
-            db.session.commit()
-            
-            return responder_escaneo(
-                exito=True, 
-                mensaje="🚪 SALIDA REGISTRADA", 
-                detalles=f"{nombre} ({tipo_usuario})<br><br><strong style='font-size:22px;'>Entradas activas: {asistente.asistencias}/1</strong>", 
-                pitido="exito"
-            )
+        resultado = procesar_escaneo(
+            request.form.get('qr_data', '').strip(),
+            request.form.get('modo', 'entrada'),
+        )
+        detalles = resultado['detalles']
+        if resultado['ok']:
+            etiqueta = 'Entradas' if resultado['pitido'] == 'exito' and 'ENTRADA' in resultado['mensaje'] else 'Entradas activas'
+            detalles += f"<br><br><strong style='font-size:22px;'>{etiqueta}: {resultado['asistencias']}/1</strong>"
+        return responder_escaneo(
+            exito=resultado['ok'],
+            mensaje=resultado['mensaje'],
+            detalles=detalles,
+            pitido=resultado['pitido'],
+        )
 
     return spa_index()
 
