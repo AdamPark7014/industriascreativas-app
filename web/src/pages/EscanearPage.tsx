@@ -174,6 +174,15 @@ export default function EscanearPage() {
             autoFocus
             autoComplete="off"
             inputMode="none"
+            // El lector actúa como teclado y cierra con Enter. La sumisión
+            // implícita del formulario no es de fiar sin botón de submit, y si
+            // falla el escáner entero deja de responder: se captura la tecla.
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                void escanear(e.currentTarget.value)
+              }
+            }}
           />
         </form>
 
