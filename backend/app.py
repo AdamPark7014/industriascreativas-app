@@ -27,9 +27,26 @@ LEYENDA_CANJE = (
     "el día del evento."
 )
 
-# Rosa FICTI / Azul FICTI
-COLOR_ROSA_FICTI = (0.820, 0.086, 0.427)  # #d1166d
-COLOR_VERDE_FICTI = (0.133, 0.663, 0.290)  # #22a94a — estudiantes (antes azul #26b0d5)
+# Paleta Tech Capital 2026 (tema oscuro). Estudiantes pasó de azul a verde.
+# Las tuplas son para reportlab (0-1); los hex, para el HTML de correos y páginas.
+HEX_ROSA_FICTI = '#ec1e63'
+HEX_VERDE_FICTI = '#35d95c'
+HEX_ELISA_MAGENTA = '#e33878'  # Gala Elisa: evento aparte, identidad propia
+HEX_FONDO = '#050b1c'
+HEX_PANEL = '#0a1428'
+HEX_BORDE = '#1b2b4d'
+HEX_TEXTO = '#ffffff'
+HEX_TEXTO_TENUE = '#93a6c4'
+
+COLOR_ROSA_FICTI = (0.925, 0.118, 0.388)  # #ec1e63 — empresas
+COLOR_VERDE_FICTI = (0.208, 0.851, 0.361)  # #35d95c — estudiantes (antes azul #26b0d5)
+COLOR_FONDO = (0.020, 0.043, 0.110)  # #050b1c
+COLOR_TEXTO_TENUE = (0.576, 0.651, 0.769)  # #93a6c4
+
+# URL pública del sitio. Los clientes de correo no cargan imágenes en data URI
+# (Gmail las descarta), así que los logos de los correos se sirven por HTTPS
+# desde el propio Flask, que publica web/dist en la raíz.
+PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL', '').strip().rstrip('/')
 
 app = Flask(
     __name__,
@@ -181,19 +198,179 @@ def ensure_gabor_logo():
     return LOGO_GABOR_PATH
 
 
+_logo_gabor_blanco_cache = None
+
+
+def logo_gabor_blanco_path():
+    """El logo Gabor original es rojo y negro: sobre el fondo oscuro el texto
+    desaparece. Se deriva una copia blanca del canal alfa, una sola vez."""
+    global _logo_gabor_blanco_cache
+    if _logo_gabor_blanco_cache and os.path.isfile(_logo_gabor_blanco_cache):
+        return _logo_gabor_blanco_cache
+
+    origen = ensure_gabor_logo()
+    destino = os.path.join(os.path.dirname(origen), 'logo-gabor-blanco.png')
+    try:
+        with Image.open(origen) as im:
+            im = im.convert('RGBA')
+            blanco = Image.new('RGBA', im.size, (255, 255, 255, 0))
+            blanco.putalpha(im.getchannel('A'))
+            blanco.save(destino, format='PNG')
+        _logo_gabor_blanco_cache = destino
+        return destino
+    except Exception:
+        return origen
+
+
 def logo_gabor_data_uri():
-    path = ensure_gabor_logo()
+    """Data URI del logo en blanco, para el HTML que sirve Flask al navegador.
+    Para correos NO se usa: ahí van URLs https (ver imagen_correo)."""
+    path = logo_gabor_blanco_path()
     with open(path, 'rb') as f:
         encoded = base64.b64encode(f.read()).decode('utf-8')
     return f'data:image/png;base64,{encoded}'
 
 
+def base_publica():
+    """Raíz https del sitio para las imágenes de los correos.
+
+    La app no lleva ProxyFix, así que `request.url_root` devuelve http detrás
+    de nginx; varios clientes de correo no cargan imágenes por http. Se hace
+    caso a X-Forwarded-Proto, que el proxy sí envía.
+    """
+    if PUBLIC_BASE_URL:
+        return PUBLIC_BASE_URL
+    try:
+        raiz = request.url_root.rstrip('/')
+        proto = request.headers.get('X-Forwarded-Proto', '').split(',')[0].strip()
+        if proto == 'https' and raiz.startswith('http://'):
+            raiz = 'https://' + raiz[len('http://'):]
+        return raiz
+    except Exception:
+        return 'https://demo.experiencebt.com.mx'
+
+
+def imagen_correo(nombre):
+    """URL absoluta de un asset de web/dist, que Flask publica en la raíz."""
+    return f'{base_publica()}/{nombre.lstrip("/")}'
+
+
+def es_tipo_empresa(tipo_usuario):
+    return str(tipo_usuario or '').upper() in ('EMPRESARIO', 'EMPRESA')
+
+
+def acento_hex(tipo_usuario):
+    """Rosa para empresas, verde para estudiantes.
+
+    La Gala Elisa es otro evento con su propia identidad: conserva su magenta
+    y no hereda el verde de estudiantes.
+    """
+    tipo = str(tipo_usuario or '').upper()
+    if tipo == 'ELISA_CARRILLO':
+        return HEX_ELISA_MAGENTA
+    return HEX_ROSA_FICTI if es_tipo_empresa(tipo) else HEX_VERDE_FICTI
+
+
+def texto_sobre_acento(tipo_usuario):
+    """Sobre el verde claro el texto blanco no contrasta: va oscuro, igual que
+    los botones del front. Sobre rosa y magenta, blanco."""
+    return HEX_FONDO if acento_hex(tipo_usuario) == HEX_VERDE_FICTI else '#ffffff'
+
+
 def bloque_leyenda_html():
     return f"""
-    <div style="margin-top:18px;padding:14px 16px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:14px;line-height:1.45;">
+    <div style="margin-top:18px;padding:14px 16px;border-radius:10px;background:#1d1705;border:1px solid #6b5410;color:#f0d68a;font-size:14px;line-height:1.45;">
       {LEYENDA_CANJE}
     </div>
     """
+
+
+def plantilla_correo(tipo_usuario, contenido_html, preheader=''):
+    """Envoltura oscura para los correos transaccionales.
+
+    Va con tablas y estilos en línea a propósito: Outlook no entiende flexbox
+    ni grid, y varios clientes tiran los bloques <style>. El atributo bgcolor
+    acompaña a cada background-color por los clientes que ignoran el CSS.
+    """
+    acento = acento_hex(tipo_usuario)
+    oculto = ''
+    if preheader:
+        oculto = (
+            f'<div style="display:none;max-height:0;overflow:hidden;'
+            f'mso-hide:all;font-size:1px;line-height:1px;color:{HEX_FONDO};">'
+            f'{preheader}</div>'
+        )
+
+    return f"""<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="color-scheme" content="dark" />
+<meta name="supported-color-schemes" content="dark" />
+</head>
+<body style="margin:0;padding:0;background-color:{HEX_FONDO};">
+{oculto}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="{HEX_FONDO}" style="background-color:{HEX_FONDO};margin:0;padding:0;">
+  <tr>
+    <td align="center" style="padding:26px 12px;">
+      <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" bgcolor="{HEX_PANEL}" style="width:560px;max-width:100%;background-color:{HEX_PANEL};border:1px solid {HEX_BORDE};border-radius:16px;overflow:hidden;">
+        <tr>
+          <td height="4" bgcolor="{acento}" style="height:4px;line-height:4px;font-size:0;background-color:{acento};">&nbsp;</td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:24px 28px 4px;">
+            <img src="{imagen_correo('ficti-logo.png')}" alt="FICTI" width="118" style="width:118px;height:auto;display:inline-block;vertical-align:middle;border:0;" />
+            <img src="{imagen_correo('tech-capital-logo.png')}" alt="Tech Capital" width="126" style="width:126px;height:auto;display:inline-block;vertical-align:middle;border:0;margin-left:14px;" />
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:14px 28px 4px;font-family:'Segoe UI',Arial,sans-serif;color:{HEX_TEXTO};font-size:15px;line-height:1.55;">
+            {contenido_html}
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:22px 28px 26px;border-top:1px solid {HEX_BORDE};">
+            <img src="{imagen_correo('gabor-logo-footer-white.png')}" alt="Gabor Grupo Papelero" width="130" style="width:130px;height:auto;display:block;margin:0 auto;border:0;" />
+          </td>
+        </tr>
+      </table>
+      <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="width:560px;max-width:100%;">
+        <tr>
+          <td align="center" style="padding:14px 12px 0;font-family:'Segoe UI',Arial,sans-serif;color:{HEX_TEXTO_TENUE};font-size:12px;line-height:1.5;">
+            <span style="color:{HEX_TEXTO_TENUE};">Recibes este correo porque te registraste en FICTI &middot; Tech Capital Puebla 2026.</span>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>"""
+
+
+def pagina_confirmacion(titulo, cuerpo_html='', tipo_usuario='ALUMNO'):
+    """Página oscura que ve el usuario tras pulsar el enlace del correo."""
+    acento = acento_hex(tipo_usuario)
+    return f"""<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>{titulo}</title>
+</head>
+<body style="margin:0;padding:0;background-color:{HEX_FONDO};font-family:'Segoe UI',Arial,sans-serif;color:{HEX_TEXTO};">
+  <div style="max-width:540px;margin:0 auto;padding:48px 20px;text-align:center;">
+    <img src="{logo_gabor_data_uri()}" alt="Gabor Grupo Papelero" style="width:150px;height:auto;margin-bottom:22px;" />
+    <h2 style="margin:0 0 10px;font-size:26px;font-weight:800;color:{acento};line-height:1.25;">{titulo}</h2>
+    {cuerpo_html}
+    {bloque_leyenda_html()}
+    <p style="margin-top:26px;">
+      <a href="/" style="display:inline-block;padding:12px 24px;border-radius:11px;border:1px solid {acento};color:{acento};text-decoration:none;font-weight:700;">Volver al menú</a>
+    </p>
+  </div>
+</body>
+</html>"""
 
 
 def ensure_schema():
@@ -360,32 +537,78 @@ def crear_pdf_gafete_elisa(usuario):
 # ---------------------------------------------------------
 # GAFETE ESTÁNDAR (Empresa / Estudiante)
 # ---------------------------------------------------------
+_imagenes_escaladas = {}
+
+
+def imagen_escalada(path, alto_px):
+    """ImageReader de una copia reducida del PNG, cacheada en memoria.
+
+    Los logos de origen son enormes (tech-capital-logo.png son 13403x4354) y
+    reportlab los incrusta tal cual: el boleto salía de 2.5 MB por correo. A
+    la altura a la que se dibujan, 3x en píxeles sobra para imprimir.
+    """
+    clave = (path, alto_px)
+    if clave in _imagenes_escaladas:
+        return ImageReader(io.BytesIO(_imagenes_escaladas[clave]))
+    with Image.open(path) as im:
+        im = im.convert('RGBA')
+        if im.height > alto_px:
+            ancho = max(1, round(im.width * alto_px / float(im.height)))
+            im = im.resize((ancho, alto_px), Image.LANCZOS)
+        buf = io.BytesIO()
+        im.save(buf, format='PNG', optimize=True)
+    datos = buf.getvalue()
+    _imagenes_escaladas[clave] = datos
+    return ImageReader(io.BytesIO(datos))
+
+
+def partir_en_lineas(texto, fuente, tam, ancho_max, medir):
+    """Corta por palabras, no por número de caracteres."""
+    lineas = []
+    actual = ''
+    for palabra in texto.split():
+        prueba = f'{actual} {palabra}'.strip()
+        if actual and medir(prueba, fuente, tam) > ancho_max:
+            lineas.append(actual)
+            actual = palabra
+        else:
+            actual = prueba
+    if actual:
+        lineas.append(actual)
+    return lineas
+
+
 def crear_pdf_gafete(id_usuario, nombre_usuario, tipo_usuario="ALUMNO", empresa="", cargo=""):
+    """Boleto digital en tema oscuro Tech Capital 2026.
+
+    El QR va sobre una placa blanca con margen: los lectores necesitan zona de
+    silencio clara alrededor del código, y sobre el fondo oscuro no leería.
+    """
     nombre_usuario = str(nombre_usuario).upper() if nombre_usuario else ""
     tipo_usuario = str(tipo_usuario).upper()
     empresa = str(empresa).upper() if empresa else ""
     cargo = str(cargo).upper() if cargo else ""
-    es_empresa = tipo_usuario in ("EMPRESARIO", "EMPRESA")
+    es_empresa = es_tipo_empresa(tipo_usuario)
     accent = COLOR_ROSA_FICTI if es_empresa else COLOR_VERDE_FICTI
 
     ANCHO = 6.0 * 72
     ALTO = 9.0 * 72
-    margin = 22
+    margin = 20
     assets_dir = os.path.join(os.path.dirname(__file__), "assets")
 
     buffer_pdf = io.BytesIO()
     c = canvas.Canvas(buffer_pdf, pagesize=(ANCHO, ALTO))
 
-    # White ticket with thick accent border
-    c.setFillColorRGB(1, 1, 1)
+    # Fondo oscuro a sangre + marco del color del perfil
+    c.setFillColorRGB(*COLOR_FONDO)
     c.rect(0, 0, ANCHO, ALTO, fill=1, stroke=0)
     c.setStrokeColorRGB(*accent)
-    c.setLineWidth(14)
-    c.roundRect(margin / 2, margin / 2, ANCHO - margin, ALTO - margin, 18, fill=0, stroke=1)
+    c.setLineWidth(9)
+    c.roundRect(margin / 2, margin / 2, ANCHO - margin, ALTO - margin, 20, fill=0, stroke=1)
 
-    # FICTI + Tech Capital logos (header)
-    logo_y = ALTO - 118
-    logo_h = 42
+    # Logos FICTI + Tech Capital (los assets ya son blancos sobre transparente)
+    logo_y = ALTO - 112
+    logo_h = 40
     gap = 16
     ficti_path = os.path.join(assets_dir, "ficti-logo.png")
     tech_path = os.path.join(assets_dir, "tech-capital-logo.png")
@@ -408,7 +631,7 @@ def crear_pdf_gafete(id_usuario, nombre_usuario, tipo_usuario="ALUMNO", empresa=
             x = (ANCHO - total_w) / 2
             for path, w in drawn:
                 c.drawImage(
-                    ImageReader(path),
+                    imagen_escalada(path, int(logo_h * 3)),
                     x,
                     logo_y,
                     width=w,
@@ -422,21 +645,32 @@ def crear_pdf_gafete(id_usuario, nombre_usuario, tipo_usuario="ALUMNO", empresa=
         logos_drawn = False
 
     if not logos_drawn:
-        c.setFillColorRGB(*accent)
+        c.setFillColorRGB(1, 1, 1)
         c.setFont("Helvetica-Bold", 14)
         c.drawCentredString(ANCHO / 2, logo_y + 12, "FICTI  ·  TECH CAPITAL")
+
+    # Filete de acento bajo la cabecera
+    c.setStrokeColorRGB(*accent)
+    c.setLineWidth(1)
+    c.line(78, ALTO - 130, ANCHO - 78, ALTO - 130)
 
     etiqueta = "EMPRESA" if es_empresa else "ESTUDIANTE"
     c.setFillColorRGB(*accent)
     c.setFont("Helvetica-Bold", 11)
-    c.drawCentredString(ANCHO / 2, ALTO - 138, etiqueta)
+    c.drawCentredString(ANCHO / 2, ALTO - 152, etiqueta)
 
-    c.setFillColorRGB(0.07, 0.07, 0.07)
-    c.setFont("Helvetica-Bold", 18)
-    c.drawCentredString(ANCHO / 2, ALTO - 170, nombre_usuario or "NOMBRE")
+    # El nombre encoge si no cabe: un nombre desbordado arruina el boleto
+    nombre_txt = nombre_usuario or "NOMBRE"
+    ancho_util = ANCHO - 88
+    tam = 19
+    while tam > 11 and c.stringWidth(nombre_txt, "Helvetica-Bold", tam) > ancho_util:
+        tam -= 1
+    c.setFillColorRGB(1, 1, 1)
+    c.setFont("Helvetica-Bold", tam)
+    c.drawCentredString(ANCHO / 2, ALTO - 182, nombre_txt)
 
-    y = ALTO - 192
-    c.setFillColorRGB(0.15, 0.15, 0.15)
+    y = ALTO - 206
+    c.setFillColorRGB(*COLOR_TEXTO_TENUE)
     c.setFont("Helvetica", 12)
     c.drawCentredString(ANCHO / 2, y, f"Folio: {id_usuario}")
     y -= 18
@@ -449,14 +683,14 @@ def crear_pdf_gafete(id_usuario, nombre_usuario, tipo_usuario="ALUMNO", empresa=
         c.drawCentredString(ANCHO / 2, y, cargo)
         y -= 14
 
-    # Mascot
+    # Mascota
     muneco = os.path.join(assets_dir, "ficti-muneco.png")
     if os.path.isfile(muneco):
         try:
-            mascot = ImageReader(muneco)
-            mw = 1.7 * 72
-            mh = 2.7 * 72
-            c.drawImage(mascot, (ANCHO - mw) / 2, 210, width=mw, height=mh, mask="auto")
+            mw = 1.6 * 72
+            mh = 2.55 * 72
+            mascot = imagen_escalada(muneco, int(mh * 3))
+            c.drawImage(mascot, (ANCHO - mw) / 2, 232, width=mw, height=mh, mask="auto")
         except Exception:
             pass
 
@@ -471,16 +705,26 @@ def crear_pdf_gafete(id_usuario, nombre_usuario, tipo_usuario="ALUMNO", empresa=
 
     qr_reader = ImageReader(qr_buffer)
     qr_tamano = 1.55 * 72
-    pos_qr_x = (ANCHO - qr_tamano) / 2
-    pos_qr_y = 88
-    c.drawImage(qr_reader, pos_qr_x, pos_qr_y, width=qr_tamano, height=qr_tamano)
+    placa_pad = 11
+    placa = qr_tamano + placa_pad * 2
+    placa_x = (ANCHO - placa) / 2
+    placa_y = 84
 
-    c.setFillColorRGB(0.55, 0.55, 0.55)
+    c.setFillColorRGB(1, 1, 1)
+    c.roundRect(placa_x, placa_y, placa, placa, 10, fill=1, stroke=0)
+    c.drawImage(
+        qr_reader,
+        placa_x + placa_pad,
+        placa_y + placa_pad,
+        width=qr_tamano,
+        height=qr_tamano,
+    )
+
+    c.setFillColorRGB(*COLOR_TEXTO_TENUE)
     c.setFont("Helvetica-Oblique", 8)
     texto = "Canjea tu boleto por un gafete físico en taquilla el día del evento."
-    max_chars = 52
-    lineas = [texto[i : i + max_chars] for i in range(0, len(texto), max_chars)]
-    ly = 70
+    lineas = partir_en_lineas(texto, "Helvetica-Oblique", 8, ANCHO - 96, c.stringWidth)
+    ly = 66
     for linea in lineas[:3]:
         c.drawCentredString(ANCHO / 2, ly, linea)
         ly -= 11
@@ -497,26 +741,43 @@ def crear_pdf_gafete(id_usuario, nombre_usuario, tipo_usuario="ALUMNO", empresa=
 # ENVÍO DE CORREOS MEDIANTE BREVO API
 # ==========================================
 
-def enviar_correo_confirmacion(email_destino, nombre, url_confirmacion, titulo_evento="Evento"):
+def enviar_correo_confirmacion(
+    email_destino,
+    nombre,
+    url_confirmacion,
+    titulo_evento="Evento",
+    tipo_usuario="ALUMNO",
+):
     try:
         if not BREVO_API_KEY:
             print('❌ Error enviando correo de confirmación: BREVO API key ausente (backend/.env → API_KEYY)')
             return False
-        logo = logo_gabor_data_uri()
-        html = f"""
-            <div style="font-family:Segoe UI,Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px;">
-              <img src="{logo}" alt="Logo Gabor" style="width:180px;height:auto;display:block;margin:0 auto 16px;" />
-              <h3>¡Hola {nombre}!</h3>
-              <p>Gracias por registrarte para el <b>{titulo_evento}</b>.</p>
-              <p>Haz clic en el siguiente enlace para confirmar tu asistencia y recibir tu <b>gafete digital con código QR</b>:</p>
-              <p>
-                <a href="{url_confirmacion}" style="background-color:#33cccc;color:white;padding:12px 22px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold;">
-                    Confirmar Registro y Recibir tu Gafete
-                </a>
+        acento = acento_hex(tipo_usuario)
+        texto_boton = texto_sobre_acento(tipo_usuario)
+        contenido = f"""
+              <p style="margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:{acento};">Confirma tu registro</p>
+              <h1 style="margin:0 0 14px;font-size:26px;font-weight:800;color:{HEX_TEXTO};line-height:1.2;">¡Hola {nombre}!</h1>
+              <p style="margin:0 0 12px;color:{HEX_TEXTO_TENUE};">Gracias por registrarte para el <b style="color:{HEX_TEXTO};">{titulo_evento}</b>.</p>
+              <p style="margin:0 0 20px;color:{HEX_TEXTO_TENUE};">Pulsa el botón para confirmar tu asistencia y recibir tu <b style="color:{HEX_TEXTO};">gafete digital con código QR</b>.</p>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 6px;">
+                <tr>
+                  <td bgcolor="{acento}" style="background-color:{acento};border-radius:11px;">
+                    <a href="{url_confirmacion}" style="display:inline-block;padding:14px 26px;color:{texto_boton};text-decoration:none;font-weight:700;font-size:15px;font-family:'Segoe UI',Arial,sans-serif;">
+                      Confirmar registro y recibir mi gafete
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:14px 0 0;font-size:12px;color:{HEX_TEXTO_TENUE};line-height:1.5;">Si el botón no funciona, copia este enlace en tu navegador:<br />
+                <span style="color:{acento};word-break:break-all;">{url_confirmacion}</span>
               </p>
               {bloque_leyenda_html()}
-            </div>
         """
+        html = plantilla_correo(
+            tipo_usuario,
+            contenido,
+            preheader=f'Confirma tu registro para {titulo_evento} y recibe tu gafete digital.',
+        )
 
         send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
             to=[{"email": email_destino, "name": nombre}],
@@ -552,27 +813,41 @@ def enviar_correo_gafete(email_destino, nombre_usuario, id_usuario, tipo_usuario
             )
 
         nombre_mayus = nombre_usuario.upper()
-        logo = logo_gabor_data_uri()
+        acento = acento_hex(tipo_usuario)
 
         if tipo_usuario.upper() == "EMPRESARIO":
             asunto = f"Gafete digital - Empresa - Folio {id_usuario}"
-            intro = f"<p>Estimado(a) <b>{nombre_mayus}</b>,</p><p>Adjunto encontrarás tu <b>gafete digital</b> con código QR.</p>"
+            etiqueta = "Acreditación de empresa"
+            saludo = f"Estimado(a) {nombre_mayus}"
         elif tipo_usuario.upper() == "ELISA_CARRILLO":
             asunto = f"Boleto de Acceso - Gala Elisa y Amigos 2026 (Folio: {id_usuario})"
-            intro = f"<p>Estimado(a) <b>{nombre_mayus}</b>,</p><p>Tu registro fue exitoso. Adjunto tu boleto en PDF.</p>"
+            etiqueta = "Boleto de acceso"
+            saludo = f"Estimado(a) {nombre_mayus}"
         else:
             asunto = f"Gafete digital - Estudiante - Folio {id_usuario}"
-            intro = f"<p>¡Hola <b>{nombre_mayus}</b>!</p><p>Adjunto encontrarás tu <b>gafete digital</b> con código QR.</p>"
+            etiqueta = "Acreditación estudiantil"
+            saludo = f"¡Hola {nombre_mayus}!"
 
-        cuerpo = f"""
-        <div style="font-family:Segoe UI,Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px;">
-          <img src="{logo}" alt="Logo Gabor" style="width:180px;height:auto;display:block;margin:0 auto 16px;" />
-          {intro}
-          <p><b>Folio:</b> {id_usuario}</p>
+        contenido = f"""
+          <p style="margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:{acento};">{etiqueta}</p>
+          <h1 style="margin:0 0 14px;font-size:26px;font-weight:800;color:{HEX_TEXTO};line-height:1.2;">{saludo}</h1>
+          <p style="margin:0 0 18px;color:{HEX_TEXTO_TENUE};">Tu registro quedó confirmado. Adjunto a este correo va tu <b style="color:{HEX_TEXTO};">gafete digital en PDF</b> con tu código QR.</p>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px;border:1px solid {HEX_BORDE};border-radius:12px;">
+            <tr>
+              <td style="padding:16px 18px;">
+                <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:{HEX_TEXTO_TENUE};">Folio</p>
+                <p style="margin:0;font-size:22px;font-weight:800;color:{acento};letter-spacing:.02em;">{id_usuario}</p>
+              </td>
+            </tr>
+          </table>
           {bloque_leyenda_html()}
-          <p style="margin-top:18px;">Atentamente,<br>Comité Organizador</p>
-        </div>
+          <p style="margin:22px 0 0;color:{HEX_TEXTO_TENUE};">Atentamente,<br />Comité Organizador</p>
         """
+        cuerpo = plantilla_correo(
+            tipo_usuario,
+            contenido,
+            preheader=f'Tu gafete digital va adjunto. Folio {id_usuario}.',
+        )
 
         pdf_base64 = base64.b64encode(bytes_pdf).decode('utf-8')
         nombre_clean = nombre_mayus.replace(' ', '_')
@@ -688,7 +963,13 @@ def registro_eventlisa():
         token_url = serializer.dumps(payload, salt='email-confirm-salt')
         url_confirmacion = url_for('confirmar_email_generico', token=token_url, _external=True)
 
-        enviar_correo_confirmacion(email, nombre, url_confirmacion, "Evento Gala Elisa y Amigos 2026 con orquesta en vivo")
+        enviar_correo_confirmacion(
+            email,
+            nombre,
+            url_confirmacion,
+            "Evento Gala Elisa y Amigos 2026 con orquesta en vivo",
+            tipo_usuario="ELISA_CARRILLO",
+        )
 
         return """
         <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 500px; margin: 60px auto; padding: 40px 30px; border-radius: 12px; border: 1px solid rgba(227, 56, 120, 0.3); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15); text-align: center; background-color: #1a0818;">
@@ -760,6 +1041,7 @@ def registro():
             nombre_completo,
             url_confirmacion,
             'Registro Estudiante - Gabor FICTI',
+            tipo_usuario='ALUMNO',
         )
 
         if not BREVO_API_KEY:
@@ -791,14 +1073,11 @@ def confirmar_email(token):
 
     if alumno:
         if alumno.confirmado:
-            return f"""
-            <div style="font-family:Segoe UI,sans-serif;max-width:520px;margin:40px auto;padding:24px;text-align:center;">
-              <img src="{logo_gabor_data_uri()}" alt="Logo Gabor" style="width:160px;margin-bottom:12px;" />
-              <h2>Tu cuenta ya había sido confirmada previamente.</h2>
-              {bloque_leyenda_html()}
-              <p><a href="/">Volver al menú</a></p>
-            </div>
-            """
+            return pagina_confirmacion(
+                f"""Tu cuenta ya había sido confirmada previamente.""",
+                f'',
+                tipo_usuario="ALUMNO",
+            )
 
         alumno.confirmado = True
         alumno.qr_code = generar_bytes_qr(f"ALUMNO-{alumno.idAlumno}")
@@ -813,15 +1092,11 @@ def confirmar_email(token):
         )
 
         db.session.commit()
-        return f"""
-        <div style="font-family:Segoe UI,sans-serif;max-width:520px;margin:40px auto;padding:24px;text-align:center;">
-          <img src="{logo_gabor_data_uri()}" alt="Logo Gabor" style="width:160px;margin-bottom:12px;" />
-          <h2>¡Registro Confirmado para {nombre_completo}!</h2>
-          <p>Revisa tu correo: ahí llega tu gafete digital con código QR.</p>
-          {bloque_leyenda_html()}
-          <p><a href="/">Volver al menú</a></p>
-        </div>
-        """
+        return pagina_confirmacion(
+            f"""¡Registro Confirmado para {nombre_completo}!""",
+            f'''<p style="margin:0 0 10px;color:{HEX_TEXTO_TENUE};line-height:1.55;">Revisa tu correo: ahí llega tu gafete digital con código QR.</p>''',
+            tipo_usuario="ALUMNO",
+        )
 
     return api_message(False, 'Estudiante no encontrado.', 404)
 
@@ -889,6 +1164,7 @@ def registro_empresario():
             f"{nombre} {apellido_paterno}",
             url_confirmacion,
             "Registro Empresa - Gabor FICTI",
+            tipo_usuario="EMPRESARIO",
         )
 
         if not BREVO_API_KEY:
@@ -913,14 +1189,11 @@ def confirmar_email_generico(token):
     try:
         data = serializer.loads(token, salt='email-confirm-salt', max_age=3600)
     except (SignatureExpired, BadTimeSignature):
-        return f"""
-        <div style="font-family:Segoe UI,sans-serif;max-width:520px;margin:40px auto;padding:24px;text-align:center;">
-          <img src="{logo_gabor_data_uri()}" alt="Logo Gabor" style="width:160px;margin-bottom:12px;" />
-          <h2>El enlace no es válido o expiró.</h2>
-          {bloque_leyenda_html()}
-          <p><a href="/">Volver al menú</a></p>
-        </div>
-        """
+        return pagina_confirmacion(
+            f"""El enlace no es válido o expiró.""",
+            f'',
+            tipo_usuario="EMPRESARIO",
+        )
     if isinstance(data, dict):
         email = data.get('email')
         tipo = data.get('tipo')
@@ -949,14 +1222,11 @@ def confirmar_email_generico(token):
 
     if usuario:
         if usuario.confirmado:
-            return f"""
-            <div style="font-family:Segoe UI,sans-serif;max-width:520px;margin:40px auto;padding:24px;text-align:center;">
-              <img src="{logo_gabor_data_uri()}" alt="Logo Gabor" style="width:160px;margin-bottom:12px;" />
-              <h2>Tu cuenta ya había sido confirmada previamente.</h2>
-              {bloque_leyenda_html()}
-              <p><a href="/">Volver al menú</a></p>
-            </div>
-            """
+            return pagina_confirmacion(
+                f"""Tu cuenta ya había sido confirmada previamente.""",
+                f'',
+                tipo_usuario=tipo_tag,
+            )
 
         usuario.confirmado = True
         usuario.qr_code = generar_bytes_qr(f"{tipo_tag}-{id_reg}")
@@ -970,15 +1240,11 @@ def confirmar_email_generico(token):
         )
 
         db.session.commit()
-        return f"""
-        <div style="font-family:Segoe UI,sans-serif;max-width:520px;margin:40px auto;padding:24px;text-align:center;">
-          <img src="{logo_gabor_data_uri()}" alt="Logo Gabor" style="width:160px;margin-bottom:12px;" />
-          <h2>¡Registro Confirmado para {nombre_completo}!</h2>
-          <p>Tu gafete digital con código QR fue enviado al correo.</p>
-          {bloque_leyenda_html()}
-          <p><a href="/">Volver al menú</a></p>
-        </div>
-        """
+        return pagina_confirmacion(
+            f"""¡Registro Confirmado para {nombre_completo}!""",
+            f'''<p style="margin:0 0 10px;color:{HEX_TEXTO_TENUE};line-height:1.55;">Tu gafete digital con código QR fue enviado al correo.</p>''',
+            tipo_usuario=tipo_tag,
+        )
     return api_message(False, 'Usuario no encontrado.', 404)
 
 

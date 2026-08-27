@@ -1,0 +1,11 @@
+# Derivado en tiempo de ejecución desde logo-gabor.png (ver logo_gabor_blanco_path)
+backend/assets/logo-gabor-blanco.png
+
+__pycache__/
+*.pyc
+backend/.env
+.env
+
+# Salida en tiempo de ejecución
+backend/gafetes_guardados/
+backend/qrs_para_imprimir/

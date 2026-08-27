@@ -29,6 +29,9 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       SECRET_KEY: ${SECRET_KEY}
+      # Raiz publica para las imagenes de los correos (los logos se sirven
+      # por https desde este mismo Flask; en data URI Gmail los descarta).
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://demo.experiencebt.com.mx}
     depends_on:
       db:
         condition: service_healthy
