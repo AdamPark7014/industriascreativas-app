@@ -30,38 +30,65 @@ que es Pumpkin/`app.` y compañía). Vive en el droplet DigitalOcean
    tamaño de mascota y cuadros decorativos que nunca bajaron. Se tomó la
    versión del servidor como verdad y se bajó a local. Ningún otro archivo de
    `web/src` difería (verificado por md5 ignorando CRLF).
-3. **Rediseño (commit `20231a7`).** Tema oscuro Tech Capital 2026 según la
-   referencia que aprobó el cliente:
+3. **Rediseño del front (commit `20231a7`).** Tema oscuro Tech Capital 2026
+   según la referencia que aprobó el cliente:
    - `_tokens.scss`: paleta oscura + `@mixin dark-field`.
    - Acento por flujo con custom properties `--accent`. `AppShell` acepta
      `variant="empresa" | "estudiante"` y pinta `.pageEmpresa` / `.pageEstudiante`.
      Todo el formulario lee `var(--accent)`.
    - Home a dos columnas (`.homeLayout`): antetítulo bicolor, "Asistentes" en
      verde, isotipo + mascota; tarjetas delineadas con icono / texto / flecha.
-   - **Estudiante pasa de azul `#26b0d5` a verde `#35d95c`** en el front, y a
-     `#22a94a` en el gafete (`badge.module.scss` y `backend/app.py`).
+   - **Estudiante pasa de azul `#26b0d5` a verde `#35d95c`.**
    - Assets nuevos en `web/public/`: `gabor-logo-footer-white.png` y
      `tech-capital-mark.png`.
+4. **Correos, boleto y confirmación (commit `f8644a7`).** Lo que sale del
+   backend seguía en blanco con el botón azul `#33cccc`:
+   - `plantilla_correo()`: envoltura oscura **con tablas y estilos en línea**.
+     Outlook no entiende flexbox y varios clientes tiran los `<style>`; cada
+     `background-color` lleva su `bgcolor` de respaldo.
+   - El acento sale del tipo: verde estudiantes, rosa empresas, **magenta la
+     Gala Elisa** (evento aparte, no hereda el verde). Sobre el verde el texto
+     blanco no contrasta, así que el botón va con texto oscuro.
+   - **Los logos de los correos pasan de data URI a https.** Gmail descarta las
+     imágenes en data URI. Los sirve el propio Flask desde `web/dist`.
+   - `crear_pdf_gafete()`: boleto oscuro con el QR **sobre placa blanca con
+     margen** (necesita zona de silencio para los escáneres). El nombre encoge
+     si no cabe y la leyenda corta por palabras.
+   - Los logos se incrustaban a resolución completa y cada adjunto pesaba
+     **2.5 MB → ahora 76 KB** (`imagen_escalada()`).
+   - Las cinco páginas de confirmación pasan por `pagina_confirmacion()`.
+   - `crear_pdf_gafete_elisa()` **intacto**.
 
 Verificado: `npm run build` y `npm run lint` limpios; navegador a 1280 y a
-375 px sin desbordamiento.
+375 px sin desbordamiento; correos y boleto renderizados; **el QR del boleto
+oscuro decodifica** (`ALUMNO-10482`, `EMPRESARIO-2071`).
 
 ## A medias - CUIDADO
 
 - **Nada desplegado.** El droplet sigue sirviendo el diseño azul claro. Todo lo
   de arriba está solo en local y en `main`.
+- **Los correos cargan sus logos desde `https://demo.experiencebt.com.mx/…`.**
+  `gabor-logo-footer-white.png` es nuevo y **todavía no existe en el servidor**:
+  hasta que se despliegue daría 404 en los correos. Se arregla solo con el
+  despliegue, porque el Dockerfile reconstruye `web/dist` desde `web/public`.
 - Las capturas headless de Chrome por debajo de ~500 px **recortan** en vez de
   escalar. No fiarse de ellas para revisar móvil; medir en el navegador.
+- `crear_pdf_gafete_elisa()` escribe en `backend/gafetes_guardados/` como efecto
+  secundario. Viene de antes, pero conviene saberlo al probar en local.
 
 ## Siguiente paso
 
 1. Decidir si se despliega a `demo.experiencebt.com.mx`.
 2. Si sí: `REGISTRO_SSH_PASSWORD=... python C:\dev\scripts\registro-deploy\deploy_demo_getzy.py`,
    que sube el árbol a `/opt/EVENTOS-app` y reconstruye `eventos_demo_web`.
-3. Confirmar con el cliente el verde del **gafete impreso** (`#22a94a`). Si ya
-   hay material impreso en azul, revertir solo `COLOR_VERDE_FICTI` en
-   `backend/app.py` y `$ticket-verde` en `badge.module.scss`; el front puede
-   quedarse verde sin tocar eso.
+   Después **mandar un registro de prueba** y abrir el correo en Gmail para
+   confirmar que los logos cargan.
+3. Añadir `PUBLIC_BASE_URL=https://demo.experiencebt.com.mx` al `backend/.env`
+   del droplet. Sin él funciona igual (se deduce del host y de
+   `X-Forwarded-Proto`), pero explícito es más seguro.
+4. Confirmar con el cliente el verde del **gafete impreso**. Si ya hay material
+   impreso en azul, revertir `COLOR_VERDE_FICTI` en `backend/app.py` y
+   `$ticket-verde` en `badge.module.scss`; el front puede quedarse verde.
 
 ## No tocar
 
