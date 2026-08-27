@@ -1,0 +1,53 @@
+name: eventos-demo
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: eventos_demo_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-bd_demo}
+    volumes:
+      - eventos_demo_pg:/var/lib/postgresql/data
+    networks:
+      - eventos-demo-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  demo_web:
+    build: .
+    image: eventos-demo-web:latest
+    container_name: eventos_demo_web
+    restart: unless-stopped
+    env_file:
+      - backend/.env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      SECRET_KEY: ${SECRET_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "5000"
+    volumes:
+      - eventos_demo_gafetes:/app/gafetes_guardados
+      - eventos_demo_qrs:/app/qrs_para_imprimir
+      - eventos_demo_temp:/app/temp_print
+    networks:
+      - eventos-demo-net
+
+volumes:
+  eventos_demo_pg:
+  eventos_demo_gafetes:
+  eventos_demo_qrs:
+  eventos_demo_temp:
+
+networks:
+  eventos-demo-net:
+    name: eventos-demo-net
+    driver: bridge

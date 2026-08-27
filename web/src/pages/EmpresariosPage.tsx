@@ -2,13 +2,11 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { postForm } from '../api/registro'
 import AppShell from '../components/AppShell'
-import BadgePreview from '../components/BadgePreview'
 import PhoneField from '../components/PhoneField'
 import { RegistrationSuccess } from '../components/RegistrationSuccess'
 import {
   AREAS_RESPONSABILIDAD,
   emptyEmpresaForm,
-  LEYENDA_CANJE,
   POSICIONES_EMPRESA,
   PRODUCTOS_INTERES,
   type EmpresaFormData,
@@ -61,18 +59,19 @@ export default function EmpresariosPage() {
     if (form.email.trim().toLowerCase() !== form.emailConfirm.trim().toLowerCase()) {
       return 'Los correos no coinciden.'
     }
-    if (!form.nombre || !form.apellidoPaterno || !form.cargo || !form.empresa) {
-      return 'Completa nombre, apellido, cargo y empresa.'
+    if (!form.nombre || !form.apellidoPaterno || !form.empresa) {
+      return 'Completa nombre, apellido y empresa.'
     }
     const phoneError = validateLocalPhone(form.phoneCountry, form.telefono)
     if (phoneError) return phoneError
     if (!form.ciudad) return 'La ciudad es obligatoria.'
+    if (!form.estado) return 'El estado es obligatorio.'
     if (!form.posicionEmpresa) return 'Selecciona la posición en la empresa.'
     if (form.posicionEmpresa === 'Otro' && !form.otroPosicion.trim()) {
       return 'Describe la opción “Otro” en posición.'
     }
     if (!form.areaResponsabilidad) return 'Selecciona tu área de responsabilidad.'
-    if (form.productosInteres.length === 0) return 'Selecciona al menos un producto de interés.'
+    if (form.productosInteres.length === 0) return 'Selecciona al menos un área de interés.'
     return ''
   }
 
@@ -95,11 +94,11 @@ export default function EmpresariosPage() {
       email: form.email.trim().toLowerCase(),
       nombre: form.nombre.trim().toUpperCase(),
       apellido_paterno: form.apellidoPaterno.trim().toUpperCase(),
-      cargo: form.cargo.trim().toUpperCase(),
       empresa: form.empresa.trim().toUpperCase(),
       lada_pais: findDial(form.phoneCountry).dial,
       telefono: form.telefono.trim(),
       ciudad: form.ciudad.trim().toUpperCase(),
+      estado: form.estado.trim().toUpperCase(),
       posicion_empresa: posicionFinal,
       area_responsabilidad: form.areaResponsabilidad,
       productos_interes: form.productosInteres,
@@ -135,8 +134,8 @@ export default function EmpresariosPage() {
           <p className={styles.kicker}>Acreditación corporativa</p>
           <h1 className={styles.title}>Registro Empresa</h1>
           <p className={styles.subtitle}>
-            Completa la información oficial. En el siguiente paso podrás revisar tus datos y la
-            vista previa del gafete Rosa FICTI.
+            Completa la información oficial. En el siguiente paso revisas tus datos y, al confirmar,
+            te enviamos un correo para validar tu registro.
           </p>
         </div>
 
@@ -222,20 +221,6 @@ export default function EmpresariosPage() {
                       />
                     </div>
                     <div className={styles.group}>
-                      <label className={styles.label} htmlFor="cargo">
-                        Cargo<span className={styles.required}>*</span>
-                      </label>
-                      <input
-                        className={styles.input}
-                        id="cargo"
-                        required
-                        style={{ textTransform: 'uppercase' }}
-                        value={form.cargo}
-                        onInput={toUpperCaseInput}
-                        onChange={(e) => update('cargo', e.target.value)}
-                      />
-                    </div>
-                    <div className={styles.group}>
                       <label className={styles.label} htmlFor="empresa">
                         Empresa<span className={styles.required}>*</span>
                       </label>
@@ -261,6 +246,20 @@ export default function EmpresariosPage() {
                         value={form.ciudad}
                         onInput={toUpperCaseInput}
                         onChange={(e) => update('ciudad', e.target.value)}
+                      />
+                    </div>
+                    <div className={styles.group}>
+                      <label className={styles.label} htmlFor="estado">
+                        Estado<span className={styles.required}>*</span>
+                      </label>
+                      <input
+                        className={styles.input}
+                        id="estado"
+                        required
+                        style={{ textTransform: 'uppercase' }}
+                        value={form.estado}
+                        onInput={toUpperCaseInput}
+                        onChange={(e) => update('estado', e.target.value)}
                       />
                     </div>
                   </div>
@@ -330,7 +329,7 @@ export default function EmpresariosPage() {
                 </section>
 
                 <section className={styles.section}>
-                  <h2 className={styles.sectionTitle}>Productos de interés</h2>
+                  <h2 className={styles.sectionTitle}>Áreas de interés</h2>
                   <div className={styles.options}>
                     {PRODUCTOS_INTERES.map((producto) => (
                       <label className={styles.option} key={producto}>
@@ -368,10 +367,6 @@ export default function EmpresariosPage() {
                       <span>{nombreCompleto}</span>
                     </div>
                     <div className={styles.summaryRow}>
-                      <strong>Cargo</strong>
-                      <span>{form.cargo}</span>
-                    </div>
-                    <div className={styles.summaryRow}>
                       <strong>Empresa</strong>
                       <span>{form.empresa}</span>
                     </div>
@@ -384,6 +379,10 @@ export default function EmpresariosPage() {
                       <span>{form.ciudad}</span>
                     </div>
                     <div className={styles.summaryRow}>
+                      <strong>Estado</strong>
+                      <span>{form.estado}</span>
+                    </div>
+                    <div className={styles.summaryRow}>
                       <strong>Posición</strong>
                       <span>{posicionFinal}</span>
                     </div>
@@ -392,27 +391,19 @@ export default function EmpresariosPage() {
                       <span>{form.areaResponsabilidad}</span>
                     </div>
                     <div className={styles.summaryRow}>
-                      <strong>Productos</strong>
+                      <strong>Áreas de interés</strong>
                       <span>{form.productosInteres.join(', ')}</span>
                     </div>
                   </div>
                 </section>
 
-                <div className={styles.previewBlock}>
-                  <div className={styles.previewCopy}>
-                    <h3>Vista previa del gafete</h3>
-                    <p>
-                      Gafete Rosa FICTI con logo Gabor. Al confirmar recibirás el QR digital; el
-                      canje físico se realiza en taquilla.
-                    </p>
-                    <p className={styles.leyenda}>{LEYENDA_CANJE}</p>
-                  </div>
-                  <BadgePreview
-                    variant="empresa"
-                    nombre={nombreCompleto}
-                    empresa={form.empresa}
-                    cargo={form.cargo}
-                  />
+                <div className={styles.confirmNote}>
+                  <h3>Siguiente paso: confirma tu correo</h3>
+                  <p>
+                    Al confirmar este registro te enviaremos un enlace a tu correo. Debes abrirlo
+                    para validar tu acreditación y recibir tu gafete digital con código QR. El día
+                    del evento canjeas ese gafete digital por el físico en taquilla.
+                  </p>
                 </div>
 
                 <div className={styles.actions}>

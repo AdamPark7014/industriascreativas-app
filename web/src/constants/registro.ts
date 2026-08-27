@@ -1,6 +1,6 @@
-/** Leyenda boceto hasta tener el texto final de taquilla */
+/** Leyenda de canje en taquilla */
 export const LEYENDA_CANJE =
-  'Boceto: Canjea tu boleto digital por tu gafete físico en taquilla el día del evento. Fecha, horario y ubicación por confirmar.'
+  'Canjea tu boleto digital por tu gafete físico en taquilla el día del evento.'
 
 export const POSICIONES_EMPRESA = [
   'Propietario / director / socio',
@@ -25,22 +25,24 @@ export const AREAS_RESPONSABILIDAD = [
   'Otro',
 ] as const
 
-/** Opciones de la foto 2 (productos de interés) — sin info comercial de talleres/ponencias */
+/** Áreas de interés (antes Productos de interés) */
 export const PRODUCTOS_INTERES = [
   'Impresión digital',
   'Impresión textil y decoración de prendas',
-  'Maquinaria de serigrafía',
+  'Serigrafía',
   'Impresión Empaque y etiqueta',
   'Impresión 3D',
   'Fabricación textil',
   'Decoración de interiores',
   'Señalización y display',
-  'Wrapping',
+  'Wrap',
   'Corte, grabado y acabado',
-  'Medios y sustratos',
+  'Sustratos',
   'Artículos promocionales',
   'Tintas y consumibles',
   'Tampografía',
+  'Offset',
+  'Acabado',
   'Otro',
 ] as const
 
@@ -49,11 +51,11 @@ export type EmpresaFormData = {
   emailConfirm: string
   nombre: string
   apellidoPaterno: string
-  cargo: string
   empresa: string
   phoneCountry: string
   telefono: string
   ciudad: string
+  estado: string
   posicionEmpresa: string
   areaResponsabilidad: string
   productosInteres: string[]
@@ -66,6 +68,8 @@ export type EstudianteFormData = {
   apellidoPaterno: string
   phoneCountry: string
   telefono: string
+  institucionEducativa: string
+  grado: string
 }
 
 export const emptyEmpresaForm = (): EmpresaFormData => ({
@@ -73,11 +77,11 @@ export const emptyEmpresaForm = (): EmpresaFormData => ({
   emailConfirm: '',
   nombre: '',
   apellidoPaterno: '',
-  cargo: '',
   empresa: '',
   phoneCountry: 'MX',
   telefono: '',
   ciudad: '',
+  estado: '',
   posicionEmpresa: '',
   areaResponsabilidad: '',
   productosInteres: [],
@@ -90,4 +94,6 @@ export const emptyEstudianteForm = (): EstudianteFormData => ({
   apellidoPaterno: '',
   phoneCountry: 'MX',
   telefono: '',
+  institucionEducativa: '',
+  grado: '',
 })

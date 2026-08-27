@@ -1,0 +1,15 @@
+.git
+.ssh_explore*.py
+**/__pycache__
+**/*.pyc
+web/node_modules
+web/dist
+gafetes_guardados
+qrs_para_imprimir
+temp_print
+backend/.env
+.env
+*.pdf
+*.png
+!backend/assets/logo-gabor.png
+!web/public/logo-gabor.svg

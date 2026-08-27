@@ -23,13 +23,13 @@ WEB_DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'web',
 LOGO_GABOR_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'logo-gabor.png')
 
 LEYENDA_CANJE = (
-    "Boceto: Canjea tu boleto digital por tu gafete físico en taquilla "
-    "el día del evento. Fecha, horario y ubicación por confirmar."
+    "Canjea tu boleto digital por tu gafete físico en taquilla "
+    "el día del evento."
 )
 
 # Rosa FICTI / Azul FICTI
-COLOR_ROSA_FICTI = (0.89, 0.22, 0.47)
-COLOR_AZUL_FICTI = (0.04, 0.17, 0.44)
+COLOR_ROSA_FICTI = (0.820, 0.086, 0.427)  # #d1166d
+COLOR_AZUL_FICTI = (0.149, 0.690, 0.835)  # #26b0d5 (teal ticket)
 
 app = Flask(
     __name__,
@@ -85,6 +85,8 @@ class Alumno(db.Model):
     ApellidoPaterno = db.Column('ApellidoPaterno', db.String(100), nullable=True)
     Telefono = db.Column('Telefono', db.String(20), nullable=True)
     Correo = db.Column('Correo', ARRAY(db.String(50)), nullable=False)
+    InstitucionEducativa = db.Column('InstitucionEducativa', db.String(200), nullable=True)
+    Grado = db.Column('Grado', db.String(100), nullable=True)
     confirmado = db.Column('confirmado', db.Boolean, default=False)
     qr_code = db.Column('qr_code', db.LargeBinary, nullable=True)
     asistencias = db.Column(db.Integer, default=0)      
@@ -119,6 +121,7 @@ class Empresario(db.Model):
     Pais = db.Column('Pais', db.String(50), nullable=False)
     CodigoPostal = db.Column('CodigoPostal', db.String(20), nullable=False)
     Ciudad = db.Column('Ciudad', db.String(100), nullable=False)
+    Estado = db.Column('Estado', db.String(100), nullable=True)
     CalleNumero = db.Column('CalleNumero', db.String(150), nullable=True)
     Correo = db.Column('Correo', db.String(150), nullable=False, unique=True)
     
@@ -355,7 +358,7 @@ def crear_pdf_gafete_elisa(usuario):
 
 
 # ---------------------------------------------------------
-# GAFETE ESTÁNDAR (Empresa Rosa FICTI / Estudiante Azul FICTI)
+# GAFETE ESTÁNDAR (Empresa / Estudiante)
 # ---------------------------------------------------------
 def crear_pdf_gafete(id_usuario, nombre_usuario, tipo_usuario="ALUMNO", empresa="", cargo=""):
     nombre_usuario = str(nombre_usuario).upper() if nombre_usuario else ""
@@ -363,79 +366,124 @@ def crear_pdf_gafete(id_usuario, nombre_usuario, tipo_usuario="ALUMNO", empresa=
     empresa = str(empresa).upper() if empresa else ""
     cargo = str(cargo).upper() if cargo else ""
     es_empresa = tipo_usuario in ("EMPRESARIO", "EMPRESA")
+    accent = COLOR_ROSA_FICTI if es_empresa else COLOR_AZUL_FICTI
 
     ANCHO = 6.0 * 72
     ALTO = 9.0 * 72
+    margin = 22
+    assets_dir = os.path.join(os.path.dirname(__file__), "assets")
 
     buffer_pdf = io.BytesIO()
     c = canvas.Canvas(buffer_pdf, pagesize=(ANCHO, ALTO))
 
-    if es_empresa:
-        c.setFillColorRGB(*COLOR_ROSA_FICTI)
-    else:
-        c.setFillColorRGB(*COLOR_AZUL_FICTI)
-    c.rect(0, 0, ANCHO, ALTO, fill=1, stroke=0)
-
-    # Franja blanca de contenido
+    # White ticket with thick accent border
     c.setFillColorRGB(1, 1, 1)
-    c.roundRect(18, 18, ANCHO - 36, ALTO - 36, 16, fill=1, stroke=0)
+    c.rect(0, 0, ANCHO, ALTO, fill=1, stroke=0)
+    c.setStrokeColorRGB(*accent)
+    c.setLineWidth(14)
+    c.roundRect(margin / 2, margin / 2, ANCHO - margin, ALTO - margin, 18, fill=0, stroke=1)
 
-    logo_path = ensure_gabor_logo()
+    # FICTI + Tech Capital logos (header)
+    logo_y = ALTO - 118
+    logo_h = 42
+    gap = 16
+    ficti_path = os.path.join(assets_dir, "ficti-logo.png")
+    tech_path = os.path.join(assets_dir, "tech-capital-logo.png")
+    logos_drawn = False
     try:
-        logo = ImageReader(logo_path)
-        c.drawImage(logo, (ANCHO - 180) / 2, ALTO - 95, width=180, height=46, mask='auto')
+        from PIL import Image as PILImage
+
+        drawn = []
+        for path in (ficti_path, tech_path):
+            if not os.path.isfile(path):
+                continue
+            with PILImage.open(path) as im:
+                im = im.convert("RGBA")
+                bw, bh = im.size
+            aspect = bw / float(bh) if bh else 1.0
+            w = logo_h * aspect
+            drawn.append((path, w))
+        if drawn:
+            total_w = sum(w for _, w in drawn) + gap * (len(drawn) - 1)
+            x = (ANCHO - total_w) / 2
+            for path, w in drawn:
+                c.drawImage(
+                    ImageReader(path),
+                    x,
+                    logo_y,
+                    width=w,
+                    height=logo_h,
+                    mask="auto",
+                    preserveAspectRatio=True,
+                )
+                x += w + gap
+            logos_drawn = True
     except Exception:
-        c.setFillColorRGB(0.04, 0.17, 0.44)
-        c.setFont("Helvetica-Bold", 18)
-        c.drawCentredString(ANCHO / 2, ALTO - 70, "GABOR FICTI")
+        logos_drawn = False
 
-    etiqueta = "EMPRESA · ROSA FICTI" if es_empresa else "ESTUDIANTE · AZUL FICTI"
-    c.setFillColorRGB(*COLOR_ROSA_FICTI if es_empresa else COLOR_AZUL_FICTI)
+    if not logos_drawn:
+        c.setFillColorRGB(*accent)
+        c.setFont("Helvetica-Bold", 14)
+        c.drawCentredString(ANCHO / 2, logo_y + 12, "FICTI  ·  TECH CAPITAL")
+
+    etiqueta = "EMPRESA" if es_empresa else "ESTUDIANTE"
+    c.setFillColorRGB(*accent)
     c.setFont("Helvetica-Bold", 11)
-    c.drawCentredString(ANCHO / 2, ALTO - 120, etiqueta)
+    c.drawCentredString(ANCHO / 2, ALTO - 138, etiqueta)
 
-    c.setFillColorRGB(0.1, 0.1, 0.1)
-    c.setFont("Helvetica-Bold", 16)
-    c.drawCentredString(ANCHO / 2, ALTO - 155, nombre_usuario or "NOMBRE")
+    c.setFillColorRGB(0.07, 0.07, 0.07)
+    c.setFont("Helvetica-Bold", 18)
+    c.drawCentredString(ANCHO / 2, ALTO - 170, nombre_usuario or "NOMBRE")
 
-    y = ALTO - 180
+    y = ALTO - 192
+    c.setFillColorRGB(0.15, 0.15, 0.15)
     c.setFont("Helvetica", 12)
-    if es_empresa:
-        if empresa:
-            c.drawCentredString(ANCHO / 2, y, empresa)
-            y -= 18
-        if cargo:
-            c.drawCentredString(ANCHO / 2, y, cargo)
-            y -= 18
+    c.drawCentredString(ANCHO / 2, y, f"Folio: {id_usuario}")
+    y -= 18
+    if empresa:
+        c.setFont("Helvetica", 10)
+        c.drawCentredString(ANCHO / 2, y, empresa)
+        y -= 14
+    if cargo:
+        c.setFont("Helvetica", 10)
+        c.drawCentredString(ANCHO / 2, y, cargo)
+        y -= 14
 
-    c.setFont("Helvetica", 11)
-    c.drawCentredString(ANCHO / 2, y - 6, f"Folio: {id_usuario}")
+    # Mascot
+    muneco = os.path.join(assets_dir, "ficti-muneco.png")
+    if os.path.isfile(muneco):
+        try:
+            mascot = ImageReader(muneco)
+            mw = 1.7 * 72
+            mh = 2.7 * 72
+            c.drawImage(mascot, (ANCHO - mw) / 2, 210, width=mw, height=mh, mask="auto")
+        except Exception:
+            pass
 
     qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=10, border=1)
     qr.add_data(f"{'EMPRESARIO' if es_empresa else 'ALUMNO'}-{id_usuario}")
     qr.make(fit=True)
 
-    qr_img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
+    qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
     qr_buffer = io.BytesIO()
     qr_img.save(qr_buffer, format="PNG")
     qr_buffer.seek(0)
 
     qr_reader = ImageReader(qr_buffer)
-    qr_tamano = 1.6 * 72
+    qr_tamano = 1.55 * 72
     pos_qr_x = (ANCHO - qr_tamano) / 2
-    pos_qr_y = 95
+    pos_qr_y = 88
     c.drawImage(qr_reader, pos_qr_x, pos_qr_y, width=qr_tamano, height=qr_tamano)
 
-    c.setFillColorRGB(0.35, 0.35, 0.35)
-    c.setFont("Helvetica", 7)
-    # Leyenda boceto de canje en taquilla
-    texto = LEYENDA_CANJE
-    max_chars = 62
-    lineas = [texto[i:i + max_chars] for i in range(0, len(texto), max_chars)]
+    c.setFillColorRGB(0.55, 0.55, 0.55)
+    c.setFont("Helvetica-Oblique", 8)
+    texto = "Canjea tu boleto por un gafete físico en taquilla el día del evento."
+    max_chars = 52
+    lineas = [texto[i : i + max_chars] for i in range(0, len(texto), max_chars)]
     ly = 70
     for linea in lineas[:3]:
         c.drawCentredString(ANCHO / 2, ly, linea)
-        ly -= 10
+        ly -= 11
 
     c.showPage()
     c.save()
@@ -507,13 +555,13 @@ def enviar_correo_gafete(email_destino, nombre_usuario, id_usuario, tipo_usuario
         logo = logo_gabor_data_uri()
 
         if tipo_usuario.upper() == "EMPRESARIO":
-            asunto = f"Gafete Empresa (Rosa FICTI) - Folio {id_usuario}"
+            asunto = f"Gafete digital - Empresa - Folio {id_usuario}"
             intro = f"<p>Estimado(a) <b>{nombre_mayus}</b>,</p><p>Adjunto encontrarás tu <b>gafete digital</b> con código QR.</p>"
         elif tipo_usuario.upper() == "ELISA_CARRILLO":
             asunto = f"Boleto de Acceso - Gala Elisa y Amigos 2026 (Folio: {id_usuario})"
             intro = f"<p>Estimado(a) <b>{nombre_mayus}</b>,</p><p>Tu registro fue exitoso. Adjunto tu boleto en PDF.</p>"
         else:
-            asunto = f"Gafete Estudiante (Azul FICTI) - Folio {id_usuario}"
+            asunto = f"Gafete digital - Estudiante - Folio {id_usuario}"
             intro = f"<p>¡Hola <b>{nombre_mayus}</b>!</p><p>Adjunto encontrarás tu <b>gafete digital</b> con código QR.</p>"
 
         cuerpo = f"""
@@ -567,7 +615,7 @@ def api_health():
     """Chequeo de conectividad para frontend/proxy (no expone secretos)."""
     return jsonify({
         'ok': True,
-        'service': 'registro-eventos-backend',
+        'service': 'evento-elisa-backend',
         'brevo_configured': bool(BREVO_API_KEY),
         'static_dist_exists': os.path.isdir(WEB_DIST) and os.path.isfile(os.path.join(WEB_DIST, 'index.html')),
         'routes': [
@@ -679,9 +727,13 @@ def registro():
         Telefono_local = request.form.get('telefono', '').strip()
         Telefono = f"{lada} {Telefono_local}".strip()
         Correo = request.form.get('email', '').strip().lower()
+        Institucion = request.form.get('institucion_educativa', '').strip().upper()
+        Grado = request.form.get('grado', '').strip().upper()
 
         if not Nombre or not Apellido or not Telefono_local or not Correo or not es_correo_valido(Correo):
             return api_message(False, 'Completa mail, nombre, apellido y teléfono correctamente.', 400)
+        if not Institucion or not Grado:
+            return api_message(False, 'Institución educativa y grado son obligatorios.', 400)
 
         alumno_existente = Alumno.query.filter(Alumno.Correo.any(Correo)).first()
         if alumno_existente:
@@ -692,6 +744,8 @@ def registro():
             ApellidoPaterno=Apellido,
             Telefono=Telefono,
             Correo=[Correo],
+            InstitucionEducativa=Institucion,
+            Grado=Grado,
             confirmado=False,
         )
         db.session.add(nuevo)
@@ -787,32 +841,34 @@ def registro_empresario():
         nombre = request.form.get('nombre', '').strip().upper()
         apellido_paterno = request.form.get('apellido_paterno', '').strip().upper()
         apellido_materno = request.form.get('apellido_materno', '').strip().upper()
-        cargo = request.form.get('cargo', '').strip().upper()
+        cargo = request.form.get('cargo', '').strip().upper()  # optional / legacy
         empresa = request.form.get('empresa', '').strip().upper()
         lada_pais = request.form.get('lada_pais', '+52').strip()
         telefono = request.form.get('telefono', '').strip()
         pais = request.form.get('pais', 'MEXICO').strip().upper() or 'MEXICO'
         codigo_postal = request.form.get('codigo_postal', '00000').strip() or '00000'
         ciudad = request.form.get('ciudad', '').strip().upper()
+        estado = request.form.get('estado', '').strip().upper()
         calle_numero = request.form.get('calle_numero', '').strip().upper()
         posicion_empresa = request.form.get('posicion_empresa', '').strip()
         area_responsabilidad = request.form.get('area_responsabilidad', '').strip()
         productos_interes = request.form.getlist('productos_interes')
 
-        if not all([nombre, apellido_paterno, cargo, empresa, telefono, ciudad]):
+        if not all([nombre, apellido_paterno, empresa, telefono, ciudad, estado]):
             return api_message(False, 'Faltan campos obligatorios del formulario empresa.', 400)
 
         nuevo_empresario = Empresario(
             Nombre=nombre,
             ApellidoPaterno=apellido_paterno,
             ApellidoMaterno=apellido_materno or None,
-            Cargo=cargo,
+            Cargo=cargo or None,
             Empresa=empresa,
             LadaPais=lada_pais,
             Telefono=telefono,
             Pais=pais,
             CodigoPostal=codigo_postal,
             Ciudad=ciudad,
+            Estado=estado,
             CalleNumero=calle_numero or None,
             Correo=email,
             PosicionEmpresa=posicion_empresa or None,

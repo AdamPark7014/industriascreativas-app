@@ -1,0 +1,36 @@
+# Panel de control — se conecta a la red y la base que ya usa el registro demo.
+name: eventos-panel
+
+services:
+  panel_web:
+    build: .
+    image: eventos-panel-web:latest
+    container_name: eventos_panel_web
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
+      PANEL_SECRET_KEY: ${PANEL_SECRET_KEY:?Set PANEL_SECRET_KEY}
+      # Interno: ve empresas, estudiantes y el evento de Elisa Carrillo.
+      PANEL_USER: ${PANEL_USER:-admin}
+      PANEL_PASSWORD: ${PANEL_PASSWORD:?Set PANEL_PASSWORD}
+      PANEL_NOMBRE: ${PANEL_NOMBRE:-Administrador}
+      # Promotor: solo empresas y estudiantes.
+      PANEL_PROMOTOR_USER: ${PANEL_PROMOTOR_USER:-promotor}
+      PANEL_PROMOTOR_PASSWORD: ${PANEL_PROMOTOR_PASSWORD:?Set PANEL_PROMOTOR_PASSWORD}
+      PANEL_PROMOTOR_NOMBRE: ${PANEL_PROMOTOR_NOMBRE:-Promotor}
+      PANEL_COOKIE_SECURE: "1"
+    expose:
+      - "5000"
+    networks:
+      - eventos-demo-net
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5000/health').status==200 else 1)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+networks:
+  eventos-demo-net:
+    external: true
+    name: eventos-demo-net

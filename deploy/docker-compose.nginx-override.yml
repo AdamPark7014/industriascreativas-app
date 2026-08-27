@@ -1,0 +1,12 @@
+services:
+  nginx:
+    volumes:
+      - /opt/EVENTOS-app/deploy/zz-demo.conf:/etc/nginx/conf.d/zz-demo.conf:ro
+    networks:
+      - registro-network
+      - eventos-demo-net
+
+networks:
+  eventos-demo-net:
+    external: true
+    name: eventos-demo-net

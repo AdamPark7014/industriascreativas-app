@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Acceso · Panel de control</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/panel.css') }}">
+</head>
+<body>
+  <main class="loginPage">
+    <div class="loginCard card">
+      <div class="loginHead">
+        <div class="loginLogos">
+          <img src="{{ url_for('static', filename='img/ficti-logo.png') }}" alt="FICTI">
+          <img src="{{ url_for('static', filename='img/tech-capital-logo.png') }}" alt="Tech Capital">
+        </div>
+        <h1 class="loginTitulo">Panel de control</h1>
+        <p class="loginSub">Estadísticas y conteo de registros del evento</p>
+      </div>
+
+      <div class="loginBody">
+        {% with mensajes = get_flashed_messages(category_filter=['error']) %}
+          {% if mensajes %}
+            <div class="alerta">{{ mensajes[0] }}</div>
+          {% endif %}
+        {% endwith %}
+
+        <form method="post" autocomplete="off">
+          <div class="grupo">
+            <label class="label" for="usuario">Usuario</label>
+            <input class="input" id="usuario" name="usuario" type="text"
+                   placeholder="admin" required autofocus>
+          </div>
+          <div class="grupo">
+            <label class="label" for="clave">Contraseña</label>
+            <input class="input" id="clave" name="clave" type="password"
+                   placeholder="••••••••" required>
+          </div>
+          <button class="btn btnPrimario btnLogin" type="submit">Entrar al panel</button>
+        </form>
+
+        <p class="loginPie">Registro de eventos · 2026</p>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

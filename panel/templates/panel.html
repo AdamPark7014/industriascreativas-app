@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Panel de control · Registros del evento</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/panel.css') }}">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ---------------------------------------------------------- sidebar -->
+  <aside class="lateral" id="lateral">
+    <div class="lateralMarca">
+      <img src="{{ url_for('static', filename='img/ficti-logo.png') }}" alt="FICTI">
+      <img class="lateralTech" src="{{ url_for('static', filename='img/tech-capital-logo.png') }}" alt="Tech Capital">
+    </div>
+
+    <nav class="nav">
+      <p class="navTitulo">General</p>
+      <button class="navItem activo" data-vista="resumen"
+              data-label="Resumen" data-corto="Resumen">
+        <span class="navIcono" aria-hidden="true">◧</span> Resumen
+        <span class="navTag" id="tagTotal">—</span>
+      </button>
+      <button class="navItem" data-vista="analisis"
+              data-label="Análisis" data-corto="Análisis">
+        <span class="navIcono" aria-hidden="true">◔</span> Análisis
+      </button>
+
+      <p class="navTitulo">Registros</p>
+      {# Solo las tablas del alcance del usuario. #}
+      {% for clave, info in catalogo.items() %}
+        <button class="navItem" data-vista="{{ clave }}"
+                data-label="{{ info.nombre }}" data-corto="{{ info.corto }}">
+          <span class="navIcono {{ info.acento }}" aria-hidden="true">●</span>
+          {{ info.nombre }}
+          <span class="navTag" data-tag="{{ clave }}">—</span>
+        </button>
+      {% endfor %}
+    </nav>
+
+    <div class="lateralPie">
+      <div class="conexion" id="conexion" title="Estado del servicio">
+        <span class="pulso" id="pulso"></span>
+        <span id="conexionTexto">Conectando…</span>
+      </div>
+      <div class="usuario">
+        <span>Sesión: <b>{{ session.nombre }}</b></span>
+        <a href="{{ url_for('logout') }}">Salir</a>
+      </div>
+      <img class="lateralGabor" src="{{ url_for('static', filename='img/gabor-logo-footer.png') }}" alt="Gabor Grupo Papelero">
+    </div>
+  </aside>
+
+  <!-- ------------------------------------------------------------- main -->
+  <div class="principal">
+
+    <header class="cabecera">
+      <button class="menuBtn" id="menuBtn" aria-label="Menú">≡</button>
+      <div class="cabeceraTexto">
+        <p class="kicker" id="vistaKicker">Panel de control</p>
+        <h1 class="titulo" id="vistaTitulo">Resumen del evento</h1>
+      </div>
+      <div class="cabeceraAcciones">
+        {# Junto al botón de exportar: deja claro con qué sesión sale el archivo. #}
+        <button class="insignia insignia--{{ alcance }}" id="btnInsignia"
+                title="Sesión activa: {{ session.nombre }}">
+          <span class="insigniaPunto"></span>
+          <span class="insigniaTexto">{{ alcance_nombre }}</span>
+          <span class="insigniaUsuario">{{ session.usuario }}</span>
+        </button>
+        <div class="sello" id="sello">
+          <span class="selloPunto"></span>
+          <span id="selloTexto">En vivo</span>
+        </div>
+        <div class="menuExport">
+          <button class="btn btnPrimario" id="btnExportar">
+            <span aria-hidden="true">↓</span>
+            <span class="btnTexto">Exportar Excel</span>
+          </button>
+          <div class="menuExportLista" id="menuExportLista">
+            <button data-export="">Todo el evento</button>
+            {% for clave, info in catalogo.items() %}
+              <button data-export="{{ clave }}">Solo {{ info.nombre|lower }}</button>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </header>
+
+    {# Hoja de sesión: en teléfono la barra lateral no está a la vista. #}
+    <div class="hojaSesion" id="hojaSesion" hidden>
+      <p class="hojaSesionFila"><span>Usuario</span><b>{{ session.nombre }} ({{ session.usuario }})</b></p>
+      <p class="hojaSesionFila"><span>Vista</span><b>{{ alcance_nombre }}</b></p>
+      <p class="hojaSesionFila"><span>Estado</span><b id="hojaConexion">—</b></p>
+      <a class="hojaSesionSalir" href="{{ url_for('logout') }}">Cerrar sesión</a>
+    </div>
+
+    <main class="contenido">
+      <div class="aviso" id="aviso" hidden></div>
+
+      <!-- Resumen -->
+      <section class="vista activa" id="vista-resumen">
+        <div class="kpiGrid" id="kpiGrid"></div>
+        <div class="grid g3" id="categoriasGrid"></div>
+        <div class="grid g21">
+          <article class="tarjeta">
+            <div class="tarjetaCab">
+              <h2 class="tarjetaTitulo">Productos de interés</h2>
+              <p class="tarjetaSub">Lo que buscan las empresas registradas</p>
+            </div>
+            <div class="tarjetaCuerpo" id="rk-productos"></div>
+          </article>
+          <article class="tarjeta">
+            <div class="tarjetaCab">
+              <h2 class="tarjetaTitulo">Últimos registros</h2>
+              <p class="tarjetaSub">Entradas más recientes</p>
+            </div>
+            <div class="tarjetaCuerpo sinPad" id="listaRecientes"></div>
+          </article>
+        </div>
+      </section>
+
+      <!-- Análisis -->
+      <section class="vista" id="vista-analisis">
+        <div class="grid g2">
+          <article class="tarjeta">
+            <div class="tarjetaCab">
+              <h2 class="tarjetaTitulo">Instituciones educativas</h2>
+              <p class="tarjetaSub">Nombres escritos de distintas formas se cuentan juntos</p>
+            </div>
+            <div class="tarjetaCuerpo" id="rk-instituciones"></div>
+          </article>
+          <article class="tarjeta">
+            <div class="tarjetaCab">
+              <h2 class="tarjetaTitulo">Grado escolar</h2>
+              <p class="tarjetaSub">Distribución del alumnado</p>
+            </div>
+            <div class="tarjetaCuerpo" id="rk-grados"></div>
+          </article>
+        </div>
+        <div class="grid g2">
+          <article class="tarjeta">
+            <div class="tarjetaCab">
+              <h2 class="tarjetaTitulo">Empresas registradas</h2>
+              <p class="tarjetaSub">Contactos por empresa</p>
+            </div>
+            <div class="tarjetaCuerpo" id="rk-empresas"></div>
+          </article>
+          <article class="tarjeta">
+            <div class="tarjetaCab">
+              <h2 class="tarjetaTitulo">Sector / Industria</h2>
+              <p class="tarjetaSub">Giro declarado</p>
+            </div>
+            <div class="tarjetaCuerpo" id="rk-sectores"></div>
+          </article>
+        </div>
+        <div class="grid g3">
+          <article class="tarjeta">
+            <div class="tarjetaCab"><h2 class="tarjetaTitulo">Estado</h2></div>
+            <div class="tarjetaCuerpo" id="rk-estados"></div>
+          </article>
+          <article class="tarjeta">
+            <div class="tarjetaCab"><h2 class="tarjetaTitulo">Área de responsabilidad</h2></div>
+            <div class="tarjetaCuerpo" id="rk-areas"></div>
+          </article>
+          <article class="tarjeta">
+            <div class="tarjetaCab"><h2 class="tarjetaTitulo">Posición en la empresa</h2></div>
+            <div class="tarjetaCuerpo" id="rk-posiciones"></div>
+          </article>
+        </div>
+      </section>
+
+      <!-- Registros (una sola vista reutilizada por tipo) -->
+      <section class="vista" id="vista-registros">
+        <article class="tarjeta">
+          <div class="tablaBarra">
+            <div class="buscador">
+              <span class="buscadorIcono" aria-hidden="true">⌕</span>
+              <input type="search" id="buscar" placeholder="Buscar por nombre, correo, empresa, institución…" autocomplete="off">
+            </div>
+            <div class="filtros" id="filtros">
+              <button class="chip activo" data-solo="">Todos</button>
+              <button class="chip" data-solo="confirmados">Confirmados</button>
+              <button class="chip" data-solo="pendientes">Pendientes</button>
+            </div>
+            <div class="tablaMeta" id="tablaMeta"></div>
+          </div>
+          {# Escritorio: tabla completa. Teléfono: tarjetas (ver panel.js). #}
+          <div class="tablaEnvoltura">
+            <table class="tabla" id="tabla">
+              <thead id="tablaCabeza"></thead>
+              <tbody id="tablaCuerpo"></tbody>
+            </table>
+          </div>
+          <div class="tarjetas" id="tarjetas"></div>
+          <div class="paginacion" id="paginacion"></div>
+        </article>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- ficha lateral de detalle -->
+<div class="capa" id="capa" hidden></div>
+<aside class="ficha" id="ficha" hidden>
+  <div class="fichaCab">
+    <div>
+      <p class="fichaTipo" id="fichaTipo"></p>
+      <h2 class="fichaNombre" id="fichaNombre"></h2>
+    </div>
+    <button class="fichaCerrar" id="fichaCerrar" aria-label="Cerrar">×</button>
+  </div>
+  <div class="fichaCuerpo" id="fichaCuerpo"></div>
+</aside>
+
+<div class="brindis" id="brindis" hidden></div>
+
+<script>window.CATALOGO = {{ catalogo | tojson }};</script>
+<script src="{{ url_for('static', filename='js/panel.js') }}"></script>
+</body>
+</html>

@@ -2,12 +2,10 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { postForm } from '../api/registro'
 import AppShell from '../components/AppShell'
-import BadgePreview from '../components/BadgePreview'
 import PhoneField from '../components/PhoneField'
 import { RegistrationSuccess } from '../components/RegistrationSuccess'
 import {
   emptyEstudianteForm,
-  LEYENDA_CANJE,
   type EstudianteFormData,
 } from '../constants/registro'
 import { findDial, formatPhoneDisplay, validateLocalPhone } from '../constants/phone'
@@ -39,6 +37,8 @@ export default function EstudiantesPage() {
   function validateForm() {
     if (!form.email) return 'El correo es obligatorio.'
     if (!form.nombre || !form.apellidoPaterno) return 'Nombre y apellido son obligatorios.'
+    if (!form.institucionEducativa.trim()) return 'La institución educativa es obligatoria.'
+    if (!form.grado.trim()) return 'El grado es obligatorio.'
     return validateLocalPhone(form.phoneCountry, form.telefono)
   }
 
@@ -63,6 +63,8 @@ export default function EstudiantesPage() {
       apellido_paterno: form.apellidoPaterno.trim().toUpperCase(),
       lada_pais: findDial(form.phoneCountry).dial,
       telefono: form.telefono.trim(),
+      institucion_educativa: form.institucionEducativa.trim().toUpperCase(),
+      grado: form.grado.trim().toUpperCase(),
     })
     setLoading(false)
     if (!result.ok) {
@@ -93,8 +95,8 @@ export default function EstudiantesPage() {
           <p className={styles.kicker}>Acreditación estudiantil</p>
           <h1 className={styles.title}>Registro Estudiante</h1>
           <p className={styles.subtitle}>
-            Solo pedimos los datos esenciales. Después verás el resumen y la vista previa de tu
-            gafete Azul FICTI.
+            Solo pedimos los datos esenciales. En el siguiente paso revisas tu información y, al
+            confirmar, te enviamos un correo para validar tu registro.
           </p>
         </div>
 
@@ -169,6 +171,36 @@ export default function EstudiantesPage() {
                     }}
                     onNumberChange={(value) => update('telefono', value)}
                   />
+                  <div className={styles.group}>
+                    <label className={styles.label} htmlFor="institucion">
+                      Institución educativa<span className={styles.required}>*</span>
+                    </label>
+                    <input
+                      className={styles.input}
+                      id="institucion"
+                      required
+                      style={{ textTransform: 'uppercase' }}
+                      placeholder="Ej. Universidad Nacional"
+                      value={form.institucionEducativa}
+                      onInput={toUpperCaseInput}
+                      onChange={(e) => update('institucionEducativa', e.target.value)}
+                    />
+                  </div>
+                  <div className={styles.group}>
+                    <label className={styles.label} htmlFor="grado">
+                      Grado<span className={styles.required}>*</span>
+                    </label>
+                    <input
+                      className={styles.input}
+                      id="grado"
+                      required
+                      style={{ textTransform: 'uppercase' }}
+                      placeholder="Ej. 5º semestre"
+                      value={form.grado}
+                      onInput={toUpperCaseInput}
+                      onChange={(e) => update('grado', e.target.value)}
+                    />
+                  </div>
                 </section>
 
                 <div className={styles.actions}>
@@ -197,19 +229,24 @@ export default function EstudiantesPage() {
                       <strong>Teléfono</strong>
                       <span>{phoneDisplay}</span>
                     </div>
+                    <div className={styles.summaryRow}>
+                      <strong>Institución educativa</strong>
+                      <span>{form.institucionEducativa}</span>
+                    </div>
+                    <div className={styles.summaryRow}>
+                      <strong>Grado</strong>
+                      <span>{form.grado}</span>
+                    </div>
                   </div>
                 </section>
 
-                <div className={styles.previewBlock}>
-                  <div className={styles.previewCopy}>
-                    <h3>Vista previa del gafete</h3>
-                    <p>
-                      Gafete Azul FICTI con logo Gabor. Tras confirmar el correo recibirás tu
-                      código QR digital.
-                    </p>
-                    <p className={styles.leyenda}>{LEYENDA_CANJE}</p>
-                  </div>
-                  <BadgePreview variant="estudiante" nombre={nombreCompleto} />
+                <div className={styles.confirmNote}>
+                  <h3>Siguiente paso: confirma tu correo</h3>
+                  <p>
+                    Al confirmar este registro te enviaremos un enlace a tu correo. Debes abrirlo
+                    para validar tu acreditación y recibir tu gafete digital con código QR. El día
+                    del evento canjeas ese gafete digital por el físico en taquilla.
+                  </p>
                 </div>
 
                 <div className={styles.actions}>
