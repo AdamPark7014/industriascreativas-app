@@ -115,7 +115,7 @@ export default function EmpresariosPage() {
 
   if (step === 'done') {
     return (
-      <AppShell>
+      <AppShell variant="empresa">
         <RegistrationSuccess title="Registro empresarial enviado">
           <div className={styles.actions} style={{ justifyContent: 'center', border: 'none', background: 'transparent' }}>
             <Link className={styles.btnGhost} to="/">
@@ -128,7 +128,7 @@ export default function EmpresariosPage() {
   }
 
   return (
-    <AppShell>
+    <AppShell variant="empresa">
       <div className={styles.shell}>
         <div className={styles.hero}>
           <p className={styles.kicker}>Acreditación corporativa</p>

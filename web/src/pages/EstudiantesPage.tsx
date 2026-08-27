@@ -76,7 +76,7 @@ export default function EstudiantesPage() {
 
   if (step === 'done') {
     return (
-      <AppShell>
+      <AppShell variant="estudiante">
         <RegistrationSuccess title="Registro de estudiante enviado">
           <div className={styles.actions} style={{ justifyContent: 'center', border: 'none', background: 'transparent' }}>
             <Link className={styles.btnGhost} to="/">
@@ -89,7 +89,7 @@ export default function EstudiantesPage() {
   }
 
   return (
-    <AppShell>
+    <AppShell variant="estudiante">
       <div className={styles.shell}>
         <div className={styles.hero}>
           <p className={styles.kicker}>Acreditación estudiantil</p>

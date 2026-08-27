@@ -12,8 +12,12 @@ body,
 }
 
 body {
-  background: #eef3f9;
+  background: #050b1c;
   font-family: 'Manrope', 'Segoe UI', sans-serif;
-  color: #132039;
+  color: #ffffff;
   -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(53, 217, 92, 0.35);
 }

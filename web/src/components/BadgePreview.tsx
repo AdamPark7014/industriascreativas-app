@@ -15,7 +15,7 @@ export default function BadgePreview({
 }: BadgePreviewProps) {
   const tipo =
     variant === 'empresa' ? 'EMPRESA - ROSA FICTI' : 'ESTUDIANTE - AZUL FICTI'
-  const colorClass = variant === 'empresa' ? styles.rosa : styles.azul
+  const colorClass = variant === 'empresa' ? styles.rosa : styles.verde
 
   return (
     <div className={`${styles.badge} ${colorClass}`} aria-label="Vista previa del boleto digital">

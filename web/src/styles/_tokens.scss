@@ -64,3 +64,47 @@ $font-body: 'Manrope', 'Segoe UI', sans-serif;
     box-shadow 0.18s ease,
     background-color 0.18s ease;
 }
+
+// ---------------------------------------------------------------------------
+// TECH CAPITAL 2026 — tema oscuro
+// Paleta de la referencia aprobada por el cliente (agosto 2026). Estudiantes
+// pasa de azul a verde; empresas conserva el rosa FICTI.
+// ---------------------------------------------------------------------------
+$dark-bg: #050b1c;
+$dark-bg-2: #071026;
+$dark-surface: #0a1428;
+$dark-surface-2: #0d1b33;
+$dark-border: #1b2b4d;
+$dark-border-soft: rgba(125, 165, 225, 0.16);
+$dark-text: #ffffff;
+$dark-text-muted: #93a6c4;
+$dark-text-dim: #6b80a3;
+
+$verde-tech: #35d95c;
+$verde-tech-bright: #5cf07f;
+$verde-tech-deep: #1faa42;
+$rosa-tech: #ec1e63;
+$rosa-tech-bright: #ff3d7f;
+$cyan-tech: #22d3ee;
+$cyan-dim: #5f82ad;
+
+@mixin dark-field {
+  @include text-field;
+  border: 1px solid $dark-border;
+  background: rgba(255, 255, 255, 0.04);
+  color: $dark-text;
+
+  &::placeholder {
+    color: $dark-text-dim;
+  }
+
+  &:hover {
+    border-color: rgba(125, 165, 225, 0.38);
+  }
+
+  &:focus {
+    border-color: var(--accent);
+    background: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 0 0 4px var(--accent-soft);
+  }
+}

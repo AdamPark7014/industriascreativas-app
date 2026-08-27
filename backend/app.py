@@ -29,7 +29,7 @@ LEYENDA_CANJE = (
 
 # Rosa FICTI / Azul FICTI
 COLOR_ROSA_FICTI = (0.820, 0.086, 0.427)  # #d1166d
-COLOR_AZUL_FICTI = (0.149, 0.690, 0.835)  # #26b0d5 (teal ticket)
+COLOR_VERDE_FICTI = (0.133, 0.663, 0.290)  # #22a94a — estudiantes (antes azul #26b0d5)
 
 app = Flask(
     __name__,
@@ -366,7 +366,7 @@ def crear_pdf_gafete(id_usuario, nombre_usuario, tipo_usuario="ALUMNO", empresa=
     empresa = str(empresa).upper() if empresa else ""
     cargo = str(cargo).upper() if cargo else ""
     es_empresa = tipo_usuario in ("EMPRESARIO", "EMPRESA")
-    accent = COLOR_ROSA_FICTI if es_empresa else COLOR_AZUL_FICTI
+    accent = COLOR_ROSA_FICTI if es_empresa else COLOR_VERDE_FICTI
 
     ANCHO = 6.0 * 72
     ALTO = 9.0 * 72
