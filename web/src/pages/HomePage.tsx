@@ -30,6 +30,12 @@ export default function HomePage() {
           </div>
 
           <div className={styles.homeSide}>
+            <img
+              className={styles.homeBanner}
+              src="/registrate-sin-costo.png"
+              alt="Regístrate sin costo"
+            />
+
             <div className={styles.homeGrid}>
               <Link className={`${styles.homeCard} ${styles.empresa}`} to="/empresarios">
                 <span className={styles.homeCardIcon} aria-hidden>
@@ -39,8 +45,8 @@ export default function HomePage() {
                   </svg>
                 </span>
                 <span className={styles.homeCardText}>
-                  <strong>Empresa</strong>
-                  <span>Acreditación corporativa</span>
+                  <strong>Público General</strong>
+                  <span>Registro Gratuito</span>
                 </span>
                 <span className={styles.homeCardArrow} aria-hidden>
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

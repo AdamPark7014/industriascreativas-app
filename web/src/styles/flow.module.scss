@@ -909,6 +909,22 @@
   gap: 22px;
 }
 
+// Banner "Regístrate sin costo": el PNG ya trae la mascota desbordando la barra
+// rosa, así que va sin caja ni fondo propios y se escala por su lado largo.
+.homeBanner {
+  display: block;
+  width: 100%;
+  height: auto;
+  // El arte tiene aire transparente arriba y abajo; se recorta con el margen
+  // negativo para que no abra un hueco contra las tarjetas.
+  margin: -8px 0 -6px;
+
+  @media (max-width: 980px) {
+    max-width: 520px;
+    margin-inline: auto;
+  }
+}
+
 .homeGrid {
   display: grid;
   grid-template-columns: 1fr;
@@ -975,6 +991,13 @@
   }
 
   @media (max-width: 480px) {
+    // "Público General" no cabe en una línea a 1.5rem en un móvil de 375 px, y
+    // partido deja la tarjeta más alta que la de Estudiante. Baja el título lo
+    // justo para que ambos entren en un renglón y las dos tarjetas casen.
+    strong {
+      font-size: 1.3rem;
+    }
+
     span {
       font-size: 0.88rem;
     }
