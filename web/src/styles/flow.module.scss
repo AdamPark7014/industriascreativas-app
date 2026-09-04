@@ -101,28 +101,33 @@
   background: transparent;
 }
 
-// FICTI es la marca principal y debe leerse por encima de Tech Capital. Su PNG
-// ya viene recortado a la tinta (antes traia 50% de relleno vacio y por eso se
-// veia mas chico aun siendo mas "alto" en CSS). De su altura, el 86% es el
-// logotipo y el 14% la bajada de texto; con estos valores el logotipo dibuja
-// ~1.2x lo que dibuja Tech Capital.
+// Los dos PNG vienen recortados a su caja de tinta, asi que la altura en CSS es
+// tinta de verdad y no aire. La unica asimetria que queda es que FICTI lleva
+// bajada de texto: de su alto, el 87% es el logotipo y el 13% la bajada. Por eso
+// FICTI va 1.155x mas alto que Tech Capital, para que los dos LOGOTIPOS midan
+// lo mismo. Igualar las cajas en vez de los logotipos deja FICTI mas chico.
 .partnerLogoFicti {
-  height: 50px;
+  height: 42px;
   max-width: 230px;
+  // La fila centra por caja, y la bajada de texto cuelga por debajo: eso deja el
+  // logotipo 6.7% de su alto por encima del de Tech Capital. Se baja esa misma
+  // fraccion para que los dos logotipos queden a la misma linea de centro. En %
+  // porque asi vale igual en las tres alturas (42 / 38 / 28 px).
+  transform: translateY(6.7%);
 }
 
 .partnerLogoTech {
-  height: 52px;
+  height: 36px;
   max-width: 210px;
 }
 
 .topbarHome .partnerLogoFicti {
-  height: 46px;
+  height: 38px;
   max-width: 215px;
 }
 
 .topbarHome .partnerLogoTech {
-  height: 48px;
+  height: 33px;
   max-width: 195px;
 }
 
@@ -145,13 +150,13 @@
 
   .partnerLogoFicti,
   .topbarHome .partnerLogoFicti {
-    height: 33px;
+    height: 28px;
     max-width: 140px;
   }
 
   .partnerLogoTech,
   .topbarHome .partnerLogoTech {
-    height: 34px;
+    height: 24px;
     max-width: 130px;
   }
 }

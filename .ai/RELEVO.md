@@ -26,19 +26,33 @@ ahora sirve la plataforma ExperienceBT: `terror.`, `taquilla.terror.` y
 Cambio de marca pedido por el cliente (Getzy) vía Adam, con tres instrucciones y
 cuatro PNG. Todo en `web/`.
 
-1. **Logo FICTI: de blanco a rosa, y recortado para que mande sobre Tech Capital.**
+1. **Logos de la cabecera: FICTI a rosa, y los dos igualados.**
    - `web/public/ficti-logo.png` ← `Logotipo_FICTI_2026-06.png` (RGBA con alfa).
-     El blanco anterior queda como `web/public/ficti-logo-blanco.png` por si hay
-     que revertir. Sin cambio de codigo: `AppShell.tsx` ya apuntaba ahi.
-   - **El original traia 50 % de relleno vacio** (caja 3191×1309, tinta solo
-     1948×655). Por eso se veia mas chico que Tech Capital *aun teniendo mas
-     altura en CSS*: dibujaba 25 px de logotipo contra los 33 px de tinta del
-     otro. Medido, no a ojo. Se recorto a la caja de tinta y se bajo a 600 px de
-     ancho (47 KB): `ficti-logo.png` es ahora 600×202, ratio 2.97.
-   - Con la caja limpia, la altura CSS por fin significa lo que dice. Alturas
-     nuevas: 50 px general, 46 px en el home, 33 px en movil. De esa altura el
-     **86 % es el logotipo y el 14 % la bajada de texto**, asi que el logotipo
-     dibuja **1.19x** lo que dibuja Tech Capital. Verificado en produccion.
+     El blanco anterior queda como `ficti-logo-blanco.png` por si hay que
+     revertir. Sin cambio de codigo: `AppShell.tsx` ya apuntaba ahi.
+   - **Los dos PNG traian relleno vacio y por eso no habia forma de cuadrarlos
+     con la altura de CSS**: FICTI usaba solo el 50 % de su lienzo y Tech
+     Capital el 69 %. Medido: FICTI dibujaba 25 px de logotipo contra 33 px del
+     otro, *aun teniendo mas altura en CSS*. Los dos se recortaron a su caja de
+     tinta y se bajaron a 600 px de ancho:
+     `ficti-logo.png` 600×202 (47 KB) y `tech-capital-logo.png` 600×159 (38 KB,
+     antes 13403×4354 y **859 KB**). El original de Tech queda como
+     `tech-capital-logo-original.png`.
+   - Con las cajas limpias la altura de CSS es tinta de verdad. La unica
+     asimetria que queda es que FICTI lleva bajada de texto: de su alto, el
+     **87 % es el logotipo y el 13 % la bajada**. Por eso FICTI va **1.155x mas
+     alto** que Tech Capital — para que los dos LOGOTIPOS midan lo mismo.
+     Igualar las cajas en vez de los logotipos deja FICTI mas chico.
+     Alturas: 42/36 px general, 38/33 px en el home, 28/24 px en movil.
+   - `transform: translateY(6.7%)` en `.partnerLogoFicti`: la fila centra por
+     caja y la bajada cuelga por debajo, lo que dejaba el logotipo de FICTI
+     2.5 px por encima del de Tech. En porcentaje para que valga igual en las
+     tres alturas.
+   - **Verificado en produccion: logotipos 32.9 px vs 33.0 px (ratio 1.00x) y
+     desfase de centros 0.0 px.** A 375 px, 1.01x y 0.0 px.
+   - Ojo con el historial de este ajuste: primero se pidio "mas grande" y quedo
+     en 1.19x; despues se corrigio a "parejos". El criterio bueno es **1.00x
+     entre logotipos**, no entre cajas.
 
 2. **Logo Gabor: de blanco al original rojo con negro, sobre un cintillo.**
    - `web/public/gabor-logo-footer.png` ← `Logo Gabor-01.png` (2250×1020, RGBA).
