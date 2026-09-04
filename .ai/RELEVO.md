@@ -44,33 +44,44 @@ cuatro PNG. Todo en `web/`.
      a borde, y `.footerLogo` perdió el `opacity: .95` (sobre fondo claro solo
      restaba contraste).
 
-3. **Circuitos verdes sobre el cintillo.**
-   - **Van en SVG, no como los PNG que mandó el cliente.** `CIRCUITO 1.png` y
-     `CIRCUITO 2.png` vienen en **RGB sin canal alfa**, sobre fondo negro
-     sólido: puestos sobre la banda turquesa se verían como dos cajas negras.
-     Comprobado leyendo la cabecera IHDR de los PNG, no a ojo.
-   - Componente `BandCircuit` en `AppShell.tsx`, al lado del `Circuit` que ya
-     existía para el home. Trazos horizontales con codos de 45° y nodos llenos
-     y huecos, que es el lenguaje de la referencia. Color `$band-circuit`
-     (#8ce818) y `drop-shadow` para el neón.
-   - **CIRCUITO 2 = izquierda, CIRCUITO 1 = derecha**, confirmado contra el
-     arte: en el 2 las líneas entran a ras del borde izquierdo, en el 1 terminan
-     a ras del derecho. La variante derecha es la misma reflejada con
-     `scaleX(-1)`, igual que ya hacía `.circuitRight`.
-   - A ≤640 px la banda baja a 58 px y los circuitos **se estrechan a 78 px**,
-     no se ocultan. La traza completa mide ~209 px de ancho a esa altura y dos
-     no caben junto al logo; con `preserveAspectRatio="xMinYMid slice"` el SVG
-     **recorta desde el filo anclado** en vez de encogerse, asi conserva el
-     grosor del trazo y sigue naciendo del borde. Primer intento fue
-     `display: none` y Adam lo cazo en el telefono: estaba mal.
+3. **Circuitos verdes sobre el cintillo: el arte real del cliente.**
+   - `web/public/circuito-izq.png` ← `CIRCUITO 2.png` y
+     `web/public/circuito-der.png` ← `CIRCUITO 1.png`. **Son piezas distintas,
+     una por lado, no la misma reflejada**: en el 2 las lineas entran a ras del
+     borde izquierdo y en el 1 terminan a ras del derecho.
+   - Los originales vienen en **RGB sin canal alfa**, sobre negro puro (~80 % de
+     la imagen). Se les saco la transparencia **usando la luminancia como alfa**
+     (`alpha = max(R,G,B)` y color despremultiplicado). Para arte de neon sobre
+     negro es lo correcto: el degradado del glow *es* la luminancia, asi que se
+     conserva entero y no queda el halo oscuro que deja un recorte por umbral.
+     Reescalados a 480 px de ancho (~65 KB cada uno); se renderizan a 148 px.
+   - **Primer intento fallido: los redibuje como SVG a mano.** Adam lo cazo:
+     "no se ven para nada como las que te mande". Tenia razon, era una
+     imitacion. El `drop-shadow` que le puse encima ademas rasterizaba y se veia
+     pixeleado. Nada de filtros: el arte ya trae su propio glow.
+   - A ≤640 px la banda baja a 58 px y las piezas se estrechan a 88 px con
+     `object-fit: cover` y `object-position` al filo de cada lado, para que se
+     recorten desde el borde en vez de encogerse. Un intento anterior las
+     ocultaba con `display: none` y Adam lo cazo en el telefono: estaba mal.
 
-Tokens nuevos en `_tokens.scss`: `$band-teal` y `$band-circuit`.
+4. **Eliminados los circuitos viejos del home.** `AppShell.tsx` tenia un
+   componente `Circuit` dibujado a mano que pintaba dos SVG de 300×150 px en las
+   esquinas inferiores, en azul grisaceo (`rgba(96,165,215,.42)`). Medido en
+   vivo: iban de 750 a 900 px y **pisaban la banda entera** (824-900). Eran otro
+   dibujo distinto superpuesto al arte real, y como estaban ocultos por debajo
+   de 900 px, **el defecto solo se veia en escritorio** — que es justo como lo
+   reporto Adam. Fuera el componente y fuera `.circuit/.circuitLeft/
+   .circuitRight` del SCSS. La referencia del cliente tampoco los lleva.
 
-Verificado: `npm run build` limpio (`tsc -b` + `vite build`), home y
-`/empresarios` revisados en el navegador a 1440 px y a 375 px sin errores de
-consola, y medidas leídas del DOM (banda `rgb(18,181,176)` a 76 px, circuitos
-`rgb(140,232,24)` con el derecho en `matrix(-1,0,0,1,0,0)`, ambos logos con su
-tamaño natural correcto).
+Token nuevo en `_tokens.scss`: `$band-teal`. (`$band-circuit` quedo sin uso al
+pasar del SVG al arte real; se deja por si vuelve a hacer falta un trazo propio.)
+
+Verificado: `npm run build` limpio, home y `/empresarios` en el navegador a
+1440 px y a 375 px sin errores de consola, y medido en el DOM contra produccion:
+banda `rgb(18,181,176)` a 76 px, las tres piezas a escala 0.31x (reducidas, no
+ampliadas: no hay pixelado posible), sin `filter`, y **cero SVG encimados**.
+Muestreo del arte por canvas: color medio R132 G255 B61, 1.06 % de pixeles con
+rojo dominante — el nucleo amarillento del neon. No hay rosa en el origen.
 
 ## Cómo levantar esto en local (importante)
 

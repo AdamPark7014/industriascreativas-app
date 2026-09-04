@@ -245,14 +245,15 @@
   object-fit: contain;
 }
 
+// El arte ya trae su propio glow: nada de drop-shadow encima, que sobre el
+// turquesa ensuciaba el verde y se veia como un halo.
 .bandCircuit {
   position: absolute;
   top: 0;
   height: 100%;
   width: auto;
-  color: $band-circuit;
   pointer-events: none;
-  filter: drop-shadow(0 0 3px rgba(140, 232, 24, 0.9));
+  user-select: none;
 }
 
 .bandCircuitLeft {
@@ -261,7 +262,6 @@
 
 .bandCircuitRight {
   right: 0;
-  transform: scaleX(-1);
 }
 
 // Sello gráfico del evento. Fuera del home la referencia no lo lleva, pero se
@@ -309,37 +309,19 @@
     padding: 10px 14px;
   }
 
-  // La traza completa mide ~209px de ancho a esta altura de banda; dos no caben
-  // junto al logo en un movil. Se estrechan y el "slice" del SVG las recorta
-  // desde el filo, que es la parte que da el efecto.
+  // Dos piezas completas no caben junto al logo en un movil: se estrechan y se
+  // recortan desde el filo de cada lado, que es la parte que da el efecto.
   .bandCircuit {
-    width: 78px;
+    width: 88px;
+    object-fit: cover;
   }
-}
 
-// Trazos de circuito de las esquinas inferiores.
-.circuit {
-  position: absolute;
-  bottom: 0;
-  width: min(300px, 26vw);
-  height: auto;
-  color: rgba(96, 165, 215, 0.42);
-  pointer-events: none;
-  z-index: 0;
-}
+  .bandCircuitLeft {
+    object-position: left center;
+  }
 
-.circuitLeft {
-  left: 0;
-}
-
-.circuitRight {
-  right: 0;
-  transform: scaleX(-1);
-}
-
-@media (max-width: 900px) {
-  .circuit {
-    display: none;
+  .bandCircuitRight {
+    object-position: right center;
   }
 }
 
