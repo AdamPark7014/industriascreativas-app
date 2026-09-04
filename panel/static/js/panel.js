@@ -368,6 +368,7 @@
   const TITULOS = {
     resumen: ['Panel de control', 'Resumen del evento'],
     analisis: ['Panel de control', 'Análisis de registros'],
+    accesos: ['Control de accesos', 'Escáner, zonas e informes (Nest FICTI)'],
   };
 
   function irA(vista) {
@@ -392,9 +393,17 @@
         c.classList.toggle('activo', c.dataset.solo === ''));
       cargarTabla();
     } else {
-      const [k, t] = TITULOS[vista];
+      const [k, t] = TITULOS[vista] || ['Panel de control', vista];
       $('vistaKicker').textContent = k;
       $('vistaTitulo').textContent = t;
+      if (vista === 'accesos') {
+        const frame = $('accesosFrame');
+        const base = (window.NEST_ACCESS_BASE || 'https://manager.demo.experiencebt.com.mx').replace(/\/$/, '');
+        if (frame && (!frame.dataset.loaded || frame.src.indexOf(base) !== 0)) {
+          frame.src = `${base}/embed/access`;
+          frame.dataset.loaded = '1';
+        }
+      }
     }
     $('lateral').classList.remove('abierto');
   }
@@ -421,7 +430,7 @@
   // ---------------------------------------------------- navegación móvil
   // Se construye a partir de la lateral para no duplicar el menú: cambia el
   // alcance del usuario y ambas navegaciones cambian juntas.
-  const ICONOS = { resumen: '◧', analisis: '◔', empresas: '●', estudiantes: '●', elisa: '●' };
+  const ICONOS = { resumen: '◧', analisis: '◔', accesos: '▣', empresas: '●', estudiantes: '●', elisa: '●' };
 
   function montarNavInferior() {
     const fuente = [...document.querySelectorAll('.lateral .navItem')];
