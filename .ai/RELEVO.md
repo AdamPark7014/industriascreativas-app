@@ -18,7 +18,7 @@ que es Pumpkin/`app.` y compañía). Vive en el droplet DigitalOcean
   raíz: build de la SPA Vite (`web/`) + Flask (`backend/`) servido por gunicorn.
 - Ese `/opt/EVENTOS-app` es este repo (`AdamPark7014/EVENTOS-app`).
 - El panel es otro contenedor, `eventos_panel_web` → `panel.experiencebt.com.mx`.
-- Script de subida: `C:\dev\scripts\registro-deploy\deploy_demo_getzy.py`
+- Script de subida: `C:\dev\scriptsegistro-deploy\deploy_demo_getzy.py`
   (paramiko, necesita `REGISTRO_SSH_PASSWORD`).
 
 ## Hecho en este turno
@@ -66,26 +66,45 @@ ahí; antes apuntaba a `C:/dev/apps/EVENTO-ELISA-app/web`, que ya no existe.
 La ruta 8.3 (`NOTOCA~1`) **no sirve**: arranca, pero Vite devuelve 403 porque
 el allow-list de `server.fs` compara contra la ruta larga.
 
+## Desplegado
+
+**En producción en `demo.experiencebt.com.mx` desde el 2026-09-01.** Subido con
+`C:\dev\scripts\registro-deploy\deploy_demo_getzy.py` contra el droplet
+**147.182.128.128** (NO Hetzner: `5.78.215.109` es Zynora-tek y ahí no hay
+ningún contenedor de eventos; solo `app.experiencebt.com.mx` vive allí).
+
+Al script se le corrigieron dos cosas en este turno:
+
+- `ROOT` apuntaba a `C:\devpps\evento-elisa-app`, ruta muerta desde que el
+  proyecto se movió a `NO TOCAR LIBREMENTE`. Con ella el tar salía vacío.
+- Se le añadió al smoke test la comprobación de `registrate-sin-costo.png`.
+
+Verificado en vivo: home 200, `/empresarios` 200, `prod` (Flask raíz) 200, y los
+seis PNG del home a 200 incluido el banner nuevo. Los hashes servidos
+(`index-CQHyE1FA.js`, `index-BOGee1M6.css`) son exactamente los del build local
+revisado. Home repasado en el navegador a 1440 y a 375 px.
+
+**Copia de la base antes de desplegar:**
+`/root/db-backups/bd_demo_pre_banner_20260901_1625.sql.gz` (187 KB).
+Datos intactos: **290 empresarios y 175 alumnos** (crecieron desde los 196/102
+del 27-08; esto se llena solo, es producción de verdad).
+
 ## A medias - CUIDADO
 
-- **Esto NO está desplegado.** Los cambios son solo locales y commiteados.
-- **Adam pidió desplegar con `ssh -i ...id_ed25519_nexara_hetzner -p 2222
-  root@5.78.215.109`, y ese es el servidor equivocado para esta app.**
-  Comprobado por DNS el 2026-09-01:
-  `demo.experiencebt.com.mx`, `experiencebt.com.mx` y `panel.` → **147.182.128.128**
-  (droplet DigitalOcean); solo `app.experiencebt.com.mx` → 5.78.215.109 (Hetzner,
-  Pumpkin). Subir esto a Hetzner no cambiaría nada en `demo.` y tocaría una
-  máquina ajena. **Pendiente de que Adam confirme.**
-- El camino correcto es `C:\dev\scripts\registro-deploy\deploy_demo_getzy.py`
-  (paramiko contra 147.182.128.128, pide `REGISTRO_SSH_PASSWORD`). Ojo: su
-  constante `ROOT` sigue apuntando a `C:\dev\apps\evento-elisa-app`, ruta que ya
-  no existe desde que el proyecto se movió a `NO TOCAR LIBREMENTE`. **Hay que
-  corregirla antes de usarlo o subirá desde una carpeta inexistente.**
-- **`demo.` no es un juguete: tiene usuarios reales.** El 2026-08-27 había 196
-  empresarios y 102 alumnos, con altas de esa misma mañana. Cualquier despliegue
-  aquí es producción; hacer copia de la base antes.
+- **La tarjeta dice "Público General" pero el flujo detrás sigue siendo el de
+  empresa.** Al pulsarla se llega a `/empresarios`, que abre con el antetítulo
+  "Acreditación corporativa", el título "Registro Empresa" y un campo
+  **Empresa obligatorio**. Alguien que se registre como público general se topa
+  con eso. Está así en vivo. **Falta decidir con Adam si el cambio de nombre es
+  solo del botón o de todo el flujo** (formulario, correos y gafete rotulan
+  "empresario" en el backend).
+- **`demo.` no es un juguete: tiene usuarios reales**, con altas cada día.
+  Cualquier despliegue aquí es producción; hacer copia de la base antes.
 - Las capturas headless de Chrome por debajo de ~500 px **recortan** en vez de
   escalar. No fiarse de ellas para revisar móvil; medir en el navegador.
+- Tras un despliegue, la primera captura del home puede salir **sin imágenes**:
+  es el navegador, que aún no las ha decodificado, no un 404. Comprobar por red
+  antes de dar por roto nada.
 - El automatizador del navegador **no dispara el Enter** de forma que React lo
   vea. Para probar el escáner hay que despachar el evento a mano:
   `inp.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))`.
@@ -94,17 +113,14 @@ el allow-list de `server.fs` compara contra la ruta larga.
 
 ## Siguiente paso
 
-1. **Confirmar con Adam el servidor de despliegue** (ver "A medias"). Si es el
-   droplet, arreglar `ROOT` en `deploy_demo_getzy.py`, hacer copia de la base y
-   desplegar con él.
-2. El texto "Empresa / Acreditación corporativa" **sigue vivo dentro del flujo**:
-   `EmpresariosPage.tsx` abre con el antetítulo "Acreditación corporativa" y el
-   backend rotula los correos y el gafete como empresario. Si el cambio de
-   nombre es de producto y no solo del botón, hay que decidir hasta dónde llega.
-3. Confirmar con el cliente el verde del **gafete impreso**. Si ya hay material
+1. **Decidir el alcance de "Público General"** (ver "A medias"): si solo era el
+   botón, se queda como está; si es de producto, hay que tocar
+   `EmpresariosPage.tsx`, las etiquetas del formulario, los correos y el rótulo
+   del gafete en `backend/app.py`. Es lo único que quedó incoherente en vivo.
+2. Confirmar con el cliente el verde del **gafete impreso**. Si ya hay material
    impreso en azul, revertir `COLOR_VERDE_FICTI` en `backend/app.py` y
    `$ticket-verde` en `badge.module.scss`; el front puede quedarse verde.
-4. Retirar la Gala Elisa cuando FICTI cierre. Plan completo en
+3. Retirar la Gala Elisa cuando FICTI cierre. Plan completo en
    `docs/EVENTO-ELISA.md`.
 
 ## No tocar
