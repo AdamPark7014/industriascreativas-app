@@ -45,7 +45,16 @@ function Circuit({ className }: { className: string }) {
  */
 function BandCircuit({ className }: { className: string }) {
   return (
-    <svg className={className} viewBox="0 0 260 72" fill="none" aria-hidden>
+    <svg
+      className={className}
+      viewBox="0 0 260 72"
+      // En movil se le fija un ancho menor que su relacion de aspecto: con
+      // "slice" recorta desde el borde anclado en vez de encogerse, asi la
+      // traza conserva su grosor y sigue naciendo del filo de la banda.
+      preserveAspectRatio="xMinYMid slice"
+      fill="none"
+      aria-hidden
+    >
       <g
         stroke="currentColor"
         strokeWidth="2.4"

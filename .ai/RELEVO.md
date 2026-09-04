@@ -57,8 +57,12 @@ cuatro PNG. Todo en `web/`.
      arte: en el 2 las líneas entran a ras del borde izquierdo, en el 1 terminan
      a ras del derecho. La variante derecha es la misma reflejada con
      `scaleX(-1)`, igual que ya hacía `.circuitRight`.
-   - A ≤640 px los circuitos se ocultan y la banda baja a 58 px, para que no
-     compitan con el logo.
+   - A ≤640 px la banda baja a 58 px y los circuitos **se estrechan a 78 px**,
+     no se ocultan. La traza completa mide ~209 px de ancho a esa altura y dos
+     no caben junto al logo; con `preserveAspectRatio="xMinYMid slice"` el SVG
+     **recorta desde el filo anclado** en vez de encogerse, asi conserva el
+     grosor del trazo y sigue naciendo del borde. Primer intento fue
+     `display: none` y Adam lo cazo en el telefono: estaba mal.
 
 Tokens nuevos en `_tokens.scss`: `$band-teal` y `$band-circuit`.
 
@@ -87,13 +91,14 @@ fallar. La junction sigue siendo el camino seguro si vuelve a aparecer.
 
 ## Desplegado
 
-**En producción en `demo.experiencebt.com.mx` desde el 2026-09-04.** Subido con
-`deploy_demo_getzy.py` contra el droplet **147.182.128.128**.
+**En producción en `demo.experiencebt.com.mx` desde el 2026-09-03.** Subido con
+`deploy_demo_getzy.py` contra el droplet **147.182.128.128**. Dos despliegues:
+el primero con el cintillo, el segundo con los circuitos ya visibles en movil.
 
 Verificado en vivo: `demo_home=200`, `prod=200` (el Flask de la raíz, intacto) y
-los cuatro PNG a 200. Los hashes servidos (`index-Bv1LTyWi.js`,
-`index-ou7-9GxY.css`) son exactamente los del build local revisado. Home
-repasado en el navegador contra el dominio real.
+los cuatro PNG a 200. Los hashes servidos (`index-DXWzbnZy.js`,
+`index-C6isZDua.css`) son exactamente los del build local revisado. Home
+repasado en el navegador contra el dominio real, a 1440 px y a 375 px.
 
 **Copia de la base:** `/root/db-backups/bd_demo_post_cintillo_20260904.sql.gz`
 (240 KB). Datos intactos y creciendo: **379 empresarios y 228 alumnos** (eran

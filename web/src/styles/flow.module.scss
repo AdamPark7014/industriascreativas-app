@@ -309,8 +309,11 @@
     padding: 10px 14px;
   }
 
+  // La traza completa mide ~209px de ancho a esta altura de banda; dos no caben
+  // junto al logo en un movil. Se estrechan y el "slice" del SVG las recorta
+  // desde el filo, que es la parte que da el efecto.
   .bandCircuit {
-    display: none;
+    width: 78px;
   }
 }
 
