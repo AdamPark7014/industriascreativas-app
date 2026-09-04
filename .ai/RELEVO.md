@@ -1,14 +1,14 @@
 # RELEVO
 
 - **Último turno:** claude-code
-- **Fecha:** 2026-09-01
+- **Fecha:** 2026-09-03
 - **Rama:** main
 
 ## Mapa rápido: quién sirve qué
 
-`demo.experiencebt.com.mx` **no vive en el servidor Hetzner** (5.78.215.109,
-que es Pumpkin/`app.` y compañía). Vive en el droplet DigitalOcean
-`147.182.128.128`:
+`demo.experiencebt.com.mx` **no vive en el servidor Hetzner** (5.78.215.109, que
+ahora sirve la plataforma ExperienceBT: `terror.`, `taquilla.terror.` y
+`manager.terror.`). Vive en el droplet DigitalOcean `147.182.128.128`:
 
 - `/etc/nginx/conf.d/zz-demo.conf` dentro del contenedor `nginx_registro_proxy`
   → `proxy_pass http://eventos_demo_web:5000`. La copia versionada de ese
@@ -18,34 +18,55 @@ que es Pumpkin/`app.` y compañía). Vive en el droplet DigitalOcean
   raíz: build de la SPA Vite (`web/`) + Flask (`backend/`) servido por gunicorn.
 - Ese `/opt/EVENTOS-app` es este repo (`AdamPark7014/EVENTOS-app`).
 - El panel es otro contenedor, `eventos_panel_web` → `panel.experiencebt.com.mx`.
-- Script de subida: `C:\dev\scriptsegistro-deploy\deploy_demo_getzy.py`
+- Script de subida: `C:\dev\scripts\registro-deploy\deploy_demo_getzy.py`
   (paramiko, necesita `REGISTRO_SSH_PASSWORD`).
 
 ## Hecho en este turno
 
-Cambios de home pedidos por Adam sobre la referencia visual del cliente.
+Cambio de marca pedido por el cliente (Getzy) vía Adam, con tres instrucciones y
+cuatro PNG. Todo en `web/`.
 
-1. **Banner "Regístrate sin costo" en el home.**
-   - Asset nuevo: `web/public/registrate-sin-costo.png`. Sale del original
-     `~/Downloads/FICTI_registro.png` (2999x1056, 854 KB), reescalado a
-     1200x423 y 221 KB. **Es PNG con alfa**: la mascota desborda la barra rosa
-     y el fondo transparente es lo que hace que encaje en el tema oscuro.
-   - Va como primer hijo de `.homeSide`, encima de las tarjetas, que es donde
-     lo colocó la referencia del cliente.
-   - `.homeBanner` en `flow.module.scss`: sin caja ni fondo propios, ancho
-     100 % y márgenes verticales negativos para comer el aire transparente del
-     arte. A ≤980 px se centra con `max-width: 520px`.
+1. **Logo FICTI: de blanco a rosa.**
+   - `web/public/ficti-logo.png` ← `Logotipo_FICTI_2026-06.png` (3191×1309,
+     RGBA con alfa). El blanco anterior queda como
+     `web/public/ficti-logo-blanco.png` por si hay que revertir.
+   - Sin cambio de código: `AppShell.tsx` ya apuntaba a `/ficti-logo.png`.
 
-2. **La tarjeta de Empresa pasa a "Público General / Registro Gratuito".**
-   - Solo cambia el texto: la ruta sigue siendo `/empresarios`, el icono y el
-     rosa `$rosa-tech` se quedan como estaban.
-   - **`.homeCardText strong` baja a 1.3rem por debajo de 480 px.** "Público
-     General" no cabe en un renglón a 1.5rem en un móvil de 375 px (necesita
-     186 px y tiene 176 px), y partido en dos dejaba la tarjeta más alta que la
-     de Estudiante. Medido en el navegador, no a ojo.
+2. **Logo Gabor: de blanco al original rojo con negro, sobre un cintillo.**
+   - `web/public/gabor-logo-footer.png` ← `Logo Gabor-01.png` (2250×1020, RGBA).
+     `gabor-logo-footer-white.png` se queda intacto como respaldo.
+   - El negro del logo se perdía sobre el fondo oscuro del sitio; por eso el
+     cliente pidió el cintillo. El pie pasó de una `<img>` suelta a
+     `.brandBand`: banda **a sangre** en turquesa `$band-teal` (#12b5b0, el
+     `$teal` que ya estaba en la paleta), con el logo centrado. El negro sobre
+     esa banda contrasta ≈ 8:1, que era justo el problema a resolver.
+   - `.siteFooter` perdió su `padding` propio para que la banda llegue de borde
+     a borde, y `.footerLogo` perdió el `opacity: .95` (sobre fondo claro solo
+     restaba contraste).
 
-Verificado: `tsc -b`, `vite build` y `oxlint` limpios; home revisado a 1440 px
-y a 375 px, las dos tarjetas casan en altura y el PNG carga 200.
+3. **Circuitos verdes sobre el cintillo.**
+   - **Van en SVG, no como los PNG que mandó el cliente.** `CIRCUITO 1.png` y
+     `CIRCUITO 2.png` vienen en **RGB sin canal alfa**, sobre fondo negro
+     sólido: puestos sobre la banda turquesa se verían como dos cajas negras.
+     Comprobado leyendo la cabecera IHDR de los PNG, no a ojo.
+   - Componente `BandCircuit` en `AppShell.tsx`, al lado del `Circuit` que ya
+     existía para el home. Trazos horizontales con codos de 45° y nodos llenos
+     y huecos, que es el lenguaje de la referencia. Color `$band-circuit`
+     (#8ce818) y `drop-shadow` para el neón.
+   - **CIRCUITO 2 = izquierda, CIRCUITO 1 = derecha**, confirmado contra el
+     arte: en el 2 las líneas entran a ras del borde izquierdo, en el 1 terminan
+     a ras del derecho. La variante derecha es la misma reflejada con
+     `scaleX(-1)`, igual que ya hacía `.circuitRight`.
+   - A ≤640 px los circuitos se ocultan y la banda baja a 58 px, para que no
+     compitan con el logo.
+
+Tokens nuevos en `_tokens.scss`: `$band-teal` y `$band-circuit`.
+
+Verificado: `npm run build` limpio (`tsc -b` + `vite build`), home y
+`/empresarios` revisados en el navegador a 1440 px y a 375 px sin errores de
+consola, y medidas leídas del DOM (banda `rgb(18,181,176)` a 76 px, circuitos
+`rgb(140,232,24)` con el derecho en `matrix(-1,0,0,1,0,0)`, ambos logos con su
+tamaño natural correcto).
 
 ## Cómo levantar esto en local (importante)
 
@@ -53,53 +74,44 @@ El proyecto vive bajo `C:\dev\apps\NO TOCAR LIBREMENTE\`, y **el espacio en la
 ruta rompe Vite 8 / rolldown**: `npm run build` falla con
 `Cannot resolve entry module ...\vite.config.ts`. No es un fallo del código.
 
-Se sortea con una junction sin espacios:
+Se sortea con una junction sin espacios (`New-Item -ItemType Junction -Path
+C:\dev\_scratch\elisa-web -Target "C:\dev\apps\NO TOCAR LIBREMENTE\
+EVENTO-ELISA-app\web"`). Desde `C:\dev\_scratch\elisa-web` funcionan
+`npx vite build` y `npx vite` (dev en 5173). `C:\dev\.claude\launch.json` →
+entrada `registro-demo` ya apunta ahí. La ruta 8.3 (`NOTOCA~1`) **no sirve**:
+arranca, pero Vite devuelve 403 porque el allow-list de `server.fs` compara
+contra la ruta larga.
 
-```
-New-Item -ItemType Junction -Path C:\dev\_scratch\elisa-web `
-         -Target "C:\dev\apps\NO TOCAR LIBREMENTE\EVENTO-ELISA-app\web"
-```
-
-Desde `C:\dev\_scratch\elisa-web` funcionan `npx vite build` y `npx vite`
-(dev en 5173). `C:\dev\.claude\launch.json` → entrada `registro-demo` ya apunta
-ahí; antes apuntaba a `C:/dev/apps/EVENTO-ELISA-app/web`, que ya no existe.
-La ruta 8.3 (`NOTOCA~1`) **no sirve**: arranca, pero Vite devuelve 403 porque
-el allow-list de `server.fs` compara contra la ruta larga.
+En este turno `npm run build` sí corrió directo desde la ruta con espacios sin
+fallar. La junction sigue siendo el camino seguro si vuelve a aparecer.
 
 ## Desplegado
 
-**En producción en `demo.experiencebt.com.mx` desde el 2026-09-01.** Subido con
-`C:\dev\scripts\registro-deploy\deploy_demo_getzy.py` contra el droplet
-**147.182.128.128** (NO Hetzner: `5.78.215.109` es Zynora-tek y ahí no hay
-ningún contenedor de eventos; solo `app.experiencebt.com.mx` vive allí).
+**En producción en `demo.experiencebt.com.mx` desde el 2026-09-04.** Subido con
+`deploy_demo_getzy.py` contra el droplet **147.182.128.128**.
 
-Al script se le corrigieron dos cosas en este turno:
+Verificado en vivo: `demo_home=200`, `prod=200` (el Flask de la raíz, intacto) y
+los cuatro PNG a 200. Los hashes servidos (`index-Bv1LTyWi.js`,
+`index-ou7-9GxY.css`) son exactamente los del build local revisado. Home
+repasado en el navegador contra el dominio real.
 
-- `ROOT` apuntaba a `C:\devpps\evento-elisa-app`, ruta muerta desde que el
-  proyecto se movió a `NO TOCAR LIBREMENTE`. Con ella el tar salía vacío.
-- Se le añadió al smoke test la comprobación de `registrate-sin-costo.png`.
-
-Verificado en vivo: home 200, `/empresarios` 200, `prod` (Flask raíz) 200, y los
-seis PNG del home a 200 incluido el banner nuevo. Los hashes servidos
-(`index-CQHyE1FA.js`, `index-BOGee1M6.css`) son exactamente los del build local
-revisado. Home repasado en el navegador a 1440 y a 375 px.
-
-**Copia de la base antes de desplegar:**
-`/root/db-backups/bd_demo_pre_banner_20260901_1625.sql.gz` (187 KB).
-Datos intactos: **290 empresarios y 175 alumnos** (crecieron desde los 196/102
-del 27-08; esto se llena solo, es producción de verdad).
+**Copia de la base:** `/root/db-backups/bd_demo_post_cintillo_20260904.sql.gz`
+(240 KB). Datos intactos y creciendo: **379 empresarios y 228 alumnos** (eran
+290/175 el 01-09). Esto se llena solo: es producción de verdad.
 
 ## A medias - CUIDADO
 
 - **La tarjeta dice "Público General" pero el flujo detrás sigue siendo el de
   empresa.** Al pulsarla se llega a `/empresarios`, que abre con el antetítulo
-  "Acreditación corporativa", el título "Registro Empresa" y un campo
-  **Empresa obligatorio**. Alguien que se registre como público general se topa
-  con eso. Está así en vivo. **Falta decidir con Adam si el cambio de nombre es
-  solo del botón o de todo el flujo** (formulario, correos y gafete rotulan
-  "empresario" en el backend).
+  "Acreditación corporativa", el título "Registro Empresa" y un campo **Empresa
+  obligatorio**. Está así en vivo desde el 01-09. **Falta decidir con Adam si el
+  cambio de nombre es solo del botón o de todo el flujo** (formulario, correos y
+  gafete rotulan "empresario" en el backend).
 - **`demo.` no es un juguete: tiene usuarios reales**, con altas cada día.
   Cualquier despliegue aquí es producción; hacer copia de la base antes.
+- El cliente puede pedir los circuitos **más discretos**: el arte original es
+  neón brillante y así se dejó, pero en su mockup se ven más apagados. Se ajusta
+  con la opacidad o el `drop-shadow` de `.bandCircuit`, sin tocar el trazo.
 - Las capturas headless de Chrome por debajo de ~500 px **recortan** en vez de
   escalar. No fiarse de ellas para revisar móvil; medir en el navegador.
 - Tras un despliegue, la primera captura del home puede salir **sin imágenes**:
@@ -113,15 +125,22 @@ del 27-08; esto se llena solo, es producción de verdad).
 
 ## Siguiente paso
 
-1. **Decidir el alcance de "Público General"** (ver "A medias"): si solo era el
-   botón, se queda como está; si es de producto, hay que tocar
-   `EmpresariosPage.tsx`, las etiquetas del formulario, los correos y el rótulo
-   del gafete en `backend/app.py`. Es lo único que quedó incoherente en vivo.
-2. Confirmar con el cliente el verde del **gafete impreso**. Si ya hay material
-   impreso en azul, revertir `COLOR_VERDE_FICTI` en `backend/app.py` y
-   `$ticket-verde` en `badge.module.scss`; el front puede quedarse verde.
-3. Retirar la Gala Elisa cuando FICTI cierre. Plan completo en
-   `docs/EVENTO-ELISA.md`.
+1. Enseñarle el cintillo al cliente y ajustar la intensidad de los circuitos si
+   lo pide (ver "A medias").
+2. **Decidir el alcance de "Público General"**: si solo era el botón, se queda
+   como está; si es de producto, hay que tocar `EmpresariosPage.tsx`, las
+   etiquetas del formulario, los correos y el rótulo del gafete en
+   `backend/app.py`. Es lo único incoherente en vivo.
+3. Retirar la Gala Elisa: Adam ya lo pidió ("vuélales Elisa", 03-09). El demo y
+   el panel **se quedan**; lo que se va es el flujo `/eventoelisa` y su rastro.
+   Plan en `docs/EVENTO-ELISA.md`. Antes de borrar nada: este repo tiene
+   **commits locales que no están en `origin/main`** y 84 MB en
+   `gafetes_guardados/` — respaldo (`git bundle` + tar) primero.
+4. Cuando el demo migre al Hetzner, llevar esta misma marca a
+   `EXPERIENCEBT-app/apps/registro-web` (`PartnerHeader.tsx`, `SiteFooter.tsx`,
+   `BrandMark.tsx`), que hoy usa `mix-blend-mode: lighten` sobre PNG blancos —
+   incompatible con logos a color. Ese `registro-web` **todavía no está** en
+   `deploy/experiencebt-platform.yml`: no tiene servicio ni router.
 
 ## No tocar
 
@@ -134,3 +153,14 @@ del 27-08; esto se llena solo, es producción de verdad).
   a este trabajo.
 - El PNG del banner: es el arte del cliente con alfa. Si se reexporta sin
   transparencia, aparece una caja blanca sobre el fondo oscuro.
+- `ficti-logo-blanco.png` y `gabor-logo-footer-white.png`: son la única copia de
+  los logos monocromos anteriores. Son el camino de vuelta si el cliente se
+  arrepiente.
+
+## Deuda de seguridad (para Adam, no la toca ningún agente)
+
+La contraseña de root del droplet viaja en texto plano cada vez que se despliega
+(`REGISTRO_SSH_PASSWORD`) y se compartió por chat el 03-09. Conviene **rotarla**
+e instalar en el droplet la llave pública que ya existe
+(`~/.ssh/id_ed25519_nexara_hetzner.pub`), para que los despliegues dejen de
+necesitar contraseña.

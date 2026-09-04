@@ -37,6 +37,43 @@ function Circuit({ className }: { className: string }) {
   )
 }
 
+/**
+ * Trazo de circuito del cintillo de marca (referencia CIRCUITO 1 / CIRCUITO 2).
+ * Va vectorial y no como PNG: los archivos originales vienen sobre fondo negro
+ * solido, sin canal alfa, y sobre la banda turquesa se verian como una caja
+ * negra. La variante derecha es esta misma reflejada por CSS.
+ */
+function BandCircuit({ className }: { className: string }) {
+  return (
+    <svg className={className} viewBox="0 0 260 72" fill="none" aria-hidden>
+      <g
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M0 13h78l16 16h58" />
+        <path d="M0 29h40l16 16h104" />
+        <path d="M0 45h26l16 16h84" />
+        <path d="M0 61h14" />
+      </g>
+      <g fill="currentColor">
+        <circle cx="158" cy="29" r="5.4" />
+        <circle cx="132" cy="61" r="5.4" />
+        <circle cx="20" cy="61" r="5.4" />
+      </g>
+      <circle
+        cx="166"
+        cy="45"
+        r="5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.4"
+      />
+    </svg>
+  )
+}
+
 export default function AppShell({
   children,
   backTo = '/',
@@ -78,11 +115,19 @@ export default function AppShell({
       </header>
       {children}
       <footer className={`${styles.siteFooter} ${home ? styles.siteFooterHome : ''}`}>
-        <img
-          className={styles.footerLogo}
-          src="/gabor-logo-footer-white.png"
-          alt="Gabor Grupo Papelero"
-        />
+        <div className={styles.brandBand}>
+          <BandCircuit
+            className={`${styles.bandCircuit} ${styles.bandCircuitLeft}`}
+          />
+          <img
+            className={styles.footerLogo}
+            src="/gabor-logo-footer.png"
+            alt="Gabor Grupo Papelero"
+          />
+          <BandCircuit
+            className={`${styles.bandCircuit} ${styles.bandCircuitRight}`}
+          />
+        </div>
       </footer>
       {home ? (
         <>

@@ -88,6 +88,12 @@ $rosa-tech-bright: #ff3d7f;
 $cyan-tech: #22d3ee;
 $cyan-dim: #5f82ad;
 
+// Cintillo de marca del pie. La banda turquesa existe para que el logo Gabor
+// original (rojo con negro) se lea sobre el fondo oscuro del sitio; el verde es
+// el de los trazos de circuito de la referencia CIRCUITO 1 / CIRCUITO 2.
+$band-teal: #12b5b0;
+$band-circuit: #8ce818;
+
 @mixin dark-field {
   @include text-field;
   border: 1px solid $dark-border;
