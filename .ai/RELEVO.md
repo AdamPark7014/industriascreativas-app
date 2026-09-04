@@ -26,11 +26,19 @@ ahora sirve la plataforma ExperienceBT: `terror.`, `taquilla.terror.` y
 Cambio de marca pedido por el cliente (Getzy) vía Adam, con tres instrucciones y
 cuatro PNG. Todo en `web/`.
 
-1. **Logo FICTI: de blanco a rosa.**
-   - `web/public/ficti-logo.png` ← `Logotipo_FICTI_2026-06.png` (3191×1309,
-     RGBA con alfa). El blanco anterior queda como
-     `web/public/ficti-logo-blanco.png` por si hay que revertir.
-   - Sin cambio de código: `AppShell.tsx` ya apuntaba a `/ficti-logo.png`.
+1. **Logo FICTI: de blanco a rosa, y recortado para que mande sobre Tech Capital.**
+   - `web/public/ficti-logo.png` ← `Logotipo_FICTI_2026-06.png` (RGBA con alfa).
+     El blanco anterior queda como `web/public/ficti-logo-blanco.png` por si hay
+     que revertir. Sin cambio de codigo: `AppShell.tsx` ya apuntaba ahi.
+   - **El original traia 50 % de relleno vacio** (caja 3191×1309, tinta solo
+     1948×655). Por eso se veia mas chico que Tech Capital *aun teniendo mas
+     altura en CSS*: dibujaba 25 px de logotipo contra los 33 px de tinta del
+     otro. Medido, no a ojo. Se recorto a la caja de tinta y se bajo a 600 px de
+     ancho (47 KB): `ficti-logo.png` es ahora 600×202, ratio 2.97.
+   - Con la caja limpia, la altura CSS por fin significa lo que dice. Alturas
+     nuevas: 50 px general, 46 px en el home, 33 px en movil. De esa altura el
+     **86 % es el logotipo y el 14 % la bajada de texto**, asi que el logotipo
+     dibuja **1.19x** lo que dibuja Tech Capital. Verificado en produccion.
 
 2. **Logo Gabor: de blanco al original rojo con negro, sobre un cintillo.**
    - `web/public/gabor-logo-footer.png` ← `Logo Gabor-01.png` (2250×1020, RGBA).

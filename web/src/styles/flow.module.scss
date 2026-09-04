@@ -101,8 +101,13 @@
   background: transparent;
 }
 
+// FICTI es la marca principal y debe leerse por encima de Tech Capital. Su PNG
+// ya viene recortado a la tinta (antes traia 50% de relleno vacio y por eso se
+// veia mas chico aun siendo mas "alto" en CSS). De su altura, el 86% es el
+// logotipo y el 14% la bajada de texto; con estos valores el logotipo dibuja
+// ~1.2x lo que dibuja Tech Capital.
 .partnerLogoFicti {
-  height: 62px;
+  height: 50px;
   max-width: 230px;
 }
 
@@ -112,7 +117,7 @@
 }
 
 .topbarHome .partnerLogoFicti {
-  height: 58px;
+  height: 46px;
   max-width: 215px;
 }
 
@@ -140,7 +145,7 @@
 
   .partnerLogoFicti,
   .topbarHome .partnerLogoFicti {
-    height: 40px;
+    height: 33px;
     max-width: 140px;
   }
 
