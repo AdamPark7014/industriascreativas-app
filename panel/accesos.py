@@ -191,8 +191,10 @@ def _parse_folio(q: str):
 
 
 def _buscar_texto(q: str, tipos: list[str]) -> list[dict]:
-    like = f"%{q}%"
+    """Prefijo primero (rápido), luego ILIKE %q% como respaldo."""
     out = []
+    prefix = f"{q}%"
+    like = f"%{q}%"
     with conexion() as con:
         for clave in tipos:
             t = TIPOS[clave]
@@ -205,16 +207,28 @@ def _buscar_texto(q: str, tipos: list[str]) -> list[dict]:
             extra = (
                 f' OR CAST("{t["extra"]}" AS TEXT) ILIKE :q' if t["extra"] else ""
             )
+            # Prefijo / email exact-ish
             filas_ = filas(con, f'''
                 SELECT * FROM "{t["tabla"]}"
-                WHERE CAST("{t["id"]}" AS TEXT) ILIKE :q
-                   OR {nombre} ILIKE :q
-                   OR COALESCE("Correo",'') ILIKE :q
-                   OR COALESCE("Telefono",'') ILIKE :q
-                   {extra}
+                WHERE CAST("{t["id"]}" AS TEXT) ILIKE :pref
+                   OR {nombre} ILIKE :pref
+                   OR COALESCE("Correo",'') ILIKE :pref
+                   OR COALESCE("Telefono",'') ILIKE :pref
+                   {extra.replace(":q", ":pref") if extra else ""}
                 ORDER BY "{t["id"]}" DESC
                 LIMIT 12
-            ''', q=like)
+            ''', pref=prefix)
+            if not filas_:
+                filas_ = filas(con, f'''
+                    SELECT * FROM "{t["tabla"]}"
+                    WHERE CAST("{t["id"]}" AS TEXT) ILIKE :q
+                       OR {nombre} ILIKE :q
+                       OR COALESCE("Correo",'') ILIKE :q
+                       OR COALESCE("Telefono",'') ILIKE :q
+                       {extra}
+                    ORDER BY "{t["id"]}" DESC
+                    LIMIT 12
+                ''', q=like)
             for f in filas_:
                 out.append(_hit(clave, dict(f), "texto"))
     return out
@@ -391,6 +405,17 @@ def _resultado(ok, mensaje, detalles, nombre, tipo, asistencias, **extra):
     return out
 
 
+def _meta_zona(zona) -> dict:
+    if not zona:
+        return {"zona": ZONA_DEFECTO, "zonaNombre": "", "zonaDentro": 0, "zonaAforo": 0}
+    return {
+        "zona": zona["clave"],
+        "zonaNombre": zona.get("nombre") or zona["clave"],
+        "zonaDentro": int(zona.get("dentro") or 0),
+        "zonaAforo": int(zona.get("aforo") or 0),
+    }
+
+
 def _resolver(qr: str):
     tag, num = _parse_folio(qr)
     tipos = _tipos_ok()
@@ -429,11 +454,23 @@ def _procesar(qr: str, modo: str, zona_clave: str, operador: str, origen: str):
             zona = filas(con, "SELECT * FROM accesos_zonas WHERE clave = :c AND activo", c=ZONA_DEFECTO)
         zona = dict(zona[0]) if zona else None
 
+        if not bool(fila.get("confirmado")):
+            res = _resultado(
+                False, "NO CONFIRMADO",
+                f"{nombre} aún no confirmó su registro por correo.",
+                nombre, etiqueta, asistencias, **_meta_zona(zona),
+            )
+            _log_con(con, clave, ident, nombre, modo, False, res["mensaje"], zona_clave, origen, operador)
+            con.commit()
+            return res
+
         if modo == "salida":
             if asistencias <= 0:
-                res = _resultado(False, "SALIDA DENEGADA",
-                                 f"{nombre} no tiene una entrada activa. No hay reingreso pendiente.",
-                                 nombre, etiqueta, asistencias, zona=zona_clave)
+                res = _resultado(
+                    False, "SALIDA DENEGADA",
+                    f"{nombre} no tiene una entrada activa. No hay reingreso pendiente.",
+                    nombre, etiqueta, asistencias, **_meta_zona(zona),
+                )
                 _log_con(con, clave, ident, nombre, modo, False, res["mensaje"], zona_clave, origen, operador)
                 con.commit()
                 return res
@@ -445,26 +482,33 @@ def _procesar(qr: str, modo: str, zona_clave: str, operador: str, origen: str):
                 con.execute(text(
                     "UPDATE accesos_zonas SET dentro = GREATEST(dentro - 1, 0) WHERE clave = :c"
                 ), {"c": zona["clave"]})
+                zona["dentro"] = max(int(zona.get("dentro") or 0) - 1, 0)
             nueva = max(asistencias - 1, 0)
-            res = _resultado(True, "SALIDA REGISTRADA",
-                             f"{nombre} ({etiqueta}). Puede reingresar con ENTRADA.",
-                             nombre, etiqueta, nueva, zona=zona["clave"] if zona else zona_clave)
+            res = _resultado(
+                True, "SALIDA REGISTRADA",
+                f"{nombre} ({etiqueta}). Puede reingresar con ENTRADA.",
+                nombre, etiqueta, nueva, **_meta_zona(zona),
+            )
             _log_con(con, clave, ident, nombre, modo, True, res["mensaje"], zona_clave, origen, operador)
             con.commit()
             return res
 
         if asistencias >= 1:
-            res = _resultado(False, "YA DENTRO",
-                             f"{nombre} ya ingresó. Escanea SALIDA antes del reingreso.",
-                             nombre, etiqueta, asistencias, zona=zona_clave)
+            res = _resultado(
+                False, "YA DENTRO",
+                f"{nombre} ya ingresó. Escanea SALIDA antes del reingreso.",
+                nombre, etiqueta, asistencias, **_meta_zona(zona),
+            )
             _log_con(con, clave, ident, nombre, modo, False, res["mensaje"], zona_clave, origen, operador)
             con.commit()
             return res
 
         if zona and zona["aforo"] > 0 and zona["dentro"] >= zona["aforo"]:
-            res = _resultado(False, "ZONA LLENA",
-                             f'{zona["nombre"]} está al aforo ({zona["dentro"]}/{zona["aforo"]}).',
-                             nombre, etiqueta, asistencias, zona=zona["clave"])
+            res = _resultado(
+                False, "ZONA LLENA",
+                f'{zona["nombre"]} está al aforo ({zona["dentro"]}/{zona["aforo"]}).',
+                nombre, etiqueta, asistencias, **_meta_zona(zona),
+            )
             _log_con(con, clave, ident, nombre, modo, False, res["mensaje"], zona["clave"], origen, operador)
             con.commit()
             return res
@@ -477,10 +521,13 @@ def _procesar(qr: str, modo: str, zona_clave: str, operador: str, origen: str):
             con.execute(text(
                 "UPDATE accesos_zonas SET dentro = dentro + 1 WHERE clave = :c"
             ), {"c": zona["clave"]})
-        res = _resultado(True, "ENTRADA REGISTRADA",
-                         f"{nombre} ({etiqueta})",
-                         nombre, etiqueta, asistencias + 1,
-                         zona=zona["clave"] if zona else zona_clave)
+            zona["dentro"] = int(zona.get("dentro") or 0) + 1
+        res = _resultado(
+            True, "ENTRADA REGISTRADA",
+            f"{nombre} ({etiqueta})",
+            nombre, etiqueta, asistencias + 1,
+            **_meta_zona(zona),
+        )
         _log_con(con, clave, ident, nombre, modo, True, res["mensaje"],
                  zona["clave"] if zona else zona_clave, origen, operador)
         con.commit()
@@ -551,9 +598,22 @@ def reportes():
               COUNT(*) AS total,
               COUNT(*) FILTER (WHERE ok AND modo = 'entrada') AS entradas,
               COUNT(*) FILTER (WHERE ok AND modo = 'salida') AS salidas,
-              COUNT(*) FILTER (WHERE NOT ok) AS rechazos
+              COUNT(*) FILTER (WHERE NOT ok) AS rechazos,
+              COUNT(*) FILTER (
+                WHERE ok AND modo = 'entrada'
+                  AND EXISTS (
+                    SELECT 1 FROM accesos_escaneos s2
+                    WHERE s2.ok AND s2.modo = 'salida'
+                      AND s2.tipo = accesos_escaneos.tipo
+                      AND s2.registro_id = accesos_escaneos.registro_id
+                      AND s2.creado < accesos_escaneos.creado
+                  )
+              ) AS reingresos
             FROM accesos_escaneos WHERE {donde}
         """, **{k: v for k, v in params.items() if k != "limite"})
+        zonas_opts = filas(con, """
+            SELECT clave, nombre FROM accesos_zonas WHERE activo ORDER BY id
+        """)
         rows = filas(con, f"""
             SELECT id, creado, tipo, registro_id, nombre, modo, ok, mensaje, zona_clave, origen, operador
             FROM accesos_escaneos
@@ -568,7 +628,12 @@ def reportes():
         return _csv(registros)
     if formato in ("xlsx", "xls"):
         return _xlsx(registros)
-    return jsonify(kpis=pulso, registros=registros, puedeOperar=_ops())
+    return jsonify(
+        kpis=pulso,
+        registros=registros,
+        zonas=[{"clave": z["clave"], "nombre": z["nombre"]} for z in zonas_opts],
+        puedeOperar=_ops(),
+    )
 
 
 def _csv(registros):

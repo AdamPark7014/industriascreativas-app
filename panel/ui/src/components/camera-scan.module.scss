@@ -1,0 +1,54 @@
+.wrap {
+  margin-top: 12px;
+}
+
+.toggle {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #1b2b4d;
+  background: rgba(18, 181, 176, 0.12);
+  color: #9ef0ec;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.visor {
+  position: relative;
+  margin-top: 10px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid #1b2b4d;
+  background: #000;
+  aspect-ratio: 4 / 3;
+}
+
+.video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.marco {
+  pointer-events: none;
+  position: absolute;
+  inset: 18%;
+  border: 2px solid rgba(53, 217, 92, 0.85);
+  border-radius: 12px;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.28);
+}
+
+.status {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 0.72rem;
+  text-align: center;
+  color: #fff;
+  background: rgba(5, 11, 28, 0.72);
+}

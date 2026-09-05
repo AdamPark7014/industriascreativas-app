@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Navigate, useOutletContext } from 'react-router-dom'
 import { api, type ScanResult, type Sesion, type Zona } from '../api'
+import CameraScan from '../components/CameraScan'
+import { enqueueScan, flushQueue, readQueue } from '../lib/offlineQueue'
 import styles from './escanear.module.scss'
 
 type Modo = 'entrada' | 'salida'
@@ -44,6 +46,20 @@ function usePitido() {
   return { sonar, asegurar }
 }
 
+function aplicarAforo(
+  zonas: Zona[],
+  clave: string | undefined,
+  dentro: number | undefined,
+  aforo: number | undefined,
+): Zona[] {
+  if (!clave || dentro == null) return zonas
+  return zonas.map((z) =>
+    z.clave === clave
+      ? { ...z, dentro, aforo: aforo != null && aforo > 0 ? aforo : z.aforo }
+      : z,
+  )
+}
+
 export default function EscanearPage() {
   const sesion = useOutletContext<Sesion | null>()
   const [modo, setModo] = useState<Modo>('entrada')
@@ -53,18 +69,38 @@ export default function EscanearPage() {
   const [historial, setHistorial] = useState<(ScanResult & { clave: number; hora: string })[]>([])
   const [ocupado, setOcupado] = useState(false)
   const [latenciaMs, setLatenciaMs] = useState<number | null>(null)
+  const [camara, setCamara] = useState(false)
+  const [cola, setCola] = useState(0)
+  const [online, setOnline] = useState(
+    typeof navigator === 'undefined' ? true : navigator.onLine,
+  )
   const inputRef = useRef<HTMLInputElement>(null)
   const enVuelo = useRef(false)
+  const modoRef = useRef<Modo>('entrada')
+  const zonaRef = useRef('acreditacion')
   const { sonar, asegurar } = usePitido()
-  const enfocar = useCallback(() => inputRef.current?.focus(), [])
+  const enfocar = useCallback(() => {
+    if (camara) return
+    inputRef.current?.focus()
+  }, [camara])
 
-  useEffect(() => {
+  modoRef.current = modo
+  zonaRef.current = zona
+
+  const refrescarZonas = useCallback(() => {
     void api.zonas().then((d) => {
       const activas = d.zonas.filter((z) => z.activo)
       setZonas(activas)
-      if (activas[0]) setZona(activas[0].clave)
+      setZona((prev) =>
+        activas.some((z) => z.clave === prev) ? prev : activas[0]?.clave ?? 'acreditacion',
+      )
     })
   }, [])
+
+  useEffect(() => {
+    refrescarZonas()
+    setCola(readQueue().length)
+  }, [refrescarZonas])
 
   useEffect(() => {
     enfocar()
@@ -76,6 +112,53 @@ export default function EscanearPage() {
     return () => document.removeEventListener('click', alClic)
   }, [enfocar, asegurar])
 
+  const registrarHistorial = useCallback((datos: ScanResult) => {
+    setHistorial((prev) =>
+      [
+        {
+          ...datos,
+          clave: prev.length ? prev[0].clave + 1 : 1,
+          hora: new Date().toLocaleTimeString('es-MX', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          }),
+        },
+        ...prev,
+      ].slice(0, 10),
+    )
+  }, [])
+
+  const vaciarCola = useCallback(async () => {
+    const { left } = await flushQueue(async (item) => {
+      const datos = await api.escanear(item.qr, item.modo, item.zona)
+      setZonas((prev) =>
+        aplicarAforo(prev, datos.zona, datos.zonaDentro, datos.zonaAforo),
+      )
+      registrarHistorial({
+        ...datos,
+        detalles: `${datos.detalles} · sync offline`,
+      })
+      return true
+    })
+    setCola(left)
+  }, [registrarHistorial])
+
+  useEffect(() => {
+    const on = () => {
+      setOnline(true)
+      void vaciarCola()
+    }
+    const off = () => setOnline(false)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    if (navigator.onLine) void vaciarCola()
+    return () => {
+      window.removeEventListener('online', on)
+      window.removeEventListener('offline', off)
+    }
+  }, [vaciarCola])
+
   const escanear = useCallback(
     async (qr: string) => {
       const codigo = qr.trim()
@@ -83,38 +166,62 @@ export default function EscanearPage() {
       enVuelo.current = true
       setOcupado(true)
       const t0 = performance.now()
+      const currentModo = modoRef.current
+      const currentZona = zonaRef.current
       try {
-        const datos = await api.escanear(codigo, modo, zona)
+        if (!navigator.onLine) {
+          enqueueScan({ qr: codigo, modo: currentModo, zona: currentZona })
+          setCola(readQueue().length)
+          const fail: ScanResult = {
+            ok: false,
+            mensaje: 'EN COLA OFFLINE',
+            detalles: 'Sin red: se enviará al recuperar conexión. No es acceso confirmado.',
+            pitido: 'error',
+            nombre: '',
+            tipo: '',
+            asistencias: 0,
+            dentro: false,
+          }
+          setResultado(fail)
+          sonar('error')
+          return
+        }
+        const datos = await api.escanear(codigo, currentModo, currentZona)
         setLatenciaMs(Math.round(performance.now() - t0))
         setResultado(datos)
-        sonar(datos.pitido)
-        setHistorial((prev) =>
-          [
-            {
-              ...datos,
-              clave: prev.length ? prev[0].clave + 1 : 1,
-              hora: new Date().toLocaleTimeString('es-MX', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-              }),
-            },
-            ...prev,
-          ].slice(0, 10),
+        setZonas((prev) =>
+          aplicarAforo(prev, datos.zona, datos.zonaDentro, datos.zonaAforo),
         )
+        sonar(datos.pitido)
+        registrarHistorial(datos)
       } catch (e) {
         setLatenciaMs(Math.round(performance.now() - t0))
-        const fail: ScanResult = {
-          ok: false,
-          mensaje: 'SIN CONEXIÓN',
-          detalles: e instanceof Error ? e.message : 'No se pudo contactar al servidor',
-          pitido: 'error',
-          nombre: '',
-          tipo: '',
-          asistencias: 0,
-          dentro: false,
+        const msg = e instanceof Error ? e.message : 'No se pudo contactar al servidor'
+        if (msg === 'sesion' || msg === 'sesion_expirada') {
+          setResultado({
+            ok: false,
+            mensaje: 'SESIÓN EXPIRADA',
+            detalles: 'Vuelve a iniciar sesión.',
+            pitido: 'error',
+            nombre: '',
+            tipo: '',
+            asistencias: 0,
+            dentro: false,
+          })
+        } else {
+          enqueueScan({ qr: codigo, modo: currentModo, zona: currentZona })
+          setCola(readQueue().length)
+          setResultado({
+            ok: false,
+            mensaje: 'EN COLA OFFLINE',
+            detalles: `${msg}. Quedó en cola local hasta recuperar red.`,
+            pitido: 'error',
+            nombre: '',
+            tipo: '',
+            asistencias: 0,
+            dentro: false,
+          })
         }
-        setResultado(fail)
         sonar('error')
       } finally {
         enVuelo.current = false
@@ -123,7 +230,7 @@ export default function EscanearPage() {
         enfocar()
       }
     },
-    [modo, zona, sonar, enfocar],
+    [sonar, enfocar, registrarHistorial],
   )
 
   if (sesion && !sesion.puedeOperar) {
@@ -145,7 +252,7 @@ export default function EscanearPage() {
             }}
           >
             <strong>ENTRADA</strong>
-            <span>Deja pasar · primer acceso o reingreso</span>
+            <span>Primer acceso o reingreso tras salida</span>
           </button>
           <button
             type="button"
@@ -156,7 +263,7 @@ export default function EscanearPage() {
             }}
           >
             <strong>SALIDA</strong>
-            <span>Registra salida · libera cupo</span>
+            <span>Libera cupo · habilita reingreso</span>
           </button>
         </div>
 
@@ -189,7 +296,7 @@ export default function EscanearPage() {
           }}
         >
           <label className={styles.label} htmlFor="qr_input">
-            Escanea el código del boleto
+            Lector USB / teclado
           </label>
           <input
             ref={inputRef}
@@ -210,6 +317,13 @@ export default function EscanearPage() {
           />
         </form>
 
+        <CameraScan
+          active={camara}
+          onToggle={setCamara}
+          disabled={ocupado}
+          onScan={(code) => void escanear(code)}
+        />
+
         <p className={styles.hint}>
           {ocupado
             ? 'Validando… un momento'
@@ -218,6 +332,8 @@ export default function EscanearPage() {
               : 'Listo para SALIDA. Libera el aforo y permite que vuelva a entrar.'}
           {latenciaMs != null ? ` · ${latenciaMs} ms` : ''}
           {zonaActiva ? ` · Zona: ${zonaActiva.nombre}` : ''}
+          {!online ? ' · Sin red' : ''}
+          {cola > 0 ? ` · Cola offline: ${cola}` : ''}
         </p>
 
         {resultado ? (
@@ -235,13 +351,16 @@ export default function EscanearPage() {
               </span>
             ) : null}
             <span className={styles.conteo}>
-              {resultado.asistencias > 0 ? 'Ahora: DENTRO' : 'Ahora: FUERA'}
+              {resultado.dentro || resultado.asistencias > 0 ? 'Ahora: DENTRO' : 'Ahora: FUERA'}
+              {resultado.zonaNombre
+                ? ` · ${resultado.zonaNombre} ${resultado.zonaDentro ?? '—'}/${resultado.zonaAforo || '∞'}`
+                : ''}
             </span>
           </div>
         ) : (
           <div className={styles.espera}>
             <strong>Esperando el siguiente boleto</strong>
-            <span>El cursor ya está en el campo — solo escanea.</span>
+            <span>USB, PDA o cámara — elige el modo y la zona primero.</span>
           </div>
         )}
       </div>

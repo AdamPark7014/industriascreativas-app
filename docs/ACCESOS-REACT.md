@@ -1,6 +1,6 @@
 # FICTI Accesos — React en panel (DO)
 
-**Actualizado 2026-09-04:** consola de accesos profesional en
+**Actualizado 2026-09-05:** consola de accesos profesional en
 `https://panel.experiencebt.com.mx/accesos` (EVENTO-ELISA `panel/ui`).
 
 | Host | Rol |
@@ -12,9 +12,14 @@
 ## Módulos
 - Resumen / “qué hacer ahora” + pulso
 - Escáner ENTRY/EXIT/reingreso + zonas/aforo (solo `interno`)
+- Cámara web (BarcodeDetector) + cola offline local
 - Buscar → **vista previa del boleto** → imprimir 5×8 (React `@media print` + PDF)
-- Informes + CSV/Excel (`interno` y `promotor`)
+- Informes + filtros (zona/modo/ok) + reingresos + CSV/Excel + refresco en vivo
 - Zonas Acreditación / VIP
+
+## Demo PDA ↔ aforo
+`POST /api/escanear` acepta `zona` y actualiza `accesos_zonas.dentro` (misma DB
+que el panel). `GET /api/zonas` con `X-Scan-Key` alimenta el selector del PDA.
 
 ## Boleto 5×8
 - Cara oscura FICTI / Tech Capital, nombre grande, QR en placa blanca, marcas de corte
@@ -23,6 +28,8 @@
 
 ## Seguridad
 - `/api/accesos/*` exige sesión panel + Origin/Referer same-site + rate limit
-- Demo `/api/escanear` exige `SCAN_API_KEY` (`X-Scan-Key`); fail-closed en https
+- Demo `/api/escanear` y `/api/zonas` exigen `SCAN_API_KEY` (`X-Scan-Key`); fail-closed en https
 - Cookies `HttpOnly` + `Secure` + `SameSite=Lax`
 - Cabeceras `X-Frame-Options`, `nosniff`, `Referrer-Policy`
+- `Permissions-Policy: camera=(self)` para escáner; mic/geo cerrados
+- Cola offline **no** cuenta como acceso confirmado hasta sync OK

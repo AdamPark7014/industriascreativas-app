@@ -65,6 +65,9 @@ export type ScanResult = {
   asistencias: number
   dentro: boolean
   zona?: string
+  zonaNombre?: string
+  zonaDentro?: number
+  zonaAforo?: number
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -102,22 +105,32 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  buscar: (q: string, tipo?: string) => {
+  buscar: (q: string, tipo?: string, signal?: AbortSignal) => {
     const p = new URLSearchParams({ q })
     if (tipo) p.set('tipo', tipo)
-    return req<{ q: string; results: GafeteHit[] }>(`/api/accesos/buscar?${p}`)
+    return req<{ q: string; results: GafeteHit[] }>(
+      `/api/accesos/buscar?${p}`,
+      signal ? { signal } : undefined,
+    )
   },
   escanear: (qr: string, modo: 'entrada' | 'salida', zona: string) =>
     req<ScanResult>('/api/accesos/escanear', {
       method: 'POST',
       body: JSON.stringify({ qr, modo, zona }),
     }),
-  reportes: (params: URLSearchParams) =>
+  reportes: (params: URLSearchParams, signal?: AbortSignal) =>
     req<{
-      kpis: { total: number; entradas: number; salidas: number; rechazos: number }
+      kpis: {
+        total: number
+        entradas: number
+        salidas: number
+        rechazos: number
+        reingresos?: number
+      }
       registros: Escaneo[]
+      zonas?: { clave: string; nombre: string }[]
       puedeOperar: boolean
-    }>(`/api/accesos/reportes?${params}`),
+    }>(`/api/accesos/reportes?${params}`, signal ? { signal } : undefined),
 }
 
 export type BoletoPayload = {

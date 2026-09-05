@@ -26,26 +26,34 @@ export default function BuscarPage() {
   )
   const [active, setActive] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
   const run = useCallback(async (query: string, kind: string) => {
     if (query.trim().length < 2) {
+      abortRef.current?.abort()
       setHits([])
       setSearched(false)
+      setLoading(false)
       return
     }
+    abortRef.current?.abort()
+    const ac = new AbortController()
+    abortRef.current = ac
     setLoading(true)
     setError(null)
     try {
-      const data = await api.buscar(query.trim(), kind || undefined)
+      const data = await api.buscar(query.trim(), kind || undefined, ac.signal)
+      if (ac.signal.aborted) return
       setHits(data.results)
       setActive(0)
       setSearched(true)
     } catch (e) {
+      if (ac.signal.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
       setError(e instanceof Error ? e.message : 'No se pudo buscar')
       setHits([])
       setSearched(true)
     } finally {
-      setLoading(false)
+      if (!ac.signal.aborted) setLoading(false)
     }
   }, [])
 

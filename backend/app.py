@@ -1330,6 +1330,9 @@ _TIPO_A_CLAVE = {
 }
 
 
+ZONA_DEFECTO_DEMO = 'acreditacion'
+
+
 def _log_acceso_demo(tipo_clave, registro_id, nombre, modo, ok, mensaje, zona='acreditacion'):
     """Escribe el mismo historial que lee el panel React Accesos (si existe)."""
     try:
@@ -1351,13 +1354,67 @@ def _log_acceso_demo(tipo_clave, registro_id, nombre, modo, ok, mensaje, zona='a
         print(f'aviso accesos_escaneos: {exc}')
 
 
-def procesar_escaneo(qr_data, modo):
+def _zona_activa(zona_clave: str):
+    """Lee accesos_zonas (misma tabla que el panel). None si aún no migró."""
+    clave = (zona_clave or ZONA_DEFECTO_DEMO).strip().lower()
+    if not re.fullmatch(r'[a-z0-9_-]{1,40}', clave or ''):
+        clave = ZONA_DEFECTO_DEMO
+    try:
+        row = db.session.execute(text(
+            'SELECT clave, nombre, aforo, dentro, activo FROM accesos_zonas '
+            'WHERE clave = :c AND activo LIMIT 1'
+        ), {'c': clave}).mappings().first()
+        if not row:
+            row = db.session.execute(text(
+                'SELECT clave, nombre, aforo, dentro, activo FROM accesos_zonas '
+                'WHERE clave = :c AND activo LIMIT 1'
+            ), {'c': ZONA_DEFECTO_DEMO}).mappings().first()
+        return dict(row) if row else None
+    except Exception as exc:
+        print(f'aviso accesos_zonas: {exc}')
+        return None
+
+
+def _ajustar_aforo(zona, delta: int):
+    if not zona:
+        return
+    try:
+        if delta > 0:
+            db.session.execute(text(
+                'UPDATE accesos_zonas SET dentro = dentro + :d WHERE clave = :c'
+            ), {'d': delta, 'c': zona['clave']})
+        else:
+            db.session.execute(text(
+                'UPDATE accesos_zonas SET dentro = GREATEST(dentro + :d, 0) WHERE clave = :c'
+            ), {'d': delta, 'c': zona['clave']})
+    except Exception as exc:
+        print(f'aviso aforo: {exc}')
+
+
+def _meta_zona(zona) -> dict:
+    if not zona:
+        return {'zona': ZONA_DEFECTO_DEMO, 'zonaNombre': '', 'zonaDentro': 0, 'zonaAforo': 0}
+    return {
+        'zona': zona['clave'],
+        'zonaNombre': zona.get('nombre') or zona['clave'],
+        'zonaDentro': int(zona.get('dentro') or 0),
+        'zonaAforo': int(zona.get('aforo') or 0),
+    }
+
+
+def procesar_escaneo(qr_data, modo, zona_clave=None):
     """Aplica el escaneo y devuelve un dict con el resultado.
 
     La comparten la ruta de formulario y la de JSON, para que el escáner por
     AJAX y el POST clásico no puedan divergir de comportamiento.
     Reingreso: SALIDA baja asistencias; ENTRADA exige asistencias == 0.
+    Actualiza aforo de accesos_zonas (misma fuente que panel Accesos).
     """
+    zona_clave = (zona_clave or ZONA_DEFECTO_DEMO).strip().lower()
+    if not re.fullmatch(r'[a-z0-9_-]{1,40}', zona_clave or ''):
+        zona_clave = ZONA_DEFECTO_DEMO
+    zona = _zona_activa(zona_clave)
+
     asistente, tipo_usuario = buscar_asistente(qr_data)
 
     if not asistente:
@@ -1369,8 +1426,10 @@ def procesar_escaneo(qr_data, modo):
             'nombre': '',
             'tipo': '',
             'asistencias': 0,
+            'dentro': False,
+            **_meta_zona(zona),
         }
-        _log_acceso_demo(None, 0, '', modo, False, res['mensaje'])
+        _log_acceso_demo(None, 0, '', modo, False, res['mensaje'], zona_clave)
         try:
             db.session.commit()
         except Exception:
@@ -1386,21 +1445,42 @@ def procesar_escaneo(qr_data, modo):
         getattr(asistente, 'idAlumno', getattr(asistente, 'idUsuario', 0)),
     )
 
+    if not bool(getattr(asistente, 'confirmado', True)):
+        res = {
+            'ok': False,
+            'mensaje': '❌ NO CONFIRMADO',
+            'detalles': f'{nombre} aún no confirmó su registro por correo.',
+            'pitido': 'error',
+            'nombre': nombre,
+            'tipo': tipo_usuario,
+            'asistencias': asistencias_actuales,
+            'dentro': asistencias_actuales > 0,
+            **_meta_zona(zona),
+        }
+        _log_acceso_demo(tipo_clave, registro_id, nombre, modo, False, res['mensaje'], zona_clave)
+        db.session.commit()
+        return res
+
     if modo == 'salida':
         if asistencias_actuales <= 0:
             res = {
                 'ok': False,
                 'mensaje': '⚠️ SALIDA DENEGADA',
-                'detalles': f'{nombre} no registra entradas activas.',
+                'detalles': f'{nombre} no tiene entrada activa. No hay reingreso pendiente.',
                 'pitido': 'error',
                 'nombre': nombre,
                 'tipo': tipo_usuario,
                 'asistencias': asistencias_actuales,
+                'dentro': False,
+                **_meta_zona(zona),
             }
-            _log_acceso_demo(tipo_clave, registro_id, nombre, modo, False, res['mensaje'])
+            _log_acceso_demo(tipo_clave, registro_id, nombre, modo, False, res['mensaje'], zona_clave)
             db.session.commit()
             return res
         asistente.asistencias = asistencias_actuales - 1
+        _ajustar_aforo(zona, -1)
+        if zona:
+            zona['dentro'] = max(int(zona.get('dentro') or 0) - 1, 0)
         res = {
             'ok': True,
             'mensaje': '🚪 SALIDA REGISTRADA',
@@ -1409,8 +1489,10 @@ def procesar_escaneo(qr_data, modo):
             'nombre': nombre,
             'tipo': tipo_usuario,
             'asistencias': asistente.asistencias,
+            'dentro': False,
+            **_meta_zona(zona),
         }
-        _log_acceso_demo(tipo_clave, registro_id, nombre, modo, True, res['mensaje'])
+        _log_acceso_demo(tipo_clave, registro_id, nombre, modo, True, res['mensaje'], zona_clave)
         db.session.commit()
         return res
 
@@ -1423,12 +1505,36 @@ def procesar_escaneo(qr_data, modo):
             'nombre': nombre,
             'tipo': tipo_usuario,
             'asistencias': asistencias_actuales,
+            'dentro': True,
+            **_meta_zona(zona),
         }
-        _log_acceso_demo(tipo_clave, registro_id, nombre, modo, False, res['mensaje'])
+        _log_acceso_demo(tipo_clave, registro_id, nombre, modo, False, res['mensaje'], zona_clave)
+        db.session.commit()
+        return res
+
+    if zona and int(zona.get('aforo') or 0) > 0 and int(zona.get('dentro') or 0) >= int(zona['aforo']):
+        res = {
+            'ok': False,
+            'mensaje': '❌ ZONA LLENA',
+            'detalles': (
+                f'{zona.get("nombre") or zona["clave"]} está al aforo '
+                f'({zona["dentro"]}/{zona["aforo"]}).'
+            ),
+            'pitido': 'error',
+            'nombre': nombre,
+            'tipo': tipo_usuario,
+            'asistencias': asistencias_actuales,
+            'dentro': False,
+            **_meta_zona(zona),
+        }
+        _log_acceso_demo(tipo_clave, registro_id, nombre, modo, False, res['mensaje'], zona_clave)
         db.session.commit()
         return res
 
     asistente.asistencias = asistencias_actuales + 1
+    _ajustar_aforo(zona, 1)
+    if zona:
+        zona['dentro'] = int(zona.get('dentro') or 0) + 1
     res = {
         'ok': True,
         'mensaje': '✅ ENTRADA REGISTRADA',
@@ -1437,10 +1543,28 @@ def procesar_escaneo(qr_data, modo):
         'nombre': nombre,
         'tipo': tipo_usuario,
         'asistencias': asistente.asistencias,
+        'dentro': True,
+        **_meta_zona(zona),
     }
-    _log_acceso_demo(tipo_clave, registro_id, nombre, modo, True, res['mensaje'])
+    _log_acceso_demo(tipo_clave, registro_id, nombre, modo, True, res['mensaje'], zona_clave)
     db.session.commit()
     return res
+
+
+@app.route('/api/zonas', methods=['GET'])
+def api_zonas_pda():
+    """Lista zonas/aforo para el PDA demo (misma clave X-Scan-Key)."""
+    if not _scan_autorizado():
+        return jsonify(ok=False, error='no_autorizado'), 401
+    try:
+        rows = db.session.execute(text(
+            'SELECT clave, nombre, aforo, dentro, activo FROM accesos_zonas '
+            'WHERE activo ORDER BY id'
+        )).mappings().all()
+        return jsonify(zonas=[dict(r) for r in rows])
+    except Exception as exc:
+        print(f'aviso api_zonas: {exc}')
+        return jsonify(zonas=[])
 
 
 @app.route('/api/escanear', methods=['POST'])
@@ -1472,8 +1596,20 @@ def api_escanear():
         }), 429
 
     datos = request.get_json(silent=True) or request.form
-    qr_data = (datos.get('qr_data') or '').strip()
-    modo = (datos.get('modo') or 'entrada').strip()
+    qr_data = (datos.get('qr_data') or datos.get('qr') or '').strip()
+    modo = (datos.get('modo') or 'entrada').strip().lower()
+    zona = (datos.get('zona') or ZONA_DEFECTO_DEMO).strip().lower()
+
+    if modo not in ('entrada', 'salida'):
+        return jsonify({
+            'ok': False,
+            'mensaje': 'MODO INVALIDO',
+            'detalles': 'Usa entrada o salida.',
+            'pitido': 'error',
+            'nombre': '',
+            'tipo': '',
+            'asistencias': 0,
+        }), 400
 
     if len(qr_data) > 80:
         return jsonify({
@@ -1497,7 +1633,7 @@ def api_escanear():
             'asistencias': 0,
         }), 400
 
-    return jsonify(procesar_escaneo(qr_data, modo))
+    return jsonify(procesar_escaneo(qr_data, modo, zona))
 
 
 @app.route('/escanear', methods=['GET', 'POST'])
@@ -1508,6 +1644,7 @@ def escanear():
         resultado = procesar_escaneo(
             request.form.get('qr_data', '').strip(),
             request.form.get('modo', 'entrada'),
+            request.form.get('zona', ZONA_DEFECTO_DEMO),
         )
         detalles = resultado['detalles']
         if resultado['ok']:

@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import CameraScan from '../components/CameraScan'
+import { enqueueScan, flushQueue, readQueue } from '../lib/offlineQueue'
 import styles from '../styles/escanear.module.scss'
 
 type Modo = 'entrada' | 'salida'
+
+type Zona = {
+  clave: string
+  nombre: string
+  aforo: number
+  dentro: number
+  activo?: boolean
+}
 
 type Resultado = {
   ok: boolean
@@ -11,18 +21,23 @@ type Resultado = {
   nombre: string
   tipo: string
   asistencias: number
+  dentro?: boolean
+  zona?: string
+  zonaNombre?: string
+  zonaDentro?: number
+  zonaAforo?: number
 }
 
 type Registro = Resultado & { clave: number; hora: string }
 
-/** El AudioContext solo arranca tras un gesto del usuario: se crea una vez y
- *  se reutiliza, porque instanciarlo en cada escaneo introduce latencia. */
 function usePitido() {
   const ctxRef = useRef<AudioContext | null>(null)
 
   const asegurar = useCallback(() => {
     if (!ctxRef.current) {
-      const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+      const Ctor =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
       if (Ctor) ctxRef.current = new Ctor()
     }
     if (ctxRef.current?.state === 'suspended') void ctxRef.current.resume()
@@ -59,18 +74,61 @@ function usePitido() {
 
 export default function EscanearPage() {
   const [modo, setModo] = useState<Modo>('entrada')
+  const [zonas, setZonas] = useState<Zona[]>([])
+  const [zona, setZona] = useState('acreditacion')
   const [resultado, setResultado] = useState<Resultado | null>(null)
   const [historial, setHistorial] = useState<Registro[]>([])
   const [ocupado, setOcupado] = useState(false)
+  const [camara, setCamara] = useState(false)
+  const [cola, setCola] = useState(0)
   const [scanKey, setScanKey] = useState(() => sessionStorage.getItem('ficti_scan_key') || '')
   const [claveInput, setClaveInput] = useState('')
   const [needsKey, setNeedsKey] = useState(() => !sessionStorage.getItem('ficti_scan_key'))
   const inputRef = useRef<HTMLInputElement>(null)
-  // Evita que un lector que dispara dos veces cuente una entrada de más.
   const enVueloRef = useRef(false)
+  const modoRef = useRef<Modo>('entrada')
+  const zonaRef = useRef('acreditacion')
   const { sonar, asegurar } = usePitido()
 
-  const enfocar = useCallback(() => inputRef.current?.focus(), [])
+  modoRef.current = modo
+  zonaRef.current = zona
+
+  const enfocar = useCallback(() => {
+    if (camara) return
+    inputRef.current?.focus()
+  }, [camara])
+
+  const cargarZonas = useCallback(
+    async (key: string) => {
+      try {
+        const res = await fetch('/api/zonas', { headers: { 'X-Scan-Key': key } })
+        if (res.status === 401) {
+          sessionStorage.removeItem('ficti_scan_key')
+          setNeedsKey(true)
+          setScanKey('')
+          return
+        }
+        if (!res.ok) return
+        const data = (await res.json()) as { zonas: Zona[] }
+        const activas = (data.zonas || []).filter((z) => z.activo !== false)
+        setZonas(activas)
+        if (activas[0]) {
+          setZona((prev) =>
+            activas.some((z) => z.clave === prev) ? prev : activas[0]!.clave,
+          )
+        }
+      } catch {
+        /* zonas opcionales si aún no migró */
+      }
+    },
+    [],
+  )
+
+  useEffect(() => {
+    if (needsKey || !scanKey) return
+    void cargarZonas(scanKey)
+    setCola(readQueue().length)
+  }, [needsKey, scanKey, cargarZonas])
 
   useEffect(() => {
     if (needsKey) return
@@ -83,21 +141,78 @@ export default function EscanearPage() {
     return () => document.removeEventListener('click', alClic)
   }, [enfocar, asegurar, needsKey])
 
+  const postScan = useCallback(
+    async (codigo: string, currentModo: Modo, currentZona: string, key: string) => {
+      const res = await fetch('/api/escanear', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Scan-Key': key,
+        },
+        body: JSON.stringify({ qr_data: codigo, modo: currentModo, zona: currentZona }),
+      })
+      return res
+    },
+    [],
+  )
+
+  const vaciarCola = useCallback(async () => {
+    if (!scanKey || needsKey) return
+    const { left } = await flushQueue(async (item) => {
+      const res = await postScan(item.qr, item.modo, item.zona, scanKey)
+      if (res.status === 401) return false
+      const datos: Resultado = await res.json()
+      if (datos.zona && datos.zonaDentro != null) {
+        setZonas((prev) =>
+          prev.map((z) =>
+            z.clave === datos.zona
+              ? {
+                  ...z,
+                  dentro: datos.zonaDentro!,
+                  aforo: datos.zonaAforo || z.aforo,
+                }
+              : z,
+          ),
+        )
+      }
+      return true
+    })
+    setCola(left)
+  }, [scanKey, needsKey, postScan])
+
+  useEffect(() => {
+    const on = () => void vaciarCola()
+    window.addEventListener('online', on)
+    if (navigator.onLine) void vaciarCola()
+    return () => window.removeEventListener('online', on)
+  }, [vaciarCola])
+
   const escanear = useCallback(
     async (qr: string) => {
       const codigo = qr.trim()
       if (!codigo || enVueloRef.current) return
       enVueloRef.current = true
       setOcupado(true)
+      const currentModo = modoRef.current
+      const currentZona = zonaRef.current
       try {
-        const res = await fetch('/api/escanear', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Scan-Key': scanKey,
-          },
-          body: JSON.stringify({ qr_data: codigo, modo }),
-        })
+        if (!navigator.onLine) {
+          enqueueScan({ qr: codigo, modo: currentModo, zona: currentZona })
+          setCola(readQueue().length)
+          setResultado({
+            ok: false,
+            mensaje: 'EN COLA OFFLINE',
+            detalles: 'Sin red: se enviará al recuperar conexión. No es acceso confirmado.',
+            pitido: 'error',
+            nombre: '',
+            tipo: '',
+            asistencias: 0,
+          })
+          sonar('error')
+          return
+        }
+
+        const res = await postScan(codigo, currentModo, currentZona, scanKey)
         if (res.status === 401) {
           sessionStorage.removeItem('ficti_scan_key')
           setNeedsKey(true)
@@ -116,6 +231,19 @@ export default function EscanearPage() {
         }
         const datos: Resultado = await res.json()
         setResultado(datos)
+        if (datos.zona && datos.zonaDentro != null) {
+          setZonas((prev) =>
+            prev.map((z) =>
+              z.clave === datos.zona
+                ? {
+                    ...z,
+                    dentro: datos.zonaDentro!,
+                    aforo: datos.zonaAforo || z.aforo,
+                  }
+                : z,
+            ),
+          )
+        }
         sonar(datos.pitido)
         setHistorial((previo) =>
           [
@@ -132,10 +260,12 @@ export default function EscanearPage() {
           ].slice(0, 8),
         )
       } catch {
+        enqueueScan({ qr: codigo, modo: currentModo, zona: currentZona })
+        setCola(readQueue().length)
         setResultado({
           ok: false,
-          mensaje: '⚠️ SIN CONEXIÓN',
-          detalles: 'No se pudo contactar al servidor. Revisa la red e inténtalo otra vez.',
+          mensaje: 'EN COLA OFFLINE',
+          detalles: 'No se pudo contactar al servidor. Quedó en cola local.',
           pitido: 'error',
           nombre: '',
           tipo: '',
@@ -149,7 +279,7 @@ export default function EscanearPage() {
         enfocar()
       }
     },
-    [modo, sonar, enfocar, scanKey],
+    [sonar, enfocar, scanKey, postScan],
   )
 
   if (needsKey) {
@@ -181,7 +311,11 @@ export default function EscanearPage() {
               autoFocus
               autoComplete="off"
             />
-            <button type="submit" className={`${styles.modeBtn} ${styles.entrada}`} style={{ marginTop: 12, width: '100%' }}>
+            <button
+              type="submit"
+              className={`${styles.modeBtn} ${styles.entrada}`}
+              style={{ marginTop: 12, width: '100%' }}
+            >
               Continuar
             </button>
           </form>
@@ -190,12 +324,15 @@ export default function EscanearPage() {
     )
   }
 
+  const zonaActiva = zonas.find((z) => z.clave === zona)
+
   return (
     <div className={styles.page}>
       <div className={styles.card}>
         <h2 className={styles.title}>Control de acceso</h2>
         <p className={styles.hint}>
-          Reingreso: primero SALIDA, después ENTRADA. Sin salida se rechaza la segunda entrada.
+          Reingreso: primero SALIDA, después ENTRADA. El aforo de zona se actualiza
+          en el panel Accesos.
         </p>
 
         <div className={styles.modes}>
@@ -221,6 +358,27 @@ export default function EscanearPage() {
           </button>
         </div>
 
+        {zonas.length ? (
+          <div className={styles.zonas} role="group" aria-label="Zona">
+            {zonas.map((z) => (
+              <button
+                key={z.clave}
+                type="button"
+                className={zona === z.clave ? styles.zonaOn : styles.zona}
+                onClick={() => {
+                  setZona(z.clave)
+                  enfocar()
+                }}
+              >
+                <strong>{z.nombre}</strong>
+                <span>
+                  {z.dentro}/{z.aforo || '∞'}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         <form
           className={styles.form}
           onSubmit={(e) => {
@@ -238,9 +396,6 @@ export default function EscanearPage() {
             autoFocus
             autoComplete="off"
             inputMode="none"
-            // El lector actúa como teclado y cierra con Enter. La sumisión
-            // implícita del formulario no es de fiar sin botón de submit, y si
-            // falla el escáner entero deja de responder: se captura la tecla.
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault()
@@ -250,8 +405,19 @@ export default function EscanearPage() {
           />
         </form>
 
+        <CameraScan
+          active={camara}
+          onToggle={setCamara}
+          disabled={ocupado}
+          onScan={(code) => void escanear(code)}
+        />
+
         <p className={styles.hint}>
-          {ocupado ? 'Registrando…' : 'Listo para escanear. El cursor vuelve solo al campo.'}
+          {ocupado
+            ? 'Registrando…'
+            : 'USB, PDA o cámara. El cursor vuelve solo al campo.'}
+          {zonaActiva ? ` · ${zonaActiva.nombre}` : ''}
+          {cola > 0 ? ` · Cola offline: ${cola}` : ''}
         </p>
 
         {resultado ? (
@@ -260,7 +426,10 @@ export default function EscanearPage() {
             <span>{resultado.detalles}</span>
             {resultado.ok ? (
               <span className={styles.conteo}>
-                {modo === 'salida' ? 'Entradas activas' : 'Entradas'}: {resultado.asistencias}/1
+                {resultado.dentro || resultado.asistencias > 0 ? 'Ahora: DENTRO' : 'Ahora: FUERA'}
+                {resultado.zonaNombre
+                  ? ` · ${resultado.zonaNombre} ${resultado.zonaDentro ?? '—'}/${resultado.zonaAforo || '∞'}`
+                  : ''}
               </span>
             ) : null}
           </div>

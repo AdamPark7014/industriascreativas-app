@@ -1,27 +1,28 @@
 # RELEVO
 
 - **Último turno:** cursor
-- **Fecha:** 2026-09-04
+- **Fecha:** 2026-09-05
 - **Rama:** main
 
 ## 3 líneas
-Boleto 5×8 rediseñado (FICTI/Tech Capital oscuro, QR en placa, marcas de corte) + preview React `@media print`. Accesos más amigable (guías, CTAs, copy ES). Deploy DO ok.
+Accesos más completo: demo PDA actualiza aforo de zonas; cámara + cola offline en panel y demo; informes con zona/reingresos/en vivo; búsqueda con abort + prefijo.
 
 ## Hecho
-- `panel/gafete_pdf.py`: cara profesional branded; JSON `GET /gafete/<tipo>/<id>` + PDF.
-- React: `BoletoFace` + `BoletoPrintModal` (preview → imprimir / PDF).
-- UX: Resumen “qué hacer ahora”, Buscar pasos 1-2-3, Escáner/Informes/Zonas/nav más claros.
-- Docs `ACCESOS-REACT.md`; deploy panel+demo DO.
+- `backend/app.py`: `procesar_escaneo(..., zona)` + `GET /api/zonas` (X-Scan-Key); aforo `accesos_zonas`; no confirmado.
+- Demo `web` escáner: selector de zona, cámara BarcodeDetector, cola offline.
+- Panel React: mismo cámara/offline; aforo en vivo tras escaneo; `Permissions-Policy camera=(self)`.
+- Informes: filtro zona, KPI reingresos, refresco en vivo; buscar abort + ILIKE prefijo.
+- Deploy DO + smoke: auth 401, demo js con cámara/zonas, contenedor con `accesos_zonas`.
 
 ## Smoke DO
-- panel login/accesos 200; api anon 401; demo scan anon 401
-- JS live con “Vista previa del boleto” / “Imprimir boleto”
-- `gafete_pdf.construir` en contenedor ~33 KB
+- panel_login/accesos 200; api anon 401; demo scan/zonas anon 401
+- panel dist: Abrir cámara, EN COLA OFFLINE, zonaDentro, Reingresos
+- demo: Abrir cámara, /api/zonas, EN COLA OFFLINE; `procesar_escaneo` has_zones
 
 ## A medias / residual
-- Demo PDA no actualiza aforo de zonas (sí el panel escáner).
-- Sin cámara web en escáner (teclado/USB zebra).
-- Adam debe guardar `SCAN_API_KEY` del `.env` DO en los PDA.
+- Devices/latency hub estilo Nest: solo latencia puntual en panel escáner (sin página dispositivos).
+- BarcodeDetector: Chrome/Edge OK; Safari puede caer a USB.
+- Adam: `SCAN_API_KEY` del `.env` DO en los PDA.
 
 ## No tocar
 Terror Hetzner; cutover DNS; secretos en git.

@@ -52,8 +52,9 @@ def _cabeceras_seguridad(resp):
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     resp.headers.setdefault("Referrer-Policy", "same-origin")
+    # Cámara permitida en Accesos / escáner PDA (BarcodeDetector); mic/geo cerrados.
     resp.headers.setdefault(
-        "Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        "Permissions-Policy", "camera=(self), microphone=(), geolocation=()")
     if request.path.startswith("/api/") or (
         request.path.startswith("/accesos") and "/assets/" not in request.path
     ):

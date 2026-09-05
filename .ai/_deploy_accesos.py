@@ -40,6 +40,11 @@ FILES = [
     "backend/.env.example",
     "docker-compose.demo.yml",
     "web/src/pages/EscanearPage.tsx",
+    "web/src/styles/escanear.module.scss",
+    "web/src/lib/useCameraCapture.ts",
+    "web/src/lib/offlineQueue.ts",
+    "web/src/components/CameraScan.tsx",
+    "web/src/components/camera-scan.module.scss",
     "docs/ACCESOS-REACT.md",
     ".gitignore",
 ]

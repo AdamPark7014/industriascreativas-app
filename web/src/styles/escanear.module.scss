@@ -36,6 +36,43 @@
   gap: 10px;
 }
 
+.zonas {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.zona,
+.zonaOn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid $dark-border;
+  background: transparent;
+  color: $dark-text-dim;
+  cursor: pointer;
+  text-align: left;
+
+  strong {
+    font-size: 0.84rem;
+    color: inherit;
+  }
+
+  span {
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.zonaOn {
+  border-color: $cyan-tech;
+  background: rgba(34, 211, 238, 0.12);
+  color: $dark-text;
+}
+
 .modeBtn {
   flex: 1;
   padding: 14px 10px;

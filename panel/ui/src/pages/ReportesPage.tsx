@@ -5,40 +5,70 @@ import styles from './reportes.module.scss'
 export default function ReportesPage() {
   const [modo, setModo] = useState('')
   const [ok, setOk] = useState('')
+  const [zona, setZona] = useState('')
   const [q, setQ] = useState('')
-  const [kpis, setKpis] = useState({ total: 0, entradas: 0, salidas: 0, rechazos: 0 })
+  const [kpis, setKpis] = useState({
+    total: 0,
+    entradas: 0,
+    salidas: 0,
+    rechazos: 0,
+    reingresos: 0,
+  })
+  const [zonas, setZonas] = useState<{ clave: string; nombre: string }[]>([])
   const [rows, setRows] = useState<Escaneo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [live, setLive] = useState(true)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     const p = new URLSearchParams()
     if (modo) p.set('modo', modo)
     if (ok) p.set('ok', ok)
+    if (zona) p.set('zona', zona)
     if (q.trim()) p.set('q', q.trim())
     p.set('limite', '300')
     setLoading(true)
     try {
-      const data = await api.reportes(p)
-      setKpis(data.kpis)
+      const data = await api.reportes(p, signal)
+      if (signal?.aborted) return
+      setKpis({
+        total: data.kpis.total ?? 0,
+        entradas: data.kpis.entradas ?? 0,
+        salidas: data.kpis.salidas ?? 0,
+        rechazos: data.kpis.rechazos ?? 0,
+        reingresos: data.kpis.reingresos ?? 0,
+      })
       setRows(data.registros)
+      if (data.zonas?.length) setZonas(data.zonas)
       setError(null)
     } catch (e) {
+      if (signal?.aborted) return
       setError(e instanceof Error ? e.message : 'No se pudieron cargar los informes')
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
-  }, [modo, ok, q])
+  }, [modo, ok, zona, q])
 
   useEffect(() => {
-    const t = window.setTimeout(() => void load(), 200)
-    return () => window.clearTimeout(t)
+    const ac = new AbortController()
+    const t = window.setTimeout(() => void load(ac.signal), 180)
+    return () => {
+      ac.abort()
+      window.clearTimeout(t)
+    }
   }, [load])
+
+  useEffect(() => {
+    if (!live) return
+    const id = window.setInterval(() => void load(), 12000)
+    return () => window.clearInterval(id)
+  }, [live, load])
 
   const descargar = (formato: 'csv' | 'xlsx') => {
     const p = new URLSearchParams()
     if (modo) p.set('modo', modo)
     if (ok) p.set('ok', ok)
+    if (zona) p.set('zona', zona)
     if (q.trim()) p.set('q', q.trim())
     p.set('formato', formato)
     p.set('limite', '2000')
@@ -48,8 +78,8 @@ export default function ReportesPage() {
   return (
     <main className={styles.page}>
       <p className={styles.lead}>
-        Revisa quién entró o salió. Filtra por nombre, tipo de movimiento o resultado,
-        y descarga CSV o Excel cuando lo necesites.
+        Revisa quién entró o salió. Filtra por zona, movimiento o resultado,
+        y descarga CSV o Excel. Reingresos = entradas OK tras una salida previa.
       </p>
 
       <section className={styles.kpis} aria-label="Totales filtrados">
@@ -64,6 +94,10 @@ export default function ReportesPage() {
         <article>
           <span>Salidas</span>
           <strong>{kpis.salidas.toLocaleString('es-MX')}</strong>
+        </article>
+        <article>
+          <span>Reingresos</span>
+          <strong>{kpis.reingresos.toLocaleString('es-MX')}</strong>
         </article>
         <article>
           <span>Rechazos</span>
@@ -87,6 +121,22 @@ export default function ReportesPage() {
           <option value="true">Solo aceptados</option>
           <option value="false">Solo rechazados</option>
         </select>
+        <select value={zona} onChange={(e) => setZona(e.target.value)} aria-label="Zona">
+          <option value="">Todas las zonas</option>
+          {zonas.map((z) => (
+            <option key={z.clave} value={z.clave}>
+              {z.nombre}
+            </option>
+          ))}
+        </select>
+        <label className={styles.live}>
+          <input
+            type="checkbox"
+            checked={live}
+            onChange={(e) => setLive(e.target.checked)}
+          />
+          En vivo
+        </label>
         <button type="button" className={styles.secundario} onClick={() => descargar('csv')}>
           Exportar CSV
         </button>
