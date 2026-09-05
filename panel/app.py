@@ -158,7 +158,7 @@ def panel():
             alcance, alcance.capitalize()),
         nest_access_base=os.getenv(
             "NEST_ACCESS_BASE_URL",
-            "https://manager.demo.experiencebt.com.mx",
+            "https://panel.experiencebt.com.mx",
         ).rstrip("/"),
         catalogo={
             clave: {"nombre": consultas.CATALOGO[clave]["nombre"],

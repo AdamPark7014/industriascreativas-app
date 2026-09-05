@@ -398,7 +398,7 @@
       $('vistaTitulo').textContent = t;
       if (vista === 'accesos') {
         const frame = $('accesosFrame');
-        const base = (window.NEST_ACCESS_BASE || 'https://manager.demo.experiencebt.com.mx').replace(/\/$/, '');
+        const base = (window.NEST_ACCESS_BASE || 'https://panel.experiencebt.com.mx').replace(/\/$/, '');
         if (frame && (!frame.dataset.loaded || frame.src.indexOf(base) !== 0)) {
           frame.src = `${base}/embed/access`;
           frame.dataset.loaded = '1';

@@ -31,7 +31,7 @@
         <span class="navIcono" aria-hidden="true">◔</span> Análisis
       </button>
 
-      {# Nest access-control (demo tenant) embebido — motor en manager.demo, UX en panel. #}
+      {# Nest access-control (demo tenant) same-origin — nginx /embed|/scanner|/access* → Hetzner. #}
       <p class="navTitulo">Control de accesos</p>
       <button class="navItem" data-vista="accesos"
               data-label="Accesos Nest" data-corto="Accesos">
@@ -188,8 +188,9 @@
           <div class="tarjetaCab">
             <h2 class="tarjetaTitulo">Control de accesos · FICTI / demo</h2>
             <p class="tarjetaSub">
-              Módulos Nest (escáner ENTRY/EXIT, zonas, informes) embebidos desde
-              <code>manager.demo</code>. Terror es otro evento (<code>manager.terror</code>).
+              Módulos Nest (escáner ENTRY/EXIT, zonas, informes) en la misma
+              origen <code>panel.experiencebt.com.mx</code> (tenant demo / FICTI).
+              Terror es otro evento (<code>manager.terror</code>).
             </p>
           </div>
           <div class="tarjetaCuerpo accesosCuerpo">
@@ -203,9 +204,9 @@
               <a class="btn" href="{{ nest_access_base }}/access/reports?embed=1" target="_blank" rel="noopener">Informes</a>
             </div>
             <p class="accesosHint" id="accesosHint">
-              Login Nest: <code>admin@demo.experiencebt.com.mx</code> (ops) o
-              <code>promotor@demo…</code> (solo informes). Si el iframe no carga
-              (DNS/cookies), usa los botones de arriba.
+              Login Nest (dentro del iframe): <code>admin@demo.experiencebt.com.mx</code> (ops) o
+              <code>promotor@demo…</code> (solo informes). Misma origen — sin
+              <code>manager.demo</code>.
             </p>
             <div class="accesosFrameWrap">
               <iframe

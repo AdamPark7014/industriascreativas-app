@@ -4,16 +4,16 @@
 - **Fecha:** 2026-09-04
 - **Rama:** main
 
-## Hecho (este turno)
-Deploy Accesos embed en DO `147.182.128.128`:
-- `/opt/EVENTOS-app/panel` → rebuild `eventos_panel_web` con nav Accesos + iframe Nest.
-- `NEST_ACCESS_BASE_URL` en compose + `.env` del servidor (default manager.demo).
-- Local: `panel/docker-compose.panel.yml` ahora exporta `NEST_ACCESS_BASE_URL`.
+## 3 líneas
+Accesos same-origin: nginx `zz-panel.conf` proxea Nest bajo panel; `NEST_ACCESS_BASE_URL=https://panel.experiencebt.com.mx`. Sin `manager.demo`.
 
-Smoke: panel login/health 200; Accesos + embed/access en imagen.
+## Hecho
+- `panel/deploy/zz-panel.conf` (+ssl): locations Nest → manager.terror + X-EBT-Public-Host.
+- app.py / panel.html / panel.js / compose: base URL panel (no NXDOMAIN).
+- Deploy DO: reload nginx + recreate `eventos_panel_web`.
 
-## Blocker
-DNS A `manager.demo.experiencebt.com.mx` → `5.78.215.109` (Hetzner) para que el iframe cargue HTTPS. Panel Flask **no** se mueve de DO.
+## Smoke
+panel `/login` 200; `/embed/access` 200 FICTI; scanner/zones/reports 200.
 
 ## No tocar
 Cutover panel DNS a Nest; secretos en git/RELEVO.
