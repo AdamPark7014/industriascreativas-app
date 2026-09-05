@@ -1,0 +1,225 @@
+/* Cara del gafete 5×8 — preview en pantalla e impresión exacta. */
+
+:root {
+  --boleto-acento: #12b5b0;
+}
+
+[data-boleto-face] {
+  position: relative;
+  width: 5in;
+  height: 8in;
+  margin: 0 auto;
+  padding: 0.42in 0.38in 0.36in;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #050b1c;
+  color: #fff;
+  border-radius: 18px;
+  border: 5px solid var(--boleto-acento);
+  font-family: 'Manrope', 'Segoe UI', system-ui, sans-serif;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(5, 11, 28, 0.35);
+}
+
+.boletoCut {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+
+  i {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-color: rgba(255, 255, 255, 0.35);
+    border-style: solid;
+    border-width: 0;
+  }
+
+  i[data-c='tl'] {
+    top: 6px;
+    left: 6px;
+    border-top-width: 1px;
+    border-left-width: 1px;
+  }
+  i[data-c='tr'] {
+    top: 6px;
+    right: 6px;
+    border-top-width: 1px;
+    border-right-width: 1px;
+  }
+  i[data-c='bl'] {
+    bottom: 6px;
+    left: 6px;
+    border-bottom-width: 1px;
+    border-left-width: 1px;
+  }
+  i[data-c='br'] {
+    bottom: 6px;
+    right: 6px;
+    border-bottom-width: 1px;
+    border-right-width: 1px;
+  }
+}
+
+.boletoBrand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+  padding: 10px 12px 12px;
+  background: #0a1428;
+  border-radius: 12px;
+  margin-bottom: 14px;
+
+  img {
+    height: 28px;
+    width: auto;
+    max-width: 42%;
+    object-fit: contain;
+  }
+}
+
+.boletoTipo {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--boleto-acento);
+}
+
+.boletoRule {
+  width: 68%;
+  margin: 10px 0 16px;
+  border: none;
+  border-top: 1px solid #1b2b4d;
+}
+
+.boletoNombre {
+  margin: 0;
+  max-width: 100%;
+  padding: 0 4px;
+  text-align: center;
+  font-size: 1.55rem;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: #fff;
+  overflow-wrap: anywhere;
+}
+
+.boletoSub {
+  margin: 10px 0 0;
+  max-width: 100%;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #93a6c4;
+  overflow-wrap: anywhere;
+}
+
+.boletoEvento {
+  margin: 10px 0 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6b80a3;
+}
+
+.boletoQrWrap {
+  margin-top: auto;
+  margin-bottom: 10px;
+  padding: 14px;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #1b2b4d;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.boletoQr {
+  display: block;
+  width: 2.55in;
+  height: 2.55in;
+  image-rendering: pixelated;
+}
+
+.boletoPie {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding-top: 4px;
+
+  span {
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #93a6c4;
+  }
+
+  strong {
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: #fff;
+  }
+}
+
+/* ——— Impresión: una hoja 5×8, sin chrome del panel ——— */
+@media print {
+  @page {
+    size: 5in 8in;
+    margin: 0;
+  }
+
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  [data-boleto-print-root],
+  [data-boleto-print-root] * {
+    visibility: visible !important;
+  }
+
+  [data-boleto-print-root] {
+    position: fixed !important;
+    inset: 0 !important;
+    display: flex !important;
+    align-items: stretch !important;
+    justify-content: center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    z-index: 99999 !important;
+  }
+
+  [data-boleto-face] {
+    width: 5in !important;
+    height: 8in !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .boletoCut i {
+    border-color: #888 !important;
+  }
+}

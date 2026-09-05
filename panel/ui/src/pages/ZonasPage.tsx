@@ -52,8 +52,9 @@ export default function ZonasPage() {
   return (
     <main className={styles.page}>
       <p className={styles.lead}>
-        Cada escaneo de entrada suma aforo; la salida lo libera. Si la zona está
-        llena, la entrada se rechaza hasta que haya salidas.
+        Cada zona tiene un cupo. Al escanear <b>entrada</b> se ocupa un lugar; al
+        escanear <b>salida</b> se libera. Si está llena, la puerta rechaza hasta que
+        alguien salga.
       </p>
 
       {error ? <div className={styles.alerta}>{error}</div> : null}
@@ -94,10 +95,13 @@ export default function ZonasPage() {
             void guardar()
           }}
         >
-          <h2>Alta o ajuste de zona</h2>
+          <h2>Agregar o ajustar una zona</h2>
+          <p className={styles.formAyuda}>
+            La clave es interna (sin espacios). El nombre es lo que ve el operador en el escáner.
+          </p>
           <div className={styles.grid}>
             <label>
-              Clave
+              Clave (ej. vip)
               <input
                 value={clave}
                 onChange={(e) => setClave(e.target.value)}
@@ -107,7 +111,7 @@ export default function ZonasPage() {
               />
             </label>
             <label>
-              Nombre visible
+              Nombre que se muestra
               <input
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
@@ -116,7 +120,7 @@ export default function ZonasPage() {
               />
             </label>
             <label>
-              Aforo (0 = sin tope)
+              Cupo máximo (0 = sin límite)
               <input
                 value={aforo}
                 onChange={(e) => setAforo(e.target.value)}
@@ -128,7 +132,9 @@ export default function ZonasPage() {
           <button type="submit">Guardar zona</button>
         </form>
       ) : (
-        <p className={styles.nota}>Tu rol de promotor puede consultar aforo, no modificarlo.</p>
+        <p className={styles.nota}>
+          Con rol promotor puedes ver el aforo, pero no crear ni cambiar zonas.
+        </p>
       )}
     </main>
   )

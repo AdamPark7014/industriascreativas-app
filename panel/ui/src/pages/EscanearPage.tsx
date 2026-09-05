@@ -145,7 +145,7 @@ export default function EscanearPage() {
             }}
           >
             <strong>ENTRADA</strong>
-            <span>Check-in · primer acceso</span>
+            <span>Deja pasar · primer acceso o reingreso</span>
           </button>
           <button
             type="button"
@@ -156,7 +156,7 @@ export default function EscanearPage() {
             }}
           >
             <strong>SALIDA</strong>
-            <span>Checkout · habilita reingreso</span>
+            <span>Registra salida · libera cupo</span>
           </button>
         </div>
 
@@ -189,7 +189,7 @@ export default function EscanearPage() {
           }}
         >
           <label className={styles.label} htmlFor="qr_input">
-            Código QR / folio
+            Escanea el código del boleto
           </label>
           <input
             ref={inputRef}
@@ -197,7 +197,7 @@ export default function EscanearPage() {
             className={styles.input}
             type="text"
             name="qr_data"
-            placeholder="Apunta el lector y escanea…"
+            placeholder="Apunta el lector aquí y escanea…"
             autoFocus
             autoComplete="off"
             inputMode="none"
@@ -212,12 +212,12 @@ export default function EscanearPage() {
 
         <p className={styles.hint}>
           {ocupado
-            ? 'Validando…'
+            ? 'Validando… un momento'
             : modo === 'entrada'
-              ? 'Listo para entrada. Si la persona ya está dentro, se rechaza hasta una salida.'
-              : 'Listo para salida. Libera el aforo y permite reingreso.'}
+              ? 'Listo para ENTRADA. Si ya está dentro, se rechaza hasta registrar una salida.'
+              : 'Listo para SALIDA. Libera el aforo y permite que vuelva a entrar.'}
           {latenciaMs != null ? ` · ${latenciaMs} ms` : ''}
-          {zonaActiva ? ` · ${zonaActiva.nombre}` : ''}
+          {zonaActiva ? ` · Zona: ${zonaActiva.nombre}` : ''}
         </p>
 
         {resultado ? (
@@ -235,18 +235,23 @@ export default function EscanearPage() {
               </span>
             ) : null}
             <span className={styles.conteo}>
-              Estado: {resultado.asistencias > 0 ? 'DENTRO' : 'FUERA'} ({resultado.asistencias}/1)
+              {resultado.asistencias > 0 ? 'Ahora: DENTRO' : 'Ahora: FUERA'}
             </span>
           </div>
         ) : (
-          <div className={styles.espera}>Esperando el siguiente escaneo</div>
+          <div className={styles.espera}>
+            <strong>Esperando el siguiente boleto</strong>
+            <span>El cursor ya está en el campo — solo escanea.</span>
+          </div>
         )}
       </div>
 
       <aside className={styles.historial}>
-        <h2>Últimos escaneos</h2>
+        <h2>Últimos resultados</h2>
         {!historial.length ? (
-          <p className={styles.histVacio}>Los resultados aparecen aquí en cuanto validas un gafete.</p>
+          <p className={styles.histVacio}>
+            Aquí verás cada validación (nombre y si pasó o no) en cuanto escanees.
+          </p>
         ) : (
           <ul>
             {historial.map((r) => (

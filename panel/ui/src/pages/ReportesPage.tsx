@@ -48,8 +48,8 @@ export default function ReportesPage() {
   return (
     <main className={styles.page}>
       <p className={styles.lead}>
-        Historial de entradas, salidas, reingresos rechazados y denegaciones.
-        Disponible para operación interna y promotor.
+        Revisa quién entró o salió. Filtra por nombre, tipo de movimiento o resultado,
+        y descarga CSV o Excel cuando lo necesites.
       </p>
 
       <section className={styles.kpis} aria-label="Totales filtrados">
@@ -100,7 +100,9 @@ export default function ReportesPage() {
       <div className={styles.tablaWrap}>
         {loading ? <p className={styles.vacio}>Cargando informes…</p> : null}
         {!loading && !rows.length ? (
-          <p className={styles.vacio}>No hay escaneos con estos filtros.</p>
+          <p className={styles.vacio}>
+            No hay movimientos con estos filtros. Prueba quitar el filtro o ampliar la búsqueda.
+          </p>
         ) : null}
         {!loading && rows.length ? (
           <table className={styles.tabla}>
@@ -108,10 +110,10 @@ export default function ReportesPage() {
               <tr>
                 <th>Hora</th>
                 <th>Nombre</th>
-                <th>Modo</th>
+                <th>Movimiento</th>
                 <th>Zona</th>
                 <th>Resultado</th>
-                <th>Origen</th>
+                <th>Desde</th>
               </tr>
             </thead>
             <tbody>
@@ -128,7 +130,9 @@ export default function ReportesPage() {
                   </td>
                   <td className={styles.nombre}>{r.nombre || '—'}</td>
                   <td>
-                    <span className={styles.chip}>{r.modo}</span>
+                    <span className={styles.chip}>
+                      {r.modo === 'entrada' ? 'Entrada' : r.modo === 'salida' ? 'Salida' : r.modo}
+                    </span>
                   </td>
                   <td>{r.zona_clave || '—'}</td>
                   <td className={r.ok ? styles.ok : styles.mal}>{r.mensaje}</td>

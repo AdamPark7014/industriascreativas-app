@@ -13,33 +13,33 @@ type NavItem = {
 
 const GROUPS: { titulo: string; items: NavItem[] }[] = [
   {
-    titulo: 'General',
+    titulo: 'Inicio',
     items: [
-      { to: '/', label: 'Resumen', hint: 'Pulso en vivo', end: true },
+      { to: '/', label: 'Resumen', hint: 'Números de hoy y accesos rápidos', end: true },
     ],
   },
   {
-    titulo: 'Puerta',
+    titulo: 'En puerta',
     items: [
       { to: '/escanear', label: 'Escáner', hint: 'Entrada · salida · reingreso', ops: true },
-      { to: '/zonas', label: 'Zonas y aforo', hint: 'Capacidad por zona' },
+      { to: '/zonas', label: 'Zonas y aforo', hint: 'Cupo por área' },
     ],
   },
   {
-    titulo: 'Acreditaciones',
+    titulo: 'Personas',
     items: [
-      { to: '/buscar', label: 'Buscar e imprimir', hint: 'Gafete 5×8' },
-      { to: '/reportes', label: 'Informes', hint: 'Historial y exportación' },
+      { to: '/buscar', label: 'Buscar e imprimir', hint: 'Boleto 5×8 con QR' },
+      { to: '/reportes', label: 'Informes', hint: 'Historial y Excel' },
     ],
   },
 ]
 
 const TITULOS: Record<string, { kicker: string; titulo: string }> = {
-  '/': { kicker: 'Control de accesos', titulo: 'Resumen operativo' },
-  '/escanear': { kicker: 'Puerta', titulo: 'Estación de escaneo' },
-  '/buscar': { kicker: 'Acreditaciones', titulo: 'Buscar e imprimir gafetes' },
-  '/reportes': { kicker: 'Acreditaciones', titulo: 'Informes de acceso' },
-  '/zonas': { kicker: 'Puerta', titulo: 'Zonas y aforo' },
+  '/': { kicker: 'Accesos FICTI', titulo: 'Resumen de hoy' },
+  '/escanear': { kicker: 'Puerta', titulo: 'Validar boletos' },
+  '/buscar': { kicker: 'Boletos', titulo: 'Buscar e imprimir' },
+  '/reportes': { kicker: 'Informes', titulo: 'Historial de accesos' },
+  '/zonas': { kicker: 'Aforo', titulo: 'Zonas y capacidad' },
 }
 
 export default function OpsShell() {
@@ -65,7 +65,11 @@ export default function OpsShell() {
   }, [location.pathname])
 
   const alcanceLabel =
-    sesion?.alcance === 'interno' ? 'Interno admin' : sesion?.alcance === 'promotor' ? 'Promotor' : '…'
+    sesion?.alcance === 'interno'
+      ? 'Operación interna'
+      : sesion?.alcance === 'promotor'
+        ? 'Promotor (consulta)'
+        : '…'
 
   return (
     <div className={styles.app}>
@@ -162,7 +166,7 @@ export default function OpsShell() {
         {error ? (
           <div className={styles.aviso} role="alert">
             {error === 'sesion' || error === 'sesion_expirada'
-              ? 'Tu sesión expiró. Vuelve a iniciar sesión.'
+              ? 'Tu sesión expiró. Vuelve a iniciar sesión para continuar.'
               : error}
           </div>
         ) : null}

@@ -5,24 +5,22 @@
 - **Rama:** main
 
 ## 3 líneas
-Accesos FICTI es consola **React+TS** en `panel…/accesos` (sidebar FICTI, escáner PDA, buscar/imprimir 5×8, informes, zonas). Hardening: APIs con sesión+CSRF origen+rate limit; demo `/api/escanear` exige `X-Scan-Key`. Terror intacto.
+Boleto 5×8 rediseñado (FICTI/Tech Capital oscuro, QR en placa, marcas de corte) + preview React `@media print`. Accesos más amigable (guías, CTAs, copy ES). Deploy DO ok.
 
 ## Hecho
-- Quitada UI Accesos Jinja; SPA `panel/ui` profesional (IA, estados, copy ES).
-- AuthN en `/api/accesos/*` (antes filtraba como promotor sin login → **401**).
-- Demo scan key + rate limit; cookies/headers endurecidos.
-- Deploy DO: panel + demo rebuild.
+- `panel/gafete_pdf.py`: cara profesional branded; JSON `GET /gafete/<tipo>/<id>` + PDF.
+- React: `BoletoFace` + `BoletoPrintModal` (preview → imprimir / PDF).
+- UX: Resumen “qué hacer ahora”, Buscar pasos 1-2-3, Escáner/Informes/Zonas/nav más claros.
+- Docs `ACCESOS-REACT.md`; deploy panel+demo DO.
 
 ## Smoke DO
-- `panel…/login` 200; `panel…/accesos` 200 (login redirect)
-- `api/accesos/sesion` anon → **401**
-- `demo…/api/escanear` anon/wrong key → **401**
-- `demo…/escanear` 200 (UI pide clave)
+- panel login/accesos 200; api anon 401; demo scan anon 401
+- JS live con “Vista previa del boleto” / “Imprimir boleto”
+- `gafete_pdf.construir` en contenedor ~33 KB
 
 ## A medias / residual
 - Demo PDA no actualiza aforo de zonas (sí el panel escáner).
 - Sin cámara web en escáner (teclado/USB zebra).
-- Sin cola offline tipo Nest.
 - Adam debe guardar `SCAN_API_KEY` del `.env` DO en los PDA.
 
 ## No tocar

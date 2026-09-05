@@ -1,83 +1,295 @@
 # -*- coding: utf-8 -*-
-"""Gafete de puerta 5×8: nombre grande + QR. Misma cara que el desk de registro."""
+"""Gafete de puerta 5×8 — cara de impresión FICTI / Tech Capital.
+
+Nombre dominante + QR grande sobre placa clara (zona de silencio para lectores).
+Marcas de corte y tipografía de jerarquía clara para desk / badge printer.
+"""
+from __future__ import annotations
+
+import base64
 import io
+import os
+from typing import Any
 
 import qrcode
+from PIL import Image
 from reportlab.lib.units import inch
-from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfgen import canvas
 
-# 5 in × 8 in (360 × 576 pt)
+# 5 in × 8 in (360 × 576 pt) — formato desk actual
 ANCHO = 5 * inch
 ALTO = 8 * inch
-PLATA = (0.75, 0.75, 0.75)
-TINTA = (0.08, 0.08, 0.08)
-TENUE = (0.42, 0.42, 0.42)
+
+# Tech Capital 2026
+FONDO = (0.020, 0.043, 0.110)  # #050b1c
+PANEL = (0.039, 0.078, 0.157)  # #0a1428
+BORDE = (0.106, 0.169, 0.302)  # #1b2b4d
+TEXTO = (1.0, 1.0, 1.0)
+TENUE = (0.576, 0.651, 0.769)  # #93a6c4
+ROSA = (0.925, 0.118, 0.388)  # #ec1e63 empresas / elisa
+VERDE = (0.208, 0.851, 0.361)  # #35d95c estudiantes
+TEAL = (0.071, 0.710, 0.690)  # #12b5b0 acento ops
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_IMG = os.path.join(_HERE, "static", "img")
+_BACKEND_ASSETS = os.path.join(_HERE, "..", "backend", "assets")
+_logo_cache: dict[tuple[str, int], bytes] = {}
+
+
+def _asset(*names: str) -> str | None:
+    for base in (_IMG, _BACKEND_ASSETS):
+        for name in names:
+            path = os.path.join(base, name)
+            if os.path.isfile(path):
+                return path
+    return None
+
+
+def _logo_reader(path: str, alto_px: int) -> ImageReader:
+    clave = (path, alto_px)
+    if clave not in _logo_cache:
+        with Image.open(path) as im:
+            im = im.convert("RGBA")
+            if im.height > alto_px:
+                w = max(1, round(im.width * alto_px / float(im.height)))
+                im = im.resize((w, alto_px), Image.LANCZOS)
+            buf = io.BytesIO()
+            im.save(buf, format="PNG", optimize=True)
+            _logo_cache[clave] = buf.getvalue()
+    return ImageReader(io.BytesIO(_logo_cache[clave]))
+
+
+def _acento(tipo: str) -> tuple[float, float, float]:
+    t = (tipo or "").upper()
+    if "ESTUDI" in t or "ALUMN" in t:
+        return VERDE
+    if "ELISA" in t:
+        return ROSA
+    if "EMPRES" in t:
+        return ROSA
+    return TEAL
+
+
+def _partir(texto: str, fuente: str, tam: float, ancho: float, medir) -> list[str]:
+    palabras = (texto or "").split()
+    if not palabras:
+        return ["—"]
+    lineas: list[str] = []
+    actual = ""
+    for p in palabras:
+        prueba = f"{actual} {p}".strip()
+        if actual and medir(prueba, fuente, tam) > ancho:
+            lineas.append(actual)
+            actual = p
+        else:
+            actual = prueba
+    if actual:
+        lineas.append(actual)
+    return lineas
+
+
+def _qr_png(folio: str, box: int = 10) -> io.BytesIO:
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=box,
+        border=2,
+    )
+    qr.add_data(folio)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    buf.seek(0)
+    return buf
+
+
+def _marcas_corte(c: canvas.Canvas) -> None:
+    """Cruces de corte en las 4 esquinas (fuera del área útil)."""
+    c.setStrokeColorRGB(0.55, 0.55, 0.55)
+    c.setLineWidth(0.6)
+    m = 8
+    L = 10
+    for x, y, dx, dy in (
+        (0, ALTO, 1, -1),
+        (ANCHO, ALTO, -1, -1),
+        (0, 0, 1, 1),
+        (ANCHO, 0, -1, 1),
+    ):
+        c.line(x + dx * m, y + dy * (m + L), x + dx * m, y + dy * m)
+        c.line(x + dx * m, y + dy * m, x + dx * (m + L), y + dy * m)
+
+
+def payload(
+    nombre: str,
+    folio: str,
+    tipo: str,
+    subtitulo: str = "",
+) -> dict[str, Any]:
+    """Datos + QR en base64 para la cara React (preview / @media print)."""
+    qr_buf = _qr_png(folio, box=8)
+    b64 = base64.b64encode(qr_buf.getvalue()).decode("ascii")
+    return {
+        "nombre": (nombre or "—").strip(),
+        "folio": folio,
+        "tipo": (tipo or "Acreditación").strip(),
+        "subtitulo": (subtitulo or "").strip(),
+        "evento": "FICTI · Tech Capital 2026",
+        "formato": "5×8 in",
+        "qrDataUrl": f"data:image/png;base64,{b64}",
+        "acento": (
+            "#35d95c"
+            if "ESTUDI" in (tipo or "").upper() or "ALUMN" in (tipo or "").upper()
+            else "#ec1e63"
+            if any(k in (tipo or "").upper() for k in ("EMPRES", "ELISA"))
+            else "#12b5b0"
+        ),
+    }
 
 
 def construir(nombre: str, folio: str, tipo: str, subtitulo: str = "") -> bytes:
     buf = io.BytesIO()
-    qr = qrcode.QRCode(border=1, box_size=8)
-    qr.add_data(folio)
-    qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white")
-    qr_buf = io.BytesIO()
-    img.save(qr_buf, format="PNG")
-    qr_buf.seek(0)
+    accent = _acento(tipo)
+    qr_buf = _qr_png(folio, box=12)
 
     c = canvas.Canvas(buf, pagesize=(ANCHO, ALTO))
     c.setTitle(f"Gafete — {nombre}")
-    c.setAuthor("GABOR FICTI")
+    c.setAuthor("FICTI · Tech Capital")
+    c.setSubject(folio)
 
-    margen = 22
-    c.setStrokeColorRGB(*PLATA)
-    c.setLineWidth(1)
-    c.rect(margen * 0.45, margen * 0.45, ANCHO - margen * 0.9, ALTO - margen * 0.9)
+    # Fondo a sangre
+    c.setFillColorRGB(*FONDO)
+    c.rect(0, 0, ANCHO, ALTO, fill=1, stroke=0)
 
-    y = ALTO - 48
-    c.setFillColorRGB(*TINTA)
-    c.setFont("Helvetica-Bold", 12)
-    c.drawCentredString(ANCHO / 2, y, "GABOR")
-    y -= 16
-    c.setFillColorRGB(*PLATA)
-    c.setFont("Helvetica", 8)
-    c.drawCentredString(ANCHO / 2, y, (tipo or "ACREDITACIÓN").upper())
-    y -= 12
-    c.setStrokeColorRGB(*PLATA)
-    c.setLineWidth(0.75)
-    c.line(margen, y, ANCHO - margen, y)
+    # Marco de acento
+    margen = 14
+    c.setStrokeColorRGB(*accent)
+    c.setLineWidth(5)
+    c.roundRect(margen, margen, ANCHO - 2 * margen, ALTO - 2 * margen, 14, fill=0, stroke=1)
 
-    y -= 22
-    c.setFillColorRGB(*PLATA)
-    c.setFont("Helvetica", 8)
-    c.drawCentredString(ANCHO / 2, y, "NOMBRE")
-    y -= 28
-    c.setFillColorRGB(*TINTA)
-    c.setFont("Helvetica-Bold", 22)
-    texto = (nombre or "—").strip()
-    if len(texto) > 42:
-        texto = texto[:41] + "…"
-    c.drawCentredString(ANCHO / 2, y, texto)
+    # Banda superior
+    banda_h = 72
+    c.setFillColorRGB(*PANEL)
+    c.roundRect(margen + 3, ALTO - margen - banda_h - 3, ANCHO - 2 * margen - 6, banda_h, 10, fill=1, stroke=0)
+
+    # Logos
+    logo_y = ALTO - margen - 52
+    logo_h = 28
+    gap = 12
+    drawn: list[tuple[str, float]] = []
+    for path in (
+        _asset("ficti-logo.png", "ficti-logo-blanco.png"),
+        _asset("tech-capital-logo.png"),
+    ):
+        if not path:
+            continue
+        with Image.open(path) as im:
+            bw, bh = im.size
+        aspect = bw / float(bh) if bh else 1.0
+        drawn.append((path, logo_h * aspect))
+
+    if drawn:
+        total_w = sum(w for _, w in drawn) + gap * (len(drawn) - 1)
+        x = (ANCHO - total_w) / 2
+        for path, w in drawn:
+            c.drawImage(
+                _logo_reader(path, int(logo_h * 3)),
+                x,
+                logo_y,
+                width=w,
+                height=logo_h,
+                mask="auto",
+                preserveAspectRatio=True,
+            )
+            x += w + gap
+    else:
+        c.setFillColorRGB(*TEXTO)
+        c.setFont("Helvetica-Bold", 11)
+        c.drawCentredString(ANCHO / 2, logo_y + 8, "FICTI  ·  TECH CAPITAL")
+
+    # Etiqueta de tipo
+    y = ALTO - margen - banda_h - 28
+    c.setFillColorRGB(*accent)
+    c.setFont("Helvetica-Bold", 10)
+    etiqueta = (tipo or "ACREDITACIÓN").upper()
+    c.drawCentredString(ANCHO / 2, y, etiqueta)
+
+    # Filete
+    y -= 10
+    c.setStrokeColorRGB(*BORDE)
+    c.setLineWidth(0.8)
+    c.line(48, y, ANCHO - 48, y)
+
+    # Nombre (jerarquía principal)
+    y -= 36
+    nombre_txt = (nombre or "—").strip().upper()
+    ancho_util = ANCHO - 56
+    tam = 26
+    while tam > 13 and c.stringWidth(nombre_txt, "Helvetica-Bold", tam) > ancho_util:
+        tam -= 1
+    lineas = _partir(nombre_txt, "Helvetica-Bold", tam, ancho_util, c.stringWidth)
+    if len(lineas) > 3:
+        lineas = lineas[:2] + [lineas[2][: max(1, len(lineas[2]) - 1)] + "…"]
+    # Si sigue cabiendo en una línea con tamaño grande, úsala; si no, baja y parte.
+    if len(lineas) == 1:
+        c.setFillColorRGB(*TEXTO)
+        c.setFont("Helvetica-Bold", tam)
+        c.drawCentredString(ANCHO / 2, y, lineas[0])
+        y -= tam + 6
+    else:
+        tam = min(tam, 18)
+        lineas = _partir(nombre_txt, "Helvetica-Bold", tam, ancho_util, c.stringWidth)[:3]
+        c.setFillColorRGB(*TEXTO)
+        c.setFont("Helvetica-Bold", tam)
+        for ln in lineas:
+            c.drawCentredString(ANCHO / 2, y, ln)
+            y -= tam + 4
 
     if subtitulo:
-        y -= 18
         c.setFillColorRGB(*TENUE)
         c.setFont("Helvetica", 10)
-        linea = subtitulo.strip()
-        if len(linea) > 48:
-            linea = linea[:47] + "…"
-        c.drawCentredString(ANCHO / 2, y, linea)
+        sub = subtitulo.strip().upper()
+        for ln in _partir(sub, "Helvetica", 10, ancho_util, c.stringWidth)[:2]:
+            c.drawCentredString(ANCHO / 2, y, ln)
+            y -= 13
 
-    qr_lado = 2.35 * inch
-    qr_x = (ANCHO - qr_lado) / 2
-    qr_y = 78
-    c.drawImage(ImageReader(qr_buf), qr_x, qr_y, qr_lado, qr_lado, mask="auto")
-
-    c.setStrokeColorRGB(*PLATA)
-    c.line(margen, 52, ANCHO - margen, 52)
-    c.setFillColorRGB(*PLATA)
+    # Evento
+    c.setFillColorRGB(*TENUE)
     c.setFont("Helvetica", 8)
-    c.drawCentredString(ANCHO / 2, 34, f"{folio}  ·  Gafete 5×8")
+    c.drawCentredString(ANCHO / 2, y - 2, "FICTI · TECH CAPITAL 2026")
+
+    # QR sobre placa blanca (obligatorio sobre fondo oscuro)
+    qr_lado = 2.55 * inch
+    pad = 14
+    placa = qr_lado + pad * 2
+    placa_x = (ANCHO - placa) / 2
+    placa_y = 78
+
+    c.setFillColorRGB(1, 1, 1)
+    c.roundRect(placa_x, placa_y, placa, placa, 12, fill=1, stroke=0)
+    c.setStrokeColorRGB(*BORDE)
+    c.setLineWidth(0.7)
+    c.roundRect(placa_x, placa_y, placa, placa, 12, fill=0, stroke=1)
+
+    c.drawImage(
+        ImageReader(qr_buf),
+        placa_x + pad,
+        placa_y + pad,
+        qr_lado,
+        qr_lado,
+        mask="auto",
+    )
+
+    # Pie: folio
+    c.setFillColorRGB(*TENUE)
+    c.setFont("Helvetica", 8)
+    c.drawCentredString(ANCHO / 2, 52, "PRESENTA ESTE CÓDIGO EN PUERTA")
+    c.setFillColorRGB(*TEXTO)
+    c.setFont("Helvetica-Bold", 11)
+    c.drawCentredString(ANCHO / 2, 34, folio)
+
+    _marcas_corte(c)
     c.showPage()
     c.save()
     return buf.getvalue()

@@ -258,30 +258,59 @@ def _hit(clave: str, fila: dict, match: str) -> dict:
     }
 
 
-@bp.get("/gafete/<tipo>/<int:id_>.pdf")
-@rate_limit("api")
-def gafete_pdf_ruta(tipo, id_):
+def _gafete_fila(tipo, id_):
+    """Carga fila + etiqueta/extra o (None, err_response)."""
     if not _ops():
-        return _forbid_ops()
+        return None, _forbid_ops()
     if tipo not in _tipos_ok():
-        return jsonify(ok=False, error="sin_acceso"), 403
+        return None, (jsonify(ok=False, error="sin_acceso"), 403)
     with conexion() as con:
         fila = _obtener(con, tipo, id_)
     if not fila:
-        return jsonify(ok=False, error="no_encontrado"), 404
+        return None, (jsonify(ok=False, error="no_encontrado"), 404)
     t = TIPOS[tipo]
     extra = (fila.get(t["extra"]) or "") if t["extra"] else ""
+    return {
+        "nombre": _nombre(fila),
+        "folio": _folio(tipo, id_),
+        "tipo": t["etiqueta"],
+        "subtitulo": extra,
+    }, None
+
+
+@bp.get("/gafete/<tipo>/<int:id_>")
+@rate_limit("api")
+def gafete_json(tipo, id_):
+    """Cara de boleto para preview React + impresión @media print."""
+    datos, err = _gafete_fila(tipo, id_)
+    if err:
+        return err
+    body = gafete_pdf.payload(
+        nombre=datos["nombre"],
+        folio=datos["folio"],
+        tipo=datos["tipo"],
+        subtitulo=datos["subtitulo"],
+    )
+    return jsonify(body)
+
+
+@bp.get("/gafete/<tipo>/<int:id_>.pdf")
+@rate_limit("api")
+def gafete_pdf_ruta(tipo, id_):
+    datos, err = _gafete_fila(tipo, id_)
+    if err:
+        return err
     pdf = gafete_pdf.construir(
-        nombre=_nombre(fila),
-        folio=_folio(tipo, id_),
-        tipo=t["etiqueta"],
-        subtitulo=extra,
+        nombre=datos["nombre"],
+        folio=datos["folio"],
+        tipo=datos["tipo"],
+        subtitulo=datos["subtitulo"],
     )
     return Response(
         pdf,
         mimetype="application/pdf",
         headers={
-            "Content-Disposition": f'inline; filename="gafete-{_folio(tipo, id_)}.pdf"',
+            "Content-Disposition": f'inline; filename="gafete-{datos["folio"]}.pdf"',
             "Cache-Control": "no-store",
         },
     )

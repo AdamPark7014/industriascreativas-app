@@ -120,7 +120,23 @@ export const api = {
     }>(`/api/accesos/reportes?${params}`),
 }
 
-export async function imprimirGafete(tipo: string, id: number): Promise<void> {
+export type BoletoPayload = {
+  nombre: string
+  folio: string
+  tipo: string
+  subtitulo: string
+  evento: string
+  formato: string
+  qrDataUrl: string
+  acento: string
+}
+
+export async function cargarBoleto(tipo: string, id: number): Promise<BoletoPayload> {
+  return req<BoletoPayload>(`/api/accesos/gafete/${tipo}/${id}`)
+}
+
+/** Abre el PDF del gafete (descarga / diálogo de impresión del navegador). */
+export async function abrirPdfGafete(tipo: string, id: number): Promise<void> {
   const res = await fetch(`/api/accesos/gafete/${tipo}/${id}.pdf`, {
     credentials: 'same-origin',
   })
@@ -128,34 +144,41 @@ export async function imprimirGafete(tipo: string, id: number): Promise<void> {
     window.location.href = `/login?next=${encodeURIComponent('/accesos/buscar')}`
     throw new Error('sesion')
   }
-  if (!res.ok) throw new Error('No se pudo generar el gafete')
+  if (!res.ok) throw new Error('No se pudo generar el PDF del boleto')
   const blob = await res.blob()
   const url = URL.createObjectURL(blob)
-  const iframe = document.createElement('iframe')
-  iframe.style.position = 'fixed'
-  iframe.style.width = '0'
-  iframe.style.height = '0'
-  iframe.style.border = '0'
-  iframe.src = url
-  document.body.appendChild(iframe)
-  await new Promise<void>((resolve, reject) => {
-    iframe.onload = () => {
-      window.setTimeout(() => {
-        try {
-          iframe.contentWindow?.focus()
-          iframe.contentWindow?.print()
-          resolve()
-        } catch {
-          const win = window.open(url, '_blank')
-          if (!win) reject(new Error('Permite ventanas emergentes para imprimir'))
-          else resolve()
-        }
-      }, 250)
-    }
-    iframe.onerror = () => reject(new Error('No se abrió el PDF'))
-  })
-  window.setTimeout(() => {
-    iframe.remove()
-    URL.revokeObjectURL(url)
-  }, 60_000)
+  const win = window.open(url, '_blank')
+  if (!win) {
+    // Fallback: iframe oculto + print
+    const iframe = document.createElement('iframe')
+    iframe.style.position = 'fixed'
+    iframe.style.width = '0'
+    iframe.style.height = '0'
+    iframe.style.border = '0'
+    iframe.src = url
+    document.body.appendChild(iframe)
+    await new Promise<void>((resolve, reject) => {
+      iframe.onload = () => {
+        window.setTimeout(() => {
+          try {
+            iframe.contentWindow?.focus()
+            iframe.contentWindow?.print()
+            resolve()
+          } catch {
+            reject(new Error('Permite ventanas emergentes para abrir el PDF'))
+          }
+        }, 250)
+      }
+      iframe.onerror = () => reject(new Error('No se abrió el PDF'))
+    })
+    window.setTimeout(() => {
+      iframe.remove()
+      URL.revokeObjectURL(url)
+    }, 60_000)
+    return
+  }
+  window.setTimeout(() => URL.revokeObjectURL(url), 120_000)
 }
+
+/** @deprecated Usar cargarBoleto + preview React; se mantiene alias. */
+export const imprimirGafete = abrirPdfGafete

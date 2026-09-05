@@ -10,11 +10,16 @@
 | Hetzner terror | Nest boletera — **aparte** |
 
 ## Módulos
-- Resumen / pulso
+- Resumen / “qué hacer ahora” + pulso
 - Escáner ENTRY/EXIT/reingreso + zonas/aforo (solo `interno`)
-- Buscar e imprimir gafete **5×8** (solo `interno` imprime)
+- Buscar → **vista previa del boleto** → imprimir 5×8 (React `@media print` + PDF)
 - Informes + CSV/Excel (`interno` y `promotor`)
 - Zonas Acreditación / VIP
+
+## Boleto 5×8
+- Cara oscura FICTI / Tech Capital, nombre grande, QR en placa blanca, marcas de corte
+- `GET /api/accesos/gafete/<tipo>/<id>` → JSON + QR (preview React)
+- `GET /api/accesos/gafete/<tipo>/<id>.pdf` → PDF print-ready (`panel/gafete_pdf.py`)
 
 ## Seguridad
 - `/api/accesos/*` exige sesión panel + Origin/Referer same-site + rate limit

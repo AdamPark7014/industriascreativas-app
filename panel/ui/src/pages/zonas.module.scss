@@ -117,7 +117,7 @@
   border-radius: 14px;
 
   h2 {
-    margin: 0 0 14px;
+    margin: 0 0 8px;
     font-size: 0.95rem;
     color: #071a3a;
   }
@@ -132,6 +132,13 @@
     font-weight: 700;
     cursor: pointer;
   }
+}
+
+.formAyuda {
+  margin: 0 0 14px;
+  font-size: 0.82rem;
+  color: #5b6b82;
+  line-height: 1.4;
 }
 
 .grid {
