@@ -1,19 +1,23 @@
 # FICTI Accesos — React en panel (DO)
 
-**Actualizado 2026-09-04:** Accesos FICTI vive en **React + TypeScript** en
+**Actualizado 2026-09-04:** consola de accesos profesional en
 `https://panel.experiencebt.com.mx/accesos` (EVENTO-ELISA `panel/ui`).
 
 | Host | Rol |
 |------|-----|
-| `panel.experiencebt.com.mx` | Flask registros/Excel + SPA Accesos React |
-| `demo.experiencebt.com.mx` | Registro público + `/escanear` (PDA) |
-| Hetzner terror | Boletera Nest — **aparte**; se deja intacta |
+| `panel.experiencebt.com.mx` | Registros Flask + **Accesos React** (auth de sesión) |
+| `demo.experiencebt.com.mx` | Registro público + `/escanear` (requiere `X-Scan-Key`) |
+| Hetzner terror | Nest boletera — **aparte** |
 
-## Módulos Accesos (`/accesos`)
-- Pulso / KPIs
-- Escáner ENTRY/EXIT + **reingreso** + zonas/aforo (solo `interno`)
-- Búsqueda rápida + impresión gafete **5×8** (solo `interno`)
+## Módulos
+- Resumen / pulso
+- Escáner ENTRY/EXIT/reingreso + zonas/aforo (solo `interno`)
+- Buscar e imprimir gafete **5×8** (solo `interno` imprime)
 - Informes + CSV/Excel (`interno` y `promotor`)
 - Zonas Acreditación / VIP
 
-No hay iframe Nest, no hay proxy a Hetzner, no hay UI Accesos en Jinja.
+## Seguridad
+- `/api/accesos/*` exige sesión panel + Origin/Referer same-site + rate limit
+- Demo `/api/escanear` exige `SCAN_API_KEY` (`X-Scan-Key`); fail-closed en https
+- Cookies `HttpOnly` + `Secure` + `SameSite=Lax`
+- Cabeceras `X-Frame-Options`, `nosniff`, `Referrer-Policy`

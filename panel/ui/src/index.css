@@ -27,3 +27,7 @@ select {
 a {
   color: inherit;
 }
+
+[hidden] {
+  display: none !important;
+}

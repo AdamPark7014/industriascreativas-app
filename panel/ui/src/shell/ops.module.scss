@@ -1,67 +1,110 @@
 .app {
+  display: flex;
   min-height: 100vh;
   background: #f5f7fb;
   color: #132039;
+  font-family: 'Manrope', 'Segoe UI', system-ui, sans-serif;
 }
 
-.top {
+.lateral {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 246px;
   display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 12px 20px;
-  background: linear-gradient(90deg, #071a3a 0%, #0f2d5c 100%);
+  flex-direction: column;
+  background: linear-gradient(180deg, #071a3a 0%, #0a2249 60%, #0f2d5c 100%);
   color: #fff;
+  z-index: 40;
 }
 
-.brand {
+.marca {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  text-decoration: none;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  font-size: 0.78rem;
+  flex-direction: column;
+  gap: 11px;
+  padding: 22px 22px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 
   img {
-    height: 28px;
-    width: auto;
+    width: 118px;
+    height: auto;
   }
+}
+
+.tech {
+  width: 96px !important;
+  opacity: 0.95;
 }
 
 .nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
   flex: 1;
+  padding: 16px 12px;
+  overflow-y: auto;
+}
 
-  a {
-    padding: 8px 12px;
-    border-radius: 8px;
-    text-decoration: none;
-    font-size: 0.84rem;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.78);
-  }
+.grupo + .grupo {
+  margin-top: 8px;
+}
 
-  a:hover {
-    background: rgba(255, 255, 255, 0.08);
+.navTitulo {
+  margin: 14px 10px 7px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.grupo:first-child .navTitulo {
+  margin-top: 2px;
+}
+
+.navItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 3px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: rgba(255, 255, 255, 0.82);
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.09);
     color: #fff;
   }
 }
 
-.active {
-  background: rgba(255, 255, 255, 0.14) !important;
-  color: #fff !important;
-  box-shadow: inset 0 -2px 0 #12b5b0;
+.activo {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  box-shadow: inset 3px 0 0 #12b5b0;
 }
 
-.meta {
+.navLabel {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.navHint {
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 500;
+}
+
+.pie {
+  padding: 14px 18px 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.usuario {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 0.78rem;
-  color: rgba(255, 255, 255, 0.7);
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.74rem;
+  color: rgba(255, 255, 255, 0.72);
+  margin-bottom: 10px;
 
   a {
     color: #fff;
@@ -69,20 +112,220 @@
   }
 }
 
-.error {
-  margin: 0;
-  padding: 10px 20px;
-  background: #fdeaea;
-  color: #c62828;
+.volver {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.55);
+  text-decoration: none;
+
+  &:hover {
+    color: #fff;
+  }
 }
 
-@media (max-width: 720px) {
-  .top {
-    flex-wrap: wrap;
-    gap: 10px;
+.gabor {
+  width: 88px;
+  opacity: 0.85;
+}
+
+.capa {
+  display: none;
+}
+
+.principal {
+  flex: 1;
+  margin-left: 246px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cabecera {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 24px;
+  background: #fff;
+  border-bottom: 1px solid #d5deea;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.menuBtn {
+  display: none;
+  border: 1px solid #b7c4d8;
+  background: #fff;
+  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  font-size: 1.2rem;
+}
+
+.cabeceraTexto {
+  flex: 1;
+  min-width: 0;
+}
+
+.kicker {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #5b6b82;
+}
+
+.titulo {
+  margin: 2px 0 0;
+  font-size: 1.28rem;
+  font-weight: 800;
+  color: #071a3a;
+  letter-spacing: -0.01em;
+}
+
+.cabeceraAcciones {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.insignia {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid #d5deea;
+  background: #f5f7fb;
+}
+
+.insigniaInterno {
+  background: #071a3a;
+  color: #fff;
+  border-color: #071a3a;
+}
+
+.insigniaPromotor {
+  color: #0f2d5c;
+}
+
+.insigniaPunto {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #12b5b0;
+}
+
+.sello {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #1b7a45;
+  background: #e8f6ee;
+}
+
+.selloPunto {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #1b7a45;
+  box-shadow: 0 0 0 0 rgba(27, 122, 69, 0.45);
+  animation: pulso 2.2s infinite;
+}
+
+@keyframes pulso {
+  0% {
+    box-shadow: 0 0 0 0 rgba(27, 122, 69, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(27, 122, 69, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(27, 122, 69, 0);
+  }
+}
+
+.aviso {
+  margin: 14px 24px 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fdeaea;
+  border: 1px solid #f3c6c6;
+  color: #c62828;
+  font-size: 0.88rem;
+}
+
+.cargando {
+  padding: 48px 24px;
+  color: #5b6b82;
+  text-align: center;
+}
+
+@media (max-width: 960px) {
+  .lateral {
+    transform: translateX(-105%);
+    transition: transform 0.2s ease;
   }
 
-  .meta span {
+  .abierto {
+    transform: translateX(0);
+  }
+
+  .capa {
+    display: block;
+    position: fixed;
+    inset: 0;
+    border: none;
+    background: rgba(7, 26, 58, 0.45);
+    z-index: 35;
+  }
+
+  .principal {
+    margin-left: 0;
+  }
+
+  .menuBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .cabecera {
+    padding: 12px 14px;
+  }
+
+  .titulo {
+    font-size: 1.08rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .kicker {
     display: none;
+  }
+
+  .insignia {
+    padding: 9px;
+    border-radius: 50%;
+    font-size: 0;
+  }
+
+  .insigniaPunto {
+    margin: 0;
+  }
+
+  .sello {
+    padding: 9px;
+    border-radius: 50%;
+    font-size: 0;
   }
 }

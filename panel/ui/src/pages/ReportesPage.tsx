@@ -8,6 +8,7 @@ export default function ReportesPage() {
   const [q, setQ] = useState('')
   const [kpis, setKpis] = useState({ total: 0, entradas: 0, salidas: 0, rechazos: 0 })
   const [rows, setRows] = useState<Escaneo[]>([])
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -16,18 +17,21 @@ export default function ReportesPage() {
     if (ok) p.set('ok', ok)
     if (q.trim()) p.set('q', q.trim())
     p.set('limite', '300')
+    setLoading(true)
     try {
       const data = await api.reportes(p)
       setKpis(data.kpis)
       setRows(data.registros)
       setError(null)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error')
+      setError(e instanceof Error ? e.message : 'No se pudieron cargar los informes')
+    } finally {
+      setLoading(false)
     }
   }, [modo, ok, q])
 
   useEffect(() => {
-    const t = window.setTimeout(() => void load(), 180)
+    const t = window.setTimeout(() => void load(), 200)
     return () => window.clearTimeout(t)
   }, [load])
 
@@ -43,56 +47,98 @@ export default function ReportesPage() {
 
   return (
     <main className={styles.page}>
-      <p className={styles.kicker}>Informes</p>
-      <h1>Accesos y reingresos</h1>
-      <div className={styles.kpis}>
-        <span>Total {kpis.total}</span>
-        <span>Entradas {kpis.entradas}</span>
-        <span>Salidas {kpis.salidas}</span>
-        <span>Rechazos {kpis.rechazos}</span>
-      </div>
+      <p className={styles.lead}>
+        Historial de entradas, salidas, reingresos rechazados y denegaciones.
+        Disponible para operación interna y promotor.
+      </p>
+
+      <section className={styles.kpis} aria-label="Totales filtrados">
+        <article>
+          <span>Total</span>
+          <strong>{kpis.total.toLocaleString('es-MX')}</strong>
+        </article>
+        <article>
+          <span>Entradas</span>
+          <strong>{kpis.entradas.toLocaleString('es-MX')}</strong>
+        </article>
+        <article>
+          <span>Salidas</span>
+          <strong>{kpis.salidas.toLocaleString('es-MX')}</strong>
+        </article>
+        <article>
+          <span>Rechazos</span>
+          <strong className={styles.warn}>{kpis.rechazos.toLocaleString('es-MX')}</strong>
+        </article>
+      </section>
+
       <div className={styles.filtros}>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nombre o folio…" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Filtrar por nombre o folio…"
+        />
         <select value={modo} onChange={(e) => setModo(e.target.value)}>
           <option value="">Entrada y salida</option>
-          <option value="entrada">Entrada</option>
-          <option value="salida">Salida</option>
+          <option value="entrada">Solo entradas</option>
+          <option value="salida">Solo salidas</option>
         </select>
         <select value={ok} onChange={(e) => setOk(e.target.value)}>
-          <option value="">Todos</option>
-          <option value="true">Aceptados</option>
-          <option value="false">Rechazados</option>
+          <option value="">Aceptados y rechazados</option>
+          <option value="true">Solo aceptados</option>
+          <option value="false">Solo rechazados</option>
         </select>
-        <button type="button" onClick={() => descargar('csv')}>
-          CSV
+        <button type="button" className={styles.secundario} onClick={() => descargar('csv')}>
+          Exportar CSV
         </button>
-        <button type="button" onClick={() => descargar('xlsx')}>
-          Excel
+        <button type="button" className={styles.primario} onClick={() => descargar('xlsx')}>
+          Exportar Excel
         </button>
       </div>
-      {error ? <p className={styles.err}>{error}</p> : null}
-      <table className={styles.tabla}>
-        <thead>
-          <tr>
-            <th>Hora</th>
-            <th>Nombre</th>
-            <th>Modo</th>
-            <th>Zona</th>
-            <th>Resultado</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.id}>
-              <td>{new Date(r.creado).toLocaleString('es-MX')}</td>
-              <td>{r.nombre}</td>
-              <td>{r.modo}</td>
-              <td>{r.zona_clave || '—'}</td>
-              <td className={r.ok ? styles.ok : styles.mal}>{r.mensaje}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+
+      {error ? <div className={styles.alerta}>{error}</div> : null}
+
+      <div className={styles.tablaWrap}>
+        {loading ? <p className={styles.vacio}>Cargando informes…</p> : null}
+        {!loading && !rows.length ? (
+          <p className={styles.vacio}>No hay escaneos con estos filtros.</p>
+        ) : null}
+        {!loading && rows.length ? (
+          <table className={styles.tabla}>
+            <thead>
+              <tr>
+                <th>Hora</th>
+                <th>Nombre</th>
+                <th>Modo</th>
+                <th>Zona</th>
+                <th>Resultado</th>
+                <th>Origen</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id}>
+                  <td>
+                    {new Date(r.creado).toLocaleString('es-MX', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit',
+                    })}
+                  </td>
+                  <td className={styles.nombre}>{r.nombre || '—'}</td>
+                  <td>
+                    <span className={styles.chip}>{r.modo}</span>
+                  </td>
+                  <td>{r.zona_clave || '—'}</td>
+                  <td className={r.ok ? styles.ok : styles.mal}>{r.mensaje}</td>
+                  <td>{r.origen || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : null}
+      </div>
     </main>
   )
 }

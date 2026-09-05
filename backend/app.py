@@ -1,6 +1,10 @@
 import io
 import re
 import base64
+import hmac
+import time
+from collections import defaultdict
+from threading import Lock
 import qrcode 
 import sib_api_v3_sdk
 import os
@@ -43,10 +47,7 @@ COLOR_VERDE_FICTI = (0.208, 0.851, 0.361)  # #35d95c — estudiantes (antes azul
 COLOR_FONDO = (0.020, 0.043, 0.110)  # #050b1c
 COLOR_TEXTO_TENUE = (0.576, 0.651, 0.769)  # #93a6c4
 
-# URL pública del sitio. Los clientes de correo no cargan imágenes en data URI
-# (Gmail las descarta), así que los logos de los correos se sirven por HTTPS
-# desde el propio Flask, que publica web/dist en la raíz.
-PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL', '').strip().rstrip('/')
+# URL pública se resuelve tras load_dotenv (ver más abajo).
 
 app = Flask(
     __name__,
@@ -55,7 +56,7 @@ app = Flask(
 )
 
 # Configuración de Clave Secreta y Base de Datos
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'rpxf ddbn cdbl otez')
+# load_dotenv ocurre abajo; releemos SECRET_KEY tras dotenv.
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv(
     'DATABASE_URL',
     'postgresql://postgres:diego@127.0.0.1:5432/bd_pruebas',
@@ -71,6 +72,18 @@ _ROOT_DIR = os.path.abspath(os.path.join(_BASE_DIR, '..'))
 load_dotenv(dotenv_path=os.path.join(_BASE_DIR, '.env'))
 load_dotenv(dotenv_path=os.path.join(_ROOT_DIR, '.env'))
 
+_secret = (os.getenv('SECRET_KEY') or '').strip()
+if not _secret or _secret == 'rpxf ddbn cdbl otez':
+    if (os.getenv('PUBLIC_BASE_URL') or '').startswith('https://'):
+        raise RuntimeError('SECRET_KEY de producción ausente o insegura')
+    _secret = 'dev-only-change-me'
+app.config['SECRET_KEY'] = _secret
+
+SCAN_API_KEY = (os.getenv('SCAN_API_KEY') or '').strip()
+# URL pública del sitio. Los clientes de correo no cargan imágenes en data URI
+# (Gmail las descarta), así que los logos se sirven por HTTPS desde Flask.
+PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL', '').strip().rstrip('/')
+
 BREVO_API_KEY = (os.getenv('API_KEYY') or os.getenv('BREVO_API_KEY') or '').strip()
 REMITENTE_EMAIL = os.getenv('REMITENTE_EMAIL', 'myticket@experiencebt.com.mx').strip()
 REMITENTE_NOMBRE = os.getenv('REMITENTE_NOMBRE', 'Gabor FICTI').strip()
@@ -78,7 +91,7 @@ REMITENTE_NOMBRE = os.getenv('REMITENTE_NOMBRE', 'Gabor FICTI').strip()
 if not BREVO_API_KEY:
     print('⚠️ BREVO: no se encontró API_KEYY / BREVO_API_KEY en backend/.env')
 else:
-    print(f'✅ BREVO: API key cargada ({BREVO_API_KEY[:6]}…{BREVO_API_KEY[-4:]})')
+    print('✅ BREVO: API key cargada')
 
 configuration = sib_api_v3_sdk.Configuration()
 configuration.api_key['api-key'] = BREVO_API_KEY
@@ -87,6 +100,36 @@ brevo_mail_api = sib_api_v3_sdk.TransactionalEmailsApi(api_client)
 
 db = SQLAlchemy(app)
 serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+
+# Rate limit simple para /api/escanear (por worker).
+_scan_hits = defaultdict(list)
+_scan_lock = Lock()
+
+
+def _ip_cliente():
+    reenviado = request.headers.get('X-Forwarded-For', '')
+    return reenviado.split(',')[0].strip() or request.remote_addr or '?'
+
+
+def _scan_rate_ok(ip: str, maximo=45, ventana=60.0) -> bool:
+    ahora = time.time()
+    with _scan_lock:
+        marcas = [t for t in _scan_hits[ip] if ahora - t < ventana]
+        if len(marcas) >= maximo:
+            _scan_hits[ip] = marcas
+            return False
+        marcas.append(ahora)
+        _scan_hits[ip] = marcas
+        return True
+
+
+def _scan_autorizado() -> bool:
+    """PDA demo exige X-Scan-Key == SCAN_API_KEY (fail-closed en https)."""
+    presentada = (request.headers.get('X-Scan-Key') or '').strip()
+    if SCAN_API_KEY:
+        return hmac.compare_digest(presentada, SCAN_API_KEY)
+    # Sin clave configurada: solo desarrollo local.
+    return not PUBLIC_BASE_URL.startswith('https://')
 
 
 # ==========================================
@@ -1404,13 +1447,44 @@ def procesar_escaneo(qr_data, modo):
 def api_escanear():
     """Escaneo sin recargar la página.
 
-    La ruta de formulario obligaba a dos navegaciones completas por boleto —
-    y una de ellas volvía a descargar y arrancar todo el SPA de React — más un
-    toque manual en "Escanear Siguiente". Aquí solo viaja el JSON.
+    Requiere cabecera X-Scan-Key (SCAN_API_KEY) en producción.
     """
+    if not _scan_autorizado():
+        return jsonify({
+            'ok': False,
+            'mensaje': 'NO AUTORIZADO',
+            'detalles': 'Falta o es inválida la clave de escáner (X-Scan-Key).',
+            'pitido': 'error',
+            'nombre': '',
+            'tipo': '',
+            'asistencias': 0,
+        }), 401
+
+    if not _scan_rate_ok(_ip_cliente()):
+        return jsonify({
+            'ok': False,
+            'mensaje': 'DEMASIADOS INTENTOS',
+            'detalles': 'Espera un momento antes de seguir escaneando.',
+            'pitido': 'error',
+            'nombre': '',
+            'tipo': '',
+            'asistencias': 0,
+        }), 429
+
     datos = request.get_json(silent=True) or request.form
     qr_data = (datos.get('qr_data') or '').strip()
     modo = (datos.get('modo') or 'entrada').strip()
+
+    if len(qr_data) > 80:
+        return jsonify({
+            'ok': False,
+            'mensaje': 'CODIGO INVALIDO',
+            'detalles': 'El código es demasiado largo.',
+            'pitido': 'error',
+            'nombre': '',
+            'tipo': '',
+            'asistencias': 0,
+        }), 400
 
     if not qr_data:
         return jsonify({
@@ -1429,6 +1503,8 @@ def api_escanear():
 @app.route('/escanear', methods=['GET', 'POST'])
 def escanear():
     if request.method == 'POST':
+        if not _scan_autorizado():
+            return jsonify(ok=False, error='no_autorizado'), 401
         resultado = procesar_escaneo(
             request.form.get('qr_data', '').strip(),
             request.form.get('modo', 'entrada'),

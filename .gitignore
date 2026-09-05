@@ -14,5 +14,7 @@ backend/qrs_para_imprimir/
 panel/ui/node_modules/
 panel/ui/dist/
 
-# Helper local SSH (nunca commitear)
+# Helper local SSH / deploy (nunca commitear)
 .ai/_ssh_do.py
+.ai/_deploy_accesos.py
+.ai/_deploy_*.py

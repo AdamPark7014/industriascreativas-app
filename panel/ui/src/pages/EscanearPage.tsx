@@ -28,15 +28,15 @@ function usePitido() {
       if (tipo === 'exito') {
         osc.type = 'sine'
         osc.frequency.setValueAtTime(880, ctx.currentTime)
-        gain.gain.setValueAtTime(0.5, ctx.currentTime)
+        gain.gain.setValueAtTime(0.55, ctx.currentTime)
         osc.start()
         osc.stop(ctx.currentTime + 0.12)
       } else {
         osc.type = 'sawtooth'
         osc.frequency.setValueAtTime(150, ctx.currentTime)
-        gain.gain.setValueAtTime(0.8, ctx.currentTime)
+        gain.gain.setValueAtTime(0.75, ctx.currentTime)
         osc.start()
-        osc.stop(ctx.currentTime + 0.25)
+        osc.stop(ctx.currentTime + 0.22)
       }
     },
     [asegurar],
@@ -52,6 +52,7 @@ export default function EscanearPage() {
   const [resultado, setResultado] = useState<ScanResult | null>(null)
   const [historial, setHistorial] = useState<(ScanResult & { clave: number; hora: string })[]>([])
   const [ocupado, setOcupado] = useState(false)
+  const [latenciaMs, setLatenciaMs] = useState<number | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const enVuelo = useRef(false)
   const { sonar, asegurar } = usePitido()
@@ -59,8 +60,9 @@ export default function EscanearPage() {
 
   useEffect(() => {
     void api.zonas().then((d) => {
-      setZonas(d.zonas.filter((z) => z.activo))
-      if (d.zonas[0]) setZona(d.zonas[0].clave)
+      const activas = d.zonas.filter((z) => z.activo)
+      setZonas(activas)
+      if (activas[0]) setZona(activas[0].clave)
     })
   }, [])
 
@@ -80,8 +82,10 @@ export default function EscanearPage() {
       if (!codigo || enVuelo.current) return
       enVuelo.current = true
       setOcupado(true)
+      const t0 = performance.now()
       try {
         const datos = await api.escanear(codigo, modo, zona)
+        setLatenciaMs(Math.round(performance.now() - t0))
         setResultado(datos)
         sonar(datos.pitido)
         setHistorial((prev) =>
@@ -89,16 +93,21 @@ export default function EscanearPage() {
             {
               ...datos,
               clave: prev.length ? prev[0].clave + 1 : 1,
-              hora: new Date().toLocaleTimeString('es-MX'),
+              hora: new Date().toLocaleTimeString('es-MX', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+              }),
             },
             ...prev,
-          ].slice(0, 8),
+          ].slice(0, 10),
         )
       } catch (e) {
+        setLatenciaMs(Math.round(performance.now() - t0))
         const fail: ScanResult = {
           ok: false,
           mensaje: 'SIN CONEXIÓN',
-          detalles: e instanceof Error ? e.message : 'Error',
+          detalles: e instanceof Error ? e.message : 'No se pudo contactar al servidor',
           pitido: 'error',
           nombre: '',
           tipo: '',
@@ -121,37 +130,38 @@ export default function EscanearPage() {
     return <Navigate to="/reportes" replace />
   }
 
+  const zonaActiva = zonas.find((z) => z.clave === zona)
+
   return (
     <div className={styles.page}>
-      <div className={styles.card}>
-        <h1>Escáner de accesos</h1>
-        <p className={styles.hintReingreso}>
-          Reingreso: SALIDA y después ENTRADA. Sin salida, la segunda entrada se rechaza.
-        </p>
+      <div className={styles.station}>
         <div className={styles.modes}>
           <button
             type="button"
-            className={`${styles.entrada} ${modo === 'entrada' ? '' : styles.inactive}`}
+            className={`${styles.entrada} ${modo === 'entrada' ? styles.on : styles.off}`}
             onClick={() => {
               setModo('entrada')
               enfocar()
             }}
           >
-            ENTRADA
+            <strong>ENTRADA</strong>
+            <span>Check-in · primer acceso</span>
           </button>
           <button
             type="button"
-            className={`${styles.salida} ${modo === 'salida' ? '' : styles.inactive}`}
+            className={`${styles.salida} ${modo === 'salida' ? styles.on : styles.off}`}
             onClick={() => {
               setModo('salida')
               enfocar()
             }}
           >
-            SALIDA
+            <strong>SALIDA</strong>
+            <span>Checkout · habilita reingreso</span>
           </button>
         </div>
+
         {zonas.length ? (
-          <div className={styles.zonas}>
+          <div className={styles.zonas} role="group" aria-label="Zona">
             {zonas.map((z) => (
               <button
                 key={z.clave}
@@ -162,25 +172,32 @@ export default function EscanearPage() {
                   enfocar()
                 }}
               >
-                {z.nombre}
-                <small>
+                <strong>{z.nombre}</strong>
+                <span>
                   {z.dentro}/{z.aforo || '∞'}
-                </small>
+                </span>
               </button>
             ))}
           </div>
         ) : null}
+
         <form
+          className={styles.form}
           onSubmit={(e) => {
             e.preventDefault()
             void escanear(inputRef.current?.value ?? '')
           }}
         >
+          <label className={styles.label} htmlFor="qr_input">
+            Código QR / folio
+          </label>
           <input
             ref={inputRef}
+            id="qr_input"
             className={styles.input}
             type="text"
-            placeholder="Escanea el QR…"
+            name="qr_data"
+            placeholder="Apunta el lector y escanea…"
             autoFocus
             autoComplete="off"
             inputMode="none"
@@ -192,30 +209,56 @@ export default function EscanearPage() {
             }}
           />
         </form>
+
         <p className={styles.hint}>
-          {ocupado ? 'Registrando…' : 'Listo. El cursor vuelve al campo solo.'}
+          {ocupado
+            ? 'Validando…'
+            : modo === 'entrada'
+              ? 'Listo para entrada. Si la persona ya está dentro, se rechaza hasta una salida.'
+              : 'Listo para salida. Libera el aforo y permite reingreso.'}
+          {latenciaMs != null ? ` · ${latenciaMs} ms` : ''}
+          {zonaActiva ? ` · ${zonaActiva.nombre}` : ''}
         </p>
+
         {resultado ? (
-          <div className={`${styles.resultado} ${resultado.ok ? styles.exito : styles.fallo}`}>
+          <div
+            className={`${styles.resultado} ${resultado.ok ? styles.exito : styles.fallo}`}
+            role="status"
+            aria-live="assertive"
+          >
             <strong>{resultado.mensaje}</strong>
             <span>{resultado.detalles}</span>
+            {resultado.nombre ? (
+              <span className={styles.persona}>
+                {resultado.nombre}
+                {resultado.tipo ? ` · ${resultado.tipo}` : ''}
+              </span>
+            ) : null}
             <span className={styles.conteo}>
-              {modo === 'salida' ? 'Dentro' : 'Entradas'}: {resultado.asistencias}/1
+              Estado: {resultado.asistencias > 0 ? 'DENTRO' : 'FUERA'} ({resultado.asistencias}/1)
             </span>
           </div>
-        ) : null}
+        ) : (
+          <div className={styles.espera}>Esperando el siguiente escaneo</div>
+        )}
       </div>
-      {historial.length ? (
-        <ul className={styles.historial}>
-          {historial.map((r) => (
-            <li key={r.clave} className={r.ok ? styles.filaOk : styles.filaMal}>
-              <span>{r.hora}</span>
-              <span>{r.nombre || r.detalles}</span>
-              <span>{r.ok ? '✓' : '✕'}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+
+      <aside className={styles.historial}>
+        <h2>Últimos escaneos</h2>
+        {!historial.length ? (
+          <p className={styles.histVacio}>Los resultados aparecen aquí en cuanto validas un gafete.</p>
+        ) : (
+          <ul>
+            {historial.map((r) => (
+              <li key={r.clave} className={r.ok ? styles.filaOk : styles.filaMal}>
+                <span>{r.hora}</span>
+                <span>{r.nombre || r.detalles}</span>
+                <span>{r.ok ? '✓' : '✕'}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </aside>
     </div>
   )
 }

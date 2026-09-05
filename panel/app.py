@@ -41,9 +41,25 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=os.getenv("PANEL_COOKIE_SECURE", "1") == "1",
+    SESSION_COOKIE_NAME="panel_session",
     PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
     JSON_SORT_KEYS=False,
 )
+
+
+@app.after_request
+def _cabeceras_seguridad(resp):
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    resp.headers.setdefault("Referrer-Policy", "same-origin")
+    resp.headers.setdefault(
+        "Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    if request.path.startswith("/api/") or (
+        request.path.startswith("/accesos") and "/assets/" not in request.path
+    ):
+        resp.headers["Cache-Control"] = "no-store"
+    return resp
+
 
 # Varias pestañas sondeando cada pocos segundos comparten el mismo resultado.
 # Una caché por alcance: los datos de cada rol no se mezclan.

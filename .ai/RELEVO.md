@@ -5,27 +5,25 @@
 - **Rama:** main
 
 ## 3 líneas
-FICTI Accesos vuelve a ser **nativo en el panel Flask DO**. Se quitó el proxy/iframe Nest→Hetzner. `demo` = registro + `/escanear`; terror Nest no se toca.
+Accesos FICTI es consola **React+TS** en `panel…/accesos` (sidebar FICTI, escáner PDA, buscar/imprimir 5×8, informes, zonas). Hardening: APIs con sesión+CSRF origen+rate limit; demo `/api/escanear` exige `X-Scan-Key`. Terror intacto.
 
 ## Hecho
-- `zz-panel.conf` (+ssl): solo Flask `eventos_panel_web` — sin locations Nest/`manager.terror`.
-- Quitado `NEST_ACCESS_BASE_URL`, iframe `/embed/access`, deep-links Nest.
-- Vista Accesos mínima: KPIs asistencias/confirmados + botón a `demo…/escanear`.
-- Deploy DO: rebuild `eventos_panel_web`, nginx sin terror proxy.
+- Quitada UI Accesos Jinja; SPA `panel/ui` profesional (IA, estados, copy ES).
+- AuthN en `/api/accesos/*` (antes filtraba como promotor sin login → **401**).
+- Demo scan key + rate limit; cookies/headers endurecidos.
+- Deploy DO: panel + demo rebuild.
 
-## Smoke
-- `panel…/login` 200
-- `panel…/embed/access` → **404 Flask** (ya no Nest)
-- `panel…/scanner` → **404 Flask**
-- `demo…/escanear` 200 (intacto)
-- `manager.terror…/scanner` 200 (intacto)
+## Smoke DO
+- `panel…/login` 200; `panel…/accesos` 200 (login redirect)
+- `api/accesos/sesion` anon → **401**
+- `demo…/api/escanear` anon/wrong key → **401**
+- `demo…/escanear` 200 (UI pide clave)
 
-## Frontera
-| Host | Rol |
-|------|-----|
-| `panel.` | FICTI ops Flask |
-| `demo.` | FICTI registro + escáner |
-| Hetzner terror | boletera Nest — aparte |
+## A medias / residual
+- Demo PDA no actualiza aforo de zonas (sí el panel escáner).
+- Sin cámara web en escáner (teclado/USB zebra).
+- Sin cola offline tipo Nest.
+- Adam debe guardar `SCAN_API_KEY` del `.env` DO en los PDA.
 
 ## No tocar
-Cutover DNS panel/demo a Hetzner; secretos; mezclar FICTI con Nest.
+Terror Hetzner; cutover DNS; secretos en git.

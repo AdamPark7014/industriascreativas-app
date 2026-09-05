@@ -13,6 +13,7 @@ export default function App() {
         <Route element={<OpsShell />}>
           <Route index element={<HubPage />} />
           <Route path="escanear" element={<EscanearPage />} />
+          <Route path="movil" element={<Navigate to="/escanear" replace />} />
           <Route path="buscar" element={<BuscarPage />} />
           <Route path="reportes" element={<ReportesPage />} />
           <Route path="zonas" element={<ZonasPage />} />

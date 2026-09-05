@@ -62,6 +62,9 @@ export default function EscanearPage() {
   const [resultado, setResultado] = useState<Resultado | null>(null)
   const [historial, setHistorial] = useState<Registro[]>([])
   const [ocupado, setOcupado] = useState(false)
+  const [scanKey, setScanKey] = useState(() => sessionStorage.getItem('ficti_scan_key') || '')
+  const [claveInput, setClaveInput] = useState('')
+  const [needsKey, setNeedsKey] = useState(() => !sessionStorage.getItem('ficti_scan_key'))
   const inputRef = useRef<HTMLInputElement>(null)
   // Evita que un lector que dispara dos veces cuente una entrada de más.
   const enVueloRef = useRef(false)
@@ -70,6 +73,7 @@ export default function EscanearPage() {
   const enfocar = useCallback(() => inputRef.current?.focus(), [])
 
   useEffect(() => {
+    if (needsKey) return
     enfocar()
     const alClic = () => {
       asegurar()
@@ -77,7 +81,7 @@ export default function EscanearPage() {
     }
     document.addEventListener('click', alClic)
     return () => document.removeEventListener('click', alClic)
-  }, [enfocar, asegurar])
+  }, [enfocar, asegurar, needsKey])
 
   const escanear = useCallback(
     async (qr: string) => {
@@ -88,9 +92,28 @@ export default function EscanearPage() {
       try {
         const res = await fetch('/api/escanear', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Scan-Key': scanKey,
+          },
           body: JSON.stringify({ qr_data: codigo, modo }),
         })
+        if (res.status === 401) {
+          sessionStorage.removeItem('ficti_scan_key')
+          setNeedsKey(true)
+          setScanKey('')
+          setResultado({
+            ok: false,
+            mensaje: 'CLAVE INVALIDA',
+            detalles: 'Vuelve a capturar la clave de escáner del equipo.',
+            pitido: 'error',
+            nombre: '',
+            tipo: '',
+            asistencias: 0,
+          })
+          sonar('error')
+          return
+        }
         const datos: Resultado = await res.json()
         setResultado(datos)
         sonar(datos.pitido)
@@ -126,8 +149,46 @@ export default function EscanearPage() {
         enfocar()
       }
     },
-    [modo, sonar, enfocar],
+    [modo, sonar, enfocar, scanKey],
   )
+
+  if (needsKey) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.card}>
+          <h2 className={styles.title}>Clave de escáner</h2>
+          <p className={styles.hint}>
+            Esta estación requiere la clave operativa del evento. No es el login
+            del panel: es la llave de puerta para el PDA.
+          </p>
+          <form
+            className={styles.form}
+            onSubmit={(e) => {
+              e.preventDefault()
+              const k = claveInput.trim()
+              if (!k) return
+              sessionStorage.setItem('ficti_scan_key', k)
+              setScanKey(k)
+              setNeedsKey(false)
+            }}
+          >
+            <input
+              className={styles.input}
+              type="password"
+              value={claveInput}
+              onChange={(e) => setClaveInput(e.target.value)}
+              placeholder="X-Scan-Key"
+              autoFocus
+              autoComplete="off"
+            />
+            <button type="submit" className={`${styles.modeBtn} ${styles.entrada}`} style={{ marginTop: 12, width: '100%' }}>
+              Continuar
+            </button>
+          </form>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={styles.page}>

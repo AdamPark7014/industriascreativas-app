@@ -1,57 +1,178 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { api, type Sesion } from '../api'
 import styles from './ops.module.scss'
 
-const NAV: { to: string; label: string; end?: boolean; ops?: boolean }[] = [
-  { to: '/', label: 'Pulso', end: true },
-  { to: '/escanear', label: 'Escáner', ops: true },
-  { to: '/buscar', label: 'Buscar / imprimir' },
-  { to: '/reportes', label: 'Informes' },
-  { to: '/zonas', label: 'Zonas' },
+type NavItem = {
+  to: string
+  label: string
+  hint: string
+  end?: boolean
+  ops?: boolean
+}
+
+const GROUPS: { titulo: string; items: NavItem[] }[] = [
+  {
+    titulo: 'General',
+    items: [
+      { to: '/', label: 'Resumen', hint: 'Pulso en vivo', end: true },
+    ],
+  },
+  {
+    titulo: 'Puerta',
+    items: [
+      { to: '/escanear', label: 'Escáner', hint: 'Entrada · salida · reingreso', ops: true },
+      { to: '/zonas', label: 'Zonas y aforo', hint: 'Capacidad por zona' },
+    ],
+  },
+  {
+    titulo: 'Acreditaciones',
+    items: [
+      { to: '/buscar', label: 'Buscar e imprimir', hint: 'Gafete 5×8' },
+      { to: '/reportes', label: 'Informes', hint: 'Historial y exportación' },
+    ],
+  },
 ]
+
+const TITULOS: Record<string, { kicker: string; titulo: string }> = {
+  '/': { kicker: 'Control de accesos', titulo: 'Resumen operativo' },
+  '/escanear': { kicker: 'Puerta', titulo: 'Estación de escaneo' },
+  '/buscar': { kicker: 'Acreditaciones', titulo: 'Buscar e imprimir gafetes' },
+  '/reportes': { kicker: 'Acreditaciones', titulo: 'Informes de acceso' },
+  '/zonas': { kicker: 'Puerta', titulo: 'Zonas y aforo' },
+}
 
 export default function OpsShell() {
   const [sesion, setSesion] = useState<Sesion | null>(null)
+  const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [menuAbierto, setMenuAbierto] = useState(false)
+  const location = useLocation()
+  const meta = TITULOS[location.pathname] ?? TITULOS['/']
 
   useEffect(() => {
     void api
       .sesion()
       .then(setSesion)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Error'))
+      .catch((e: unknown) =>
+        setError(e instanceof Error ? e.message : 'No se pudo validar la sesión'),
+      )
+      .finally(() => setCargando(false))
   }, [])
+
+  useEffect(() => {
+    setMenuAbierto(false)
+  }, [location.pathname])
+
+  const alcanceLabel =
+    sesion?.alcance === 'interno' ? 'Interno admin' : sesion?.alcance === 'promotor' ? 'Promotor' : '…'
 
   return (
     <div className={styles.app}>
-      <header className={styles.top}>
-        <a className={styles.brand} href="/">
+      <aside className={`${styles.lateral} ${menuAbierto ? styles.abierto : ''}`}>
+        <div className={styles.marca}>
           <img src="/static/img/ficti-logo.png" alt="FICTI" />
-          <span>Accesos</span>
-        </a>
-        <nav className={styles.nav}>
-          {NAV.filter((n) => !n.ops || sesion?.puedeOperar).map((n) => (
-            <NavLink
-              key={n.to}
-              to={n.to}
-              end={n.end}
-              className={({ isActive }) => (isActive ? styles.active : undefined)}
-            >
-              {n.label}
-            </NavLink>
+          <img
+            className={styles.tech}
+            src="/static/img/tech-capital-logo.png"
+            alt="Tech Capital"
+          />
+        </div>
+
+        <nav className={styles.nav} aria-label="Accesos">
+          {GROUPS.map((g) => (
+            <div key={g.titulo} className={styles.grupo}>
+              <p className={styles.navTitulo}>{g.titulo}</p>
+              {g.items
+                .filter((n) => !n.ops || sesion?.puedeOperar)
+                .map((n) => (
+                  <NavLink
+                    key={n.to}
+                    to={n.to}
+                    end={n.end}
+                    className={({ isActive }) =>
+                      `${styles.navItem} ${isActive ? styles.activo : ''}`
+                    }
+                  >
+                    <span className={styles.navLabel}>{n.label}</span>
+                    <span className={styles.navHint}>{n.hint}</span>
+                  </NavLink>
+                ))}
+            </div>
           ))}
         </nav>
-        <div className={styles.meta}>
-          {sesion ? (
+
+        <div className={styles.pie}>
+          <div className={styles.usuario}>
             <span>
-              {sesion.nombre} · {sesion.alcance}
+              Sesión: <b>{sesion?.nombre ?? (cargando ? '…' : '—')}</b>
             </span>
-          ) : null}
-          <a href="/">Panel</a>
+            <a href="/logout">Salir</a>
+          </div>
+          <a className={styles.volver} href="/">
+            ← Volver al panel de registros
+          </a>
+          <img
+            className={styles.gabor}
+            src="/static/img/gabor-logo-footer.png"
+            alt="Gabor Grupo Papelero"
+          />
         </div>
-      </header>
-      {error ? <p className={styles.error}>{error}</p> : null}
-      <Outlet context={sesion} />
+      </aside>
+
+      {menuAbierto ? (
+        <button
+          type="button"
+          className={styles.capa}
+          aria-label="Cerrar menú"
+          onClick={() => setMenuAbierto(false)}
+        />
+      ) : null}
+
+      <div className={styles.principal}>
+        <header className={styles.cabecera}>
+          <button
+            type="button"
+            className={styles.menuBtn}
+            aria-label="Menú"
+            onClick={() => setMenuAbierto((v) => !v)}
+          >
+            ≡
+          </button>
+          <div className={styles.cabeceraTexto}>
+            <p className={styles.kicker}>{meta.kicker}</p>
+            <h1 className={styles.titulo}>{meta.titulo}</h1>
+          </div>
+          <div className={styles.cabeceraAcciones}>
+            <span
+              className={`${styles.insignia} ${
+                sesion?.alcance === 'interno' ? styles.insigniaInterno : styles.insigniaPromotor
+              }`}
+            >
+              <span className={styles.insigniaPunto} />
+              {alcanceLabel}
+            </span>
+            <span className={styles.sello}>
+              <span className={styles.selloPunto} />
+              En vivo
+            </span>
+          </div>
+        </header>
+
+        {error ? (
+          <div className={styles.aviso} role="alert">
+            {error === 'sesion' || error === 'sesion_expirada'
+              ? 'Tu sesión expiró. Vuelve a iniciar sesión.'
+              : error}
+          </div>
+        ) : null}
+
+        {cargando && !sesion ? (
+          <div className={styles.cargando}>Comprobando sesión…</div>
+        ) : (
+          <Outlet context={sesion} />
+        )}
+      </div>
     </div>
   )
 }

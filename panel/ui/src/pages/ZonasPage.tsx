@@ -9,13 +9,21 @@ export default function ZonasPage() {
   const [nombre, setNombre] = useState('')
   const [clave, setClave] = useState('')
   const [aforo, setAforo] = useState('200')
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [okMsg, setOkMsg] = useState<string | null>(null)
 
-  const load = () =>
-    api
+  const load = () => {
+    setLoading(true)
+    return api
       .zonas()
-      .then((d) => setZonas(d.zonas))
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Error'))
+      .then((d) => {
+        setZonas(d.zonas)
+        setError(null)
+      })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Error al cargar zonas'))
+      .finally(() => setLoading(false))
+  }
 
   useEffect(() => {
     void load()
@@ -23,47 +31,61 @@ export default function ZonasPage() {
 
   const guardar = async () => {
     if (!sesion?.puedeOperar) return
+    setOkMsg(null)
     try {
       const data = await api.guardarZona({
-        clave,
-        nombre,
+        clave: clave.trim().toLowerCase(),
+        nombre: nombre.trim(),
         aforo: Number(aforo) || 0,
       })
       setZonas(data.zonas)
       setNombre('')
       setClave('')
+      setAforo('200')
       setError(null)
+      setOkMsg('Zona guardada.')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se guardó')
+      setError(e instanceof Error ? e.message : 'No se pudo guardar')
     }
   }
 
   return (
     <main className={styles.page}>
-      <p className={styles.kicker}>Aforo</p>
-      <h1>Zonas de acceso</h1>
-      <p className={styles.sub}>
-        ENTRADA se niega si la zona está llena. SALIDA libera un lugar y permite reingreso.
+      <p className={styles.lead}>
+        Cada escaneo de entrada suma aforo; la salida lo libera. Si la zona está
+        llena, la entrada se rechaza hasta que haya salidas.
       </p>
-      {error ? <p className={styles.err}>{error}</p> : null}
+
+      {error ? <div className={styles.alerta}>{error}</div> : null}
+      {okMsg ? <div className={styles.ok}>{okMsg}</div> : null}
+
+      {loading && !zonas.length ? <p className={styles.vacio}>Cargando zonas…</p> : null}
+
       <ul className={styles.lista}>
         {zonas.map((z) => {
           const pct = z.aforo > 0 ? Math.min(100, Math.round((z.dentro / z.aforo) * 100)) : 0
+          const llena = z.aforo > 0 && z.dentro >= z.aforo
           return (
             <li key={z.clave}>
-              <div>
-                <strong>{z.nombre}</strong>
-                <span>
-                  {z.dentro} dentro · aforo {z.aforo || 'sin tope'}
-                </span>
+              <div className={styles.cab}>
+                <div>
+                  <strong>{z.nombre}</strong>
+                  <span className={styles.clave}>{z.clave}</span>
+                </div>
+                <div className={styles.nums}>
+                  <b>{z.dentro}</b>
+                  <span>/ {z.aforo > 0 ? z.aforo : '∞'}</span>
+                  {llena ? <em>Llena</em> : null}
+                </div>
               </div>
-              <div className={styles.bar}>
-                <i style={{ width: `${pct}%` }} />
+              <div className={styles.bar} aria-hidden>
+                <i style={{ width: `${z.aforo > 0 ? pct : 0}%` }} className={llena ? styles.lleno : undefined} />
               </div>
             </li>
           )
         })}
       </ul>
+
       {sesion?.puedeOperar ? (
         <form
           className={styles.form}
@@ -72,20 +94,41 @@ export default function ZonasPage() {
             void guardar()
           }}
         >
-          <h2>Alta / ajuste</h2>
-          <input value={clave} onChange={(e) => setClave(e.target.value)} placeholder="clave (vip)" />
-          <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre" />
-          <input
-            value={aforo}
-            onChange={(e) => setAforo(e.target.value)}
-            placeholder="Aforo"
-            type="number"
-            min={0}
-          />
-          <button type="submit">Guardar</button>
+          <h2>Alta o ajuste de zona</h2>
+          <div className={styles.grid}>
+            <label>
+              Clave
+              <input
+                value={clave}
+                onChange={(e) => setClave(e.target.value)}
+                placeholder="vip"
+                required
+                pattern="[a-z0-9_-]+"
+              />
+            </label>
+            <label>
+              Nombre visible
+              <input
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                placeholder="VIP"
+                required
+              />
+            </label>
+            <label>
+              Aforo (0 = sin tope)
+              <input
+                value={aforo}
+                onChange={(e) => setAforo(e.target.value)}
+                type="number"
+                min={0}
+              />
+            </label>
+          </div>
+          <button type="submit">Guardar zona</button>
         </form>
       ) : (
-        <p className={styles.sub}>Solo internos pueden cambiar aforos.</p>
+        <p className={styles.nota}>Tu rol de promotor puede consultar aforo, no modificarlo.</p>
       )}
     </main>
   )

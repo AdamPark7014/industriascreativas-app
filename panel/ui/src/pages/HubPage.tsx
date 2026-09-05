@@ -7,84 +7,129 @@ export default function HubPage() {
   const sesion = useOutletContext<Sesion | null>()
   const [data, setData] = useState<Resumen | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    void api
-      .resumen()
-      .then(setData)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Error'))
+    let vivo = true
+    const cargar = () =>
+      api
+        .resumen()
+        .then((d) => {
+          if (vivo) {
+            setData(d)
+            setError(null)
+          }
+        })
+        .catch((e: unknown) => {
+          if (vivo) setError(e instanceof Error ? e.message : 'No se pudo cargar el resumen')
+        })
+        .finally(() => {
+          if (vivo) setLoading(false)
+        })
+
+    void cargar()
+    const id = window.setInterval(() => void cargar(), 15000)
+    return () => {
+      vivo = false
+      window.clearInterval(id)
+    }
   }, [])
 
   return (
     <main className={styles.page}>
-      <header>
-        <p className={styles.kicker}>Control de accesos · FICTI</p>
-        <h1>Pulso de puerta</h1>
-        <p className={styles.sub}>
-          Entrada, salida y reingreso sobre los registros de demo. Casa del
-          Terror (Hetzner) no entra aquí.
-        </p>
-      </header>
+      <p className={styles.lead}>
+        Operación de puerta del evento FICTI / Tech Capital. Entrada, salida y
+        reingreso sobre los registros confirmados.
+      </p>
 
-      {error ? <p className={styles.err}>{error}</p> : null}
+      {error ? <div className={styles.alerta}>{error}</div> : null}
 
-      <section className={styles.kpis} aria-label="Hoy">
-        <Kpi label="Dentro ahora" value={data?.dentro} />
-        <Kpi label="Entradas hoy" value={data?.entradasHoy} />
-        <Kpi label="Salidas hoy" value={data?.salidasHoy} />
-        <Kpi label="Rechazos hoy" value={data?.rechazosHoy} />
-        <Kpi label="Confirmados" value={data?.confirmados} />
+      <section className={styles.kpis} aria-label="Indicadores de hoy">
+        <Kpi label="Personas dentro" value={data?.dentro} loading={loading} accent="navy" />
+        <Kpi label="Entradas hoy" value={data?.entradasHoy} loading={loading} />
+        <Kpi label="Salidas hoy" value={data?.salidasHoy} loading={loading} />
+        <Kpi label="Rechazos hoy" value={data?.rechazosHoy} loading={loading} accent="warn" />
+        <Kpi label="Registros confirmados" value={data?.confirmados} loading={loading} />
       </section>
 
-      <section className={styles.cards}>
+      <section className={styles.modulos} aria-label="Módulos">
         {sesion?.puedeOperar ? (
-          <Link className={styles.card} to="/escanear">
-            <strong>Escáner</strong>
-            <span>PDA / USB. ENTRADA, SALIDA y reingreso.</span>
+          <Link className={styles.modulo} to="/escanear">
+            <span className={styles.moduloTag}>Puerta</span>
+            <strong>Escáner de acceso</strong>
+            <span>Estación PDA o USB. Entrada, salida y reingreso controlado.</span>
           </Link>
         ) : (
-          <div className={styles.cardMuted}>
-            <strong>Escáner</strong>
-            <span>Solo operación interna. Tú ves informes.</span>
+          <div className={`${styles.modulo} ${styles.moduloOff}`}>
+            <span className={styles.moduloTag}>Puerta</span>
+            <strong>Escáner de acceso</strong>
+            <span>Reservado a operación interna. Tu rol ve informes y búsqueda.</span>
           </div>
         )}
-        <Link className={styles.card} to="/buscar">
+        <Link className={styles.modulo} to="/buscar">
+          <span className={styles.moduloTag}>Acreditación</span>
           <strong>Buscar e imprimir</strong>
-          <span>Gafete 5×8: nombre + QR.</span>
+          <span>Localiza por nombre, correo o folio e imprime gafete 5×8.</span>
         </Link>
-        <Link className={styles.card} to="/reportes">
+        <Link className={styles.modulo} to="/reportes">
+          <span className={styles.moduloTag}>Análisis</span>
           <strong>Informes</strong>
-          <span>Historial, CSV y Excel.</span>
+          <span>Historial de escaneos con filtros, CSV y Excel.</span>
         </Link>
-        <Link className={styles.card} to="/zonas">
-          <strong>Zonas y aforo</strong>
-          <span>Acreditación y VIP.</span>
+        <Link className={styles.modulo} to="/zonas">
+          <span className={styles.moduloTag}>Aforo</span>
+          <strong>Zonas</strong>
+          <span>Acreditación y VIP con tope de capacidad.</span>
         </Link>
       </section>
 
-      <section>
-        <h2>Últimos escaneos</h2>
-        <ul className={styles.lista}>
-          {(data?.recientes ?? []).map((r) => (
-            <li key={r.id} className={r.ok ? styles.ok : styles.mal}>
-              <span>{new Date(r.creado).toLocaleTimeString('es-MX')}</span>
-              <span>{r.nombre || '—'}</span>
-              <span>{r.modo}</span>
-              <span>{r.ok ? 'ok' : 'no'}</span>
-            </li>
-          ))}
-          {!data?.recientes?.length ? <li className={styles.vacio}>Sin movimiento aún.</li> : null}
-        </ul>
+      <section className={styles.tarjeta}>
+        <div className={styles.tarjetaCab}>
+          <h2>Actividad reciente</h2>
+          <p>Últimos escaneos registrados en panel y demo.</p>
+        </div>
+        {loading && !data ? (
+          <p className={styles.vacio}>Cargando actividad…</p>
+        ) : !data?.recientes?.length ? (
+          <p className={styles.vacio}>Todavía no hay escaneos. Abre el escáner cuando la puerta esté lista.</p>
+        ) : (
+          <ul className={styles.lista}>
+            {data.recientes.map((r) => (
+              <li key={r.id} className={r.ok ? styles.ok : styles.mal}>
+                <time dateTime={r.creado}>
+                  {new Date(r.creado).toLocaleTimeString('es-MX', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                  })}
+                </time>
+                <span className={styles.nombre}>{r.nombre || 'Código no reconocido'}</span>
+                <span className={styles.modo}>{r.modo}</span>
+                <span className={styles.estado}>{r.ok ? 'Aceptado' : 'Rechazado'}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </main>
   )
 }
 
-function Kpi({ label, value }: { label: string; value?: number }) {
+function Kpi({
+  label,
+  value,
+  loading,
+  accent,
+}: {
+  label: string
+  value?: number
+  loading?: boolean
+  accent?: 'navy' | 'warn'
+}) {
   return (
-    <div className={styles.kpi}>
+    <article className={`${styles.kpi} ${accent === 'navy' ? styles.kpiNavy : ''} ${accent === 'warn' ? styles.kpiWarn : ''}`}>
       <span>{label}</span>
-      <strong>{value == null ? '—' : value}</strong>
-    </div>
+      <strong>{loading && value == null ? '…' : value == null ? '—' : value.toLocaleString('es-MX')}</strong>
+    </article>
   )
 }
