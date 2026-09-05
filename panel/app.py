@@ -13,13 +13,16 @@ from datetime import datetime, timedelta
 from functools import wraps
 from zoneinfo import ZoneInfo
 
+from pathlib import Path
+
 from flask import (
     Flask, Response, flash, jsonify, redirect, render_template, request,
-    session, url_for,
+    send_from_directory, session, url_for,
 )
 from sqlalchemy import text
 from werkzeug.security import check_password_hash
 
+import accesos
 import consultas
 import exportar
 from db import CacheCorto, ErrorBaseDatos, conexion, estado
@@ -31,6 +34,8 @@ log = logging.getLogger("panel")
 TZ = ZoneInfo("America/Mexico_City")
 
 app = Flask(__name__)
+app.register_blueprint(accesos.bp)
+UI_DIST = Path(__file__).resolve().parent / "ui" / "dist"
 app.config["SECRET_KEY"] = os.getenv("PANEL_SECRET_KEY", os.urandom(32).hex())
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
@@ -243,6 +248,32 @@ def api_exportar(tipo=None):
             "Cache-Control": "no-store",
         },
     )
+
+
+@app.route("/accesos")
+@app.route("/accesos/")
+@login_requerido
+def accesos_spa_raiz():
+    index = UI_DIST / "index.html"
+    if not index.is_file():
+        return jsonify(ok=False, error="spa_ausente"), 503
+    return send_from_directory(UI_DIST, "index.html")
+
+
+@app.route("/accesos/<path:resto>")
+@login_requerido
+def accesos_spa(resto):
+    destino = (UI_DIST / resto).resolve()
+    try:
+        destino.relative_to(UI_DIST.resolve())
+    except ValueError:
+        return jsonify(ok=False, error="ruta"), 400
+    if destino.is_file():
+        return send_from_directory(UI_DIST, resto)
+    index = UI_DIST / "index.html"
+    if not index.is_file():
+        return jsonify(ok=False, error="spa_ausente"), 503
+    return send_from_directory(UI_DIST, "index.html")
 
 
 @app.route("/health")

@@ -368,15 +368,7 @@
   const TITULOS = {
     resumen: ['Panel de control', 'Resumen del evento'],
     analisis: ['Panel de control', 'Análisis de registros'],
-    accesos: ['Control de accesos', 'Escáner y asistencias FICTI'],
   };
-
-  function pintarAccesos(d) {
-    const asis = $('accesosAsistencias');
-    const conf = $('accesosConfirmados');
-    if (asis) asis.textContent = d && d.asistencias != null ? String(d.asistencias) : '—';
-    if (conf) conf.textContent = d && d.confirmados != null ? String(d.confirmados) : '—';
-  }
 
   function irA(vista) {
     const esTipo = TIPOS.includes(vista);
@@ -403,12 +395,6 @@
       const [k, t] = TITULOS[vista] || ['Panel de control', vista];
       $('vistaKicker').textContent = k;
       $('vistaTitulo').textContent = t;
-      if (vista === 'accesos') {
-        fetch('/api/resumen')
-          .then((r) => (r.ok ? r.json() : null))
-          .then((d) => pintarAccesos(d))
-          .catch(() => pintarAccesos(null));
-      }
     }
     $('lateral').classList.remove('abierto');
   }
@@ -443,8 +429,14 @@
     const barra = document.createElement('nav');
     barra.className = 'navInferior';
     barra.innerHTML = '<div class="navInferiorLista">' + fuente.map((b) => {
+      const corta = b.dataset.corto || b.dataset.label || b.dataset.vista;
+      if (b.tagName === 'A') {
+        return `<a href="${esc(b.getAttribute('href') || '/')}">
+          <span class="ni" aria-hidden="true">${ICONOS.accesos}</span>
+          <span>${esc(corta)}</span>
+        </a>`;
+      }
       const v = b.dataset.vista;
-      const corta = b.dataset.corto || b.dataset.label || v;
       return `<button data-vista="${v}">
         <span class="ni" aria-hidden="true">${ICONOS[v] || '●'}</span>
         <span>${esc(corta)}</span>
@@ -465,8 +457,10 @@
   }
 
   // -------------------------------------------------------------- eventos
-  document.querySelectorAll('.lateral .navItem').forEach((b) =>
-    b.addEventListener('click', () => irA(b.dataset.vista)));
+  document.querySelectorAll('.lateral .navItem').forEach((b) => {
+    if (b.tagName === 'A') return;
+    b.addEventListener('click', () => irA(b.dataset.vista));
+  });
 
   document.querySelectorAll('[data-vista-jump]').forEach((b) =>
     b.addEventListener('click', () => irA(b.dataset.vistaJump)));

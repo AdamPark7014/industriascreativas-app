@@ -1,0 +1,85 @@
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 28px 20px 48px;
+}
+
+.kicker {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #5b6b82;
+  font-weight: 700;
+}
+
+.kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 14px 0;
+  span {
+    padding: 8px 12px;
+    background: #fff;
+    border: 1px solid #d5deea;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+}
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+
+  input,
+  select,
+  button {
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid #b7c4d8;
+    background: #fff;
+  }
+
+  button {
+    background: #071a3a;
+    color: #fff;
+    border: none;
+    font-weight: 700;
+    cursor: pointer;
+  }
+}
+
+.err {
+  color: #c62828;
+}
+
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  font-size: 0.88rem;
+
+  th,
+  td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid #e8eef6;
+  }
+
+  th {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #5b6b82;
+  }
+}
+
+.ok {
+  color: #1b7a45;
+}
+.mal {
+  color: #c62828;
+}

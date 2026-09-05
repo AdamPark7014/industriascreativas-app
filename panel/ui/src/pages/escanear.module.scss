@@ -1,0 +1,168 @@
+.page {
+  min-height: calc(100vh - 56px);
+  padding: 24px 16px 40px;
+  background: #050b1c;
+  color: #fff;
+}
+
+.card {
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 22px 18px;
+  background: #0a1428;
+  border: 1px solid #1b2b4d;
+  border-radius: 16px;
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+  text-align: center;
+}
+
+.hintReingreso {
+  margin: 0 0 14px;
+  font-size: 0.78rem;
+  color: #93a6c4;
+  text-align: center;
+}
+
+.modes {
+  display: flex;
+  gap: 10px;
+}
+
+.entrada,
+.salida {
+  flex: 1;
+  padding: 14px 10px;
+  border-radius: 11px;
+  border: 1.5px solid transparent;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.entrada {
+  background: #35d95c;
+  color: #050b1c;
+}
+
+.salida {
+  background: #ec1e63;
+  color: #fff;
+}
+
+.inactive {
+  background: transparent;
+  &.entrada {
+    color: #35d95c;
+    border-color: #35d95c;
+  }
+  &.salida {
+    color: #ec1e63;
+    border-color: #ec1e63;
+  }
+}
+
+.zonas {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.zona,
+.zonaOn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid #1b2b4d;
+  background: transparent;
+  color: #93a6c4;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.82rem;
+
+  small {
+    font-weight: 600;
+    opacity: 0.8;
+  }
+}
+
+.zonaOn {
+  border-color: #12b5b0;
+  color: #fff;
+  background: rgba(18, 181, 176, 0.12);
+}
+
+.input {
+  width: 100%;
+  margin-top: 14px;
+  padding: 14px 12px;
+  border-radius: 11px;
+  border: 1.5px solid #1b2b4d;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-size: 1.15rem;
+  text-align: center;
+  outline: none;
+}
+
+.hint {
+  margin: 10px 0 0;
+  font-size: 0.8rem;
+  color: #6b80a3;
+  text-align: center;
+}
+
+.resultado {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1.5px solid;
+  text-align: center;
+}
+
+.exito {
+  border-color: #35d95c;
+  background: rgba(53, 217, 92, 0.12);
+}
+
+.fallo {
+  border-color: #ec1e63;
+  background: rgba(236, 30, 99, 0.12);
+}
+
+.conteo {
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.historial {
+  max-width: 440px;
+  margin: 18px auto 0;
+  padding: 0;
+  list-style: none;
+}
+
+.historial li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  padding: 8px 4px;
+  font-size: 0.85rem;
+  border-bottom: 1px solid #1b2b4d;
+}
+
+.filaOk span:last-child {
+  color: #35d95c;
+}
+.filaMal span:last-child {
+  color: #ec1e63;
+}

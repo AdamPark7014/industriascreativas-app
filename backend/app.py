@@ -1280,16 +1280,45 @@ def buscar_asistente(qr_data):
     return None, ""
 
 
+_TIPO_A_CLAVE = {
+    'Empresario': 'empresas',
+    'Alumno': 'estudiantes',
+    'Elisa Carrillo': 'elisa',
+}
+
+
+def _log_acceso_demo(tipo_clave, registro_id, nombre, modo, ok, mensaje, zona='acreditacion'):
+    """Escribe el mismo historial que lee el panel React Accesos (si existe)."""
+    try:
+        db.session.execute(text('''
+            INSERT INTO accesos_escaneos
+                (tipo, registro_id, nombre, modo, ok, mensaje, zona_clave, origen)
+            VALUES
+                (:tipo, :rid, :nombre, :modo, :ok, :mensaje, :zona, 'demo')
+        '''), {
+            'tipo': tipo_clave or 'desconocido',
+            'rid': registro_id or 0,
+            'nombre': (nombre or '')[:200],
+            'modo': modo,
+            'ok': ok,
+            'mensaje': (mensaje or '')[:160],
+            'zona': zona,
+        })
+    except Exception as exc:
+        print(f'aviso accesos_escaneos: {exc}')
+
+
 def procesar_escaneo(qr_data, modo):
     """Aplica el escaneo y devuelve un dict con el resultado.
 
     La comparten la ruta de formulario y la de JSON, para que el escáner por
     AJAX y el POST clásico no puedan divergir de comportamiento.
+    Reingreso: SALIDA baja asistencias; ENTRADA exige asistencias == 0.
     """
     asistente, tipo_usuario = buscar_asistente(qr_data)
 
     if not asistente:
-        return {
+        res = {
             'ok': False,
             'mensaje': '❌ ACCESO DENEGADO',
             'detalles': f'El ID "{qr_data}" no se encuentra registrado.',
@@ -1298,13 +1327,25 @@ def procesar_escaneo(qr_data, modo):
             'tipo': '',
             'asistencias': 0,
         }
+        _log_acceso_demo(None, 0, '', modo, False, res['mensaje'])
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        return res
 
     nombre = f"{asistente.Nombre} {getattr(asistente, 'ApellidoPaterno', '') or ''}".strip()
     asistencias_actuales = getattr(asistente, 'asistencias', 0) or 0
+    tipo_clave = _TIPO_A_CLAVE.get(tipo_usuario, 'desconocido')
+    registro_id = getattr(
+        asistente,
+        'idEmpresario',
+        getattr(asistente, 'idAlumno', getattr(asistente, 'idUsuario', 0)),
+    )
 
     if modo == 'salida':
         if asistencias_actuales <= 0:
-            return {
+            res = {
                 'ok': False,
                 'mensaje': '⚠️ SALIDA DENEGADA',
                 'detalles': f'{nombre} no registra entradas activas.',
@@ -1313,32 +1354,39 @@ def procesar_escaneo(qr_data, modo):
                 'tipo': tipo_usuario,
                 'asistencias': asistencias_actuales,
             }
+            _log_acceso_demo(tipo_clave, registro_id, nombre, modo, False, res['mensaje'])
+            db.session.commit()
+            return res
         asistente.asistencias = asistencias_actuales - 1
-        db.session.commit()
-        return {
+        res = {
             'ok': True,
             'mensaje': '🚪 SALIDA REGISTRADA',
-            'detalles': f'{nombre} ({tipo_usuario})',
+            'detalles': f'{nombre} ({tipo_usuario}). Puede reingresar con ENTRADA.',
             'pitido': 'exito',
             'nombre': nombre,
             'tipo': tipo_usuario,
             'asistencias': asistente.asistencias,
         }
+        _log_acceso_demo(tipo_clave, registro_id, nombre, modo, True, res['mensaje'])
+        db.session.commit()
+        return res
 
     if asistencias_actuales >= 1:
-        return {
+        res = {
             'ok': False,
-            'mensaje': '❌ LÍMITE ALCANZADO',
-            'detalles': f'{nombre} ya ingresó {asistencias_actuales}/1 veces.',
+            'mensaje': '❌ YA DENTRO',
+            'detalles': f'{nombre} ya ingresó. Escanea SALIDA antes del reingreso.',
             'pitido': 'error',
             'nombre': nombre,
             'tipo': tipo_usuario,
             'asistencias': asistencias_actuales,
         }
+        _log_acceso_demo(tipo_clave, registro_id, nombre, modo, False, res['mensaje'])
+        db.session.commit()
+        return res
 
     asistente.asistencias = asistencias_actuales + 1
-    db.session.commit()
-    return {
+    res = {
         'ok': True,
         'mensaje': '✅ ENTRADA REGISTRADA',
         'detalles': f'{nombre} ({tipo_usuario})',
@@ -1347,6 +1395,9 @@ def procesar_escaneo(qr_data, modo):
         'tipo': tipo_usuario,
         'asistencias': asistente.asistencias,
     }
+    _log_acceso_demo(tipo_clave, registro_id, nombre, modo, True, res['mensaje'])
+    db.session.commit()
+    return res
 
 
 @app.route('/api/escanear', methods=['POST'])

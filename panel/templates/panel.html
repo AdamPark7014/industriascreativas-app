@@ -32,10 +32,10 @@
       </button>
 
       <p class="navTitulo">Control de accesos</p>
-      <button class="navItem" data-vista="accesos"
-              data-label="Accesos" data-corto="Accesos">
+      <a class="navItem" href="/accesos"
+         data-label="Accesos" data-corto="Accesos">
         <span class="navIcono" aria-hidden="true">▣</span> Accesos
-      </button>
+      </a>
 
       <p class="navTitulo">Registros</p>
       {# Solo las tablas del alcance del usuario. #}
@@ -179,46 +179,6 @@
             <div class="tarjetaCuerpo" id="rk-posiciones"></div>
           </article>
         </div>
-      </section>
-
-      <!-- Accesos FICTI nativo (DO) — usa escáner/asistencias del registro demo -->
-      <section class="vista" id="vista-accesos">
-        <article class="tarjeta accesosTarjeta">
-          <div class="tarjetaCab">
-            <h2 class="tarjetaTitulo">Control de accesos · FICTI</h2>
-            <p class="tarjetaSub">
-              Operación de puerta del evento FICTI / Tech Capital. Vive en este
-              panel y en el registro <code>demo</code> (DigitalOcean). No usa
-              Nest ni Hetzner.
-            </p>
-          </div>
-          <div class="tarjetaCuerpo accesosCuerpo">
-            <div class="accesosKpis" id="accesosKpis" aria-live="polite">
-              <div class="accesosKpi">
-                <span class="accesosKpiLabel">Asistencias escaneadas</span>
-                <strong class="accesosKpiVal" id="accesosAsistencias">—</strong>
-              </div>
-              <div class="accesosKpi">
-                <span class="accesosKpiLabel">Registros confirmados</span>
-                <strong class="accesosKpiVal" id="accesosConfirmados">—</strong>
-              </div>
-            </div>
-            <div class="accesosAcciones">
-              <a class="btn btnPrimario"
-                 href="https://demo.experiencebt.com.mx/escanear"
-                 target="_blank" rel="noopener">
-                Abrir escáner de gafetes
-              </a>
-              <button type="button" class="btn" data-vista-jump="resumen">Ver resumen</button>
-            </div>
-            <p class="accesosHint">
-              El escáner (<code>/escanear</code>) y el contador de
-              <strong>asistencias</strong> ya existen en el backend de registro
-              demo. Las tablas de Registros muestran la columna Asist. por
-              persona. Casa del Terror / boletera Nest es otro producto.
-            </p>
-          </div>
-        </article>
       </section>
 
       <!-- Registros (una sola vista reutilizada por tipo) -->

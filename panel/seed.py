@@ -14,6 +14,8 @@ Alcances (ver consultas.ALCANCES):
 import os
 import sys
 
+from pathlib import Path
+
 from sqlalchemy import create_engine, text
 from werkzeug.security import generate_password_hash
 
@@ -66,6 +68,25 @@ def _configurados() -> list:
     return [u for u in definidos if u["usuario"] and u["clave"]]
 
 
+def _sql_statements(sql: str) -> list[str]:
+    """Parte un .sql en sentencias (el driver no acepta varias a la vez)."""
+    out = []
+    buf = []
+    for linea in sql.splitlines():
+        if linea.strip().startswith("--"):
+            continue
+        buf.append(linea)
+        if linea.rstrip().endswith(";"):
+            stmt = "\n".join(buf).strip().rstrip(";")
+            if stmt:
+                out.append(stmt)
+            buf = []
+    resto = "\n".join(buf).strip().rstrip(";")
+    if resto:
+        out.append(resto)
+    return out
+
+
 def main() -> int:
     url = os.getenv("DATABASE_URL", "")
     if not url:
@@ -81,6 +102,10 @@ def main() -> int:
     with engine.begin() as con:
         con.execute(text(DDL))
         con.execute(text(MIGRACION))
+        sql_accesos = Path(__file__).resolve().parent / "migraciones" / "002_accesos.sql"
+        if sql_accesos.exists():
+            for stmt in _sql_statements(sql_accesos.read_text(encoding="utf-8")):
+                con.execute(text(stmt))
 
         for u in usuarios:
             creado = con.execute(text(UPSERT), {

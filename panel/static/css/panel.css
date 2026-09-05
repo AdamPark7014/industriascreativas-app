@@ -93,6 +93,7 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 0.9rem;
   font-weight: 600;
   text-align: left;
+  text-decoration: none;
   transition: background 0.15s ease, color 0.15s ease;
 }
 .navItem:hover { background: rgba(255, 255, 255, 0.09); color: #fff; }
@@ -534,12 +535,14 @@ button { font-family: inherit; cursor: pointer; }
   box-shadow: 0 -4px 20px rgba(7, 26, 58, 0.08);
 }
 .navInferiorLista { display: flex; }
-.navInferior button {
+.navInferior button,
+.navInferior a {
   flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
   padding: 9px 4px 8px; border: none; background: none;
   font-size: 0.66rem; font-weight: 700; color: var(--text-muted);
   -webkit-tap-highlight-color: transparent;
   min-height: 54px;
+  text-decoration: none;
 }
 .navInferior button .ni { font-size: 1.05rem; line-height: 1; }
 .navInferior button .nc {
@@ -711,43 +714,3 @@ button { font-family: inherit; cursor: pointer; }
   background: #fdeaea; border: 1px solid #f3c6c6; color: var(--error);
 }
 .loginPie { margin-top: 20px; text-align: center; font-size: 0.75rem; color: var(--text-muted); }
-
-/* ======================================================= Accesos FICTI (nativo) */
-.accesosCuerpo { display: grid; gap: 14px; }
-.accesosKpis {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 10px;
-}
-.accesosKpi {
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface-2, #f6f7f9);
-}
-.accesosKpiLabel {
-  display: block;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  margin-bottom: 4px;
-}
-.accesosKpiVal {
-  font-size: 1.45rem;
-  font-weight: 700;
-  color: var(--navy);
-}
-.accesosAcciones { display: flex; flex-wrap: wrap; gap: 8px; }
-.accesosAcciones .btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 9px 14px; border-radius: 10px;
-  border: 1px solid var(--border-strong); background: var(--card);
-  color: var(--navy); font-size: 0.84rem; font-weight: 600; text-decoration: none;
-  cursor: pointer; font-family: inherit;
-}
-.accesosAcciones .btn:hover { background: var(--surface-2); }
-.accesosAcciones .btnPrimario {
-  background: var(--navy); color: #fff; border-color: var(--navy);
-}
-.accesosAcciones .btnPrimario:hover { background: var(--navy-mid); }
-.accesosHint { margin: 0; font-size: 0.8rem; color: var(--text-muted); line-height: 1.45; }
-.accesosHint code { font-size: 0.78rem; }

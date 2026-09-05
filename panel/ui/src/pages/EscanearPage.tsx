@@ -1,34 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import styles from '../styles/escanear.module.scss'
+import { Navigate, useOutletContext } from 'react-router-dom'
+import { api, type ScanResult, type Sesion, type Zona } from '../api'
+import styles from './escanear.module.scss'
 
 type Modo = 'entrada' | 'salida'
 
-type Resultado = {
-  ok: boolean
-  mensaje: string
-  detalles: string
-  pitido: 'exito' | 'error'
-  nombre: string
-  tipo: string
-  asistencias: number
-}
-
-type Registro = Resultado & { clave: number; hora: string }
-
-/** El AudioContext solo arranca tras un gesto del usuario: se crea una vez y
- *  se reutiliza, porque instanciarlo en cada escaneo introduce latencia. */
 function usePitido() {
   const ctxRef = useRef<AudioContext | null>(null)
-
   const asegurar = useCallback(() => {
     if (!ctxRef.current) {
-      const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+      const Ctor =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
       if (Ctor) ctxRef.current = new Ctor()
     }
     if (ctxRef.current?.state === 'suspended') void ctxRef.current.resume()
     return ctxRef.current
   }, [])
-
   const sonar = useCallback(
     (tipo: 'exito' | 'error') => {
       const ctx = asegurar()
@@ -53,21 +41,28 @@ function usePitido() {
     },
     [asegurar],
   )
-
   return { sonar, asegurar }
 }
 
 export default function EscanearPage() {
+  const sesion = useOutletContext<Sesion | null>()
   const [modo, setModo] = useState<Modo>('entrada')
-  const [resultado, setResultado] = useState<Resultado | null>(null)
-  const [historial, setHistorial] = useState<Registro[]>([])
+  const [zonas, setZonas] = useState<Zona[]>([])
+  const [zona, setZona] = useState('acreditacion')
+  const [resultado, setResultado] = useState<ScanResult | null>(null)
+  const [historial, setHistorial] = useState<(ScanResult & { clave: number; hora: string })[]>([])
   const [ocupado, setOcupado] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  // Evita que un lector que dispara dos veces cuente una entrada de más.
-  const enVueloRef = useRef(false)
+  const enVuelo = useRef(false)
   const { sonar, asegurar } = usePitido()
-
   const enfocar = useCallback(() => inputRef.current?.focus(), [])
+
+  useEffect(() => {
+    void api.zonas().then((d) => {
+      setZonas(d.zonas.filter((z) => z.activo))
+      if (d.zonas[0]) setZona(d.zonas[0].clave)
+    })
+  }, [])
 
   useEffect(() => {
     enfocar()
@@ -82,65 +77,61 @@ export default function EscanearPage() {
   const escanear = useCallback(
     async (qr: string) => {
       const codigo = qr.trim()
-      if (!codigo || enVueloRef.current) return
-      enVueloRef.current = true
+      if (!codigo || enVuelo.current) return
+      enVuelo.current = true
       setOcupado(true)
       try {
-        const res = await fetch('/api/escanear', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ qr_data: codigo, modo }),
-        })
-        const datos: Resultado = await res.json()
+        const datos = await api.escanear(codigo, modo, zona)
         setResultado(datos)
         sonar(datos.pitido)
-        setHistorial((previo) =>
+        setHistorial((prev) =>
           [
             {
               ...datos,
-              clave: previo.length ? previo[0].clave + 1 : 1,
-              hora: new Date().toLocaleTimeString('es-MX', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-              }),
+              clave: prev.length ? prev[0].clave + 1 : 1,
+              hora: new Date().toLocaleTimeString('es-MX'),
             },
-            ...previo,
+            ...prev,
           ].slice(0, 8),
         )
-      } catch {
-        setResultado({
+      } catch (e) {
+        const fail: ScanResult = {
           ok: false,
-          mensaje: '⚠️ SIN CONEXIÓN',
-          detalles: 'No se pudo contactar al servidor. Revisa la red e inténtalo otra vez.',
+          mensaje: 'SIN CONEXIÓN',
+          detalles: e instanceof Error ? e.message : 'Error',
           pitido: 'error',
           nombre: '',
           tipo: '',
           asistencias: 0,
-        })
+          dentro: false,
+        }
+        setResultado(fail)
         sonar('error')
       } finally {
-        enVueloRef.current = false
+        enVuelo.current = false
         setOcupado(false)
         if (inputRef.current) inputRef.current.value = ''
         enfocar()
       }
     },
-    [modo, sonar, enfocar],
+    [modo, zona, sonar, enfocar],
   )
+
+  if (sesion && !sesion.puedeOperar) {
+    return <Navigate to="/reportes" replace />
+  }
 
   return (
     <div className={styles.page}>
       <div className={styles.card}>
-        <h2 className={styles.title}>Control de acceso</h2>
-        <p className={styles.hint}>
-          Reingreso: primero SALIDA, después ENTRADA. Sin salida se rechaza la segunda entrada.
+        <h1>Escáner de accesos</h1>
+        <p className={styles.hintReingreso}>
+          Reingreso: SALIDA y después ENTRADA. Sin salida, la segunda entrada se rechaza.
         </p>
-
         <div className={styles.modes}>
           <button
             type="button"
-            className={`${styles.modeBtn} ${styles.entrada}${modo === 'entrada' ? '' : ` ${styles.inactive}`}`}
+            className={`${styles.entrada} ${modo === 'entrada' ? '' : styles.inactive}`}
             onClick={() => {
               setModo('entrada')
               enfocar()
@@ -150,7 +141,7 @@ export default function EscanearPage() {
           </button>
           <button
             type="button"
-            className={`${styles.modeBtn} ${styles.salida}${modo === 'salida' ? '' : ` ${styles.inactive}`}`}
+            className={`${styles.salida} ${modo === 'salida' ? '' : styles.inactive}`}
             onClick={() => {
               setModo('salida')
               enfocar()
@@ -159,9 +150,27 @@ export default function EscanearPage() {
             SALIDA
           </button>
         </div>
-
+        {zonas.length ? (
+          <div className={styles.zonas}>
+            {zonas.map((z) => (
+              <button
+                key={z.clave}
+                type="button"
+                className={zona === z.clave ? styles.zonaOn : styles.zona}
+                onClick={() => {
+                  setZona(z.clave)
+                  enfocar()
+                }}
+              >
+                {z.nombre}
+                <small>
+                  {z.dentro}/{z.aforo || '∞'}
+                </small>
+              </button>
+            ))}
+          </div>
+        ) : null}
         <form
-          className={styles.form}
           onSubmit={(e) => {
             e.preventDefault()
             void escanear(inputRef.current?.value ?? '')
@@ -171,15 +180,10 @@ export default function EscanearPage() {
             ref={inputRef}
             className={styles.input}
             type="text"
-            name="qr_data"
-            id="qr_input"
             placeholder="Escanea el QR…"
             autoFocus
             autoComplete="off"
             inputMode="none"
-            // El lector actúa como teclado y cierra con Enter. La sumisión
-            // implícita del formulario no es de fiar sin botón de submit, y si
-            // falla el escáner entero deja de responder: se captura la tecla.
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault()
@@ -188,37 +192,29 @@ export default function EscanearPage() {
             }}
           />
         </form>
-
         <p className={styles.hint}>
-          {ocupado ? 'Registrando…' : 'Listo para escanear. El cursor vuelve solo al campo.'}
+          {ocupado ? 'Registrando…' : 'Listo. El cursor vuelve al campo solo.'}
         </p>
-
         {resultado ? (
           <div className={`${styles.resultado} ${resultado.ok ? styles.exito : styles.fallo}`}>
             <strong>{resultado.mensaje}</strong>
             <span>{resultado.detalles}</span>
-            {resultado.ok ? (
-              <span className={styles.conteo}>
-                {modo === 'salida' ? 'Entradas activas' : 'Entradas'}: {resultado.asistencias}/1
-              </span>
-            ) : null}
+            <span className={styles.conteo}>
+              {modo === 'salida' ? 'Dentro' : 'Entradas'}: {resultado.asistencias}/1
+            </span>
           </div>
         ) : null}
       </div>
-
       {historial.length ? (
-        <div className={styles.historial}>
-          <h3>Últimos escaneos</h3>
-          <ul>
-            {historial.map((r) => (
-              <li key={r.clave} className={r.ok ? styles.filaOk : styles.filaMal}>
-                <span className={styles.hora}>{r.hora}</span>
-                <span className={styles.quien}>{r.nombre || r.detalles}</span>
-                <span className={styles.marca}>{r.ok ? '✓' : '✕'}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ul className={styles.historial}>
+          {historial.map((r) => (
+            <li key={r.clave} className={r.ok ? styles.filaOk : styles.filaMal}>
+              <span>{r.hora}</span>
+              <span>{r.nombre || r.detalles}</span>
+              <span>{r.ok ? '✓' : '✕'}</span>
+            </li>
+          ))}
+        </ul>
       ) : null}
     </div>
   )

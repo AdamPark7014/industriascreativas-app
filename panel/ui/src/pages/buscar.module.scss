@@ -1,0 +1,93 @@
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 28px 20px 48px;
+}
+
+.kicker {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #5b6b82;
+  font-weight: 700;
+}
+
+h1 {
+  margin: 4px 0 0;
+}
+
+.sub {
+  color: #5b6b82;
+}
+
+.bar {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.bar input,
+.bar select {
+  padding: 12px 14px;
+  border: 1px solid #b7c4d8;
+  border-radius: 10px;
+  font-size: 1rem;
+}
+
+.bar input {
+  flex: 1;
+}
+
+.meta {
+  color: #5b6b82;
+}
+.err {
+  color: #c62828;
+}
+.ok {
+  color: #1b7a45;
+}
+
+.lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #d5deea;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.lista li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e8eef6;
+
+  span {
+    display: block;
+    font-size: 0.8rem;
+    color: #5b6b82;
+  }
+
+  button {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 8px;
+    background: #071a3a;
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+  }
+}
+
+.on {
+  background: #e8eef6;
+}
+
+.solo {
+  font-size: 0.8rem;
+  color: #5b6b82;
+}

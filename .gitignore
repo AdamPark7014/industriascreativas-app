@@ -9,3 +9,10 @@ backend/.env
 # Salida en tiempo de ejecución
 backend/gafetes_guardados/
 backend/qrs_para_imprimir/
+
+# Accesos SPA
+panel/ui/node_modules/
+panel/ui/dist/
+
+# Helper local SSH (nunca commitear)
+.ai/_ssh_do.py
