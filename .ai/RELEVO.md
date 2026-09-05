@@ -5,15 +5,15 @@
 - **Rama:** main
 
 ## Hecho (este turno)
-Embed Nest access-control into Flask panel FICTI (Adam): nav **Accesos** + iframe a
-`manager.demo…/embed/access`. Sin cutover DNS de panel. Terror intacto.
+Deploy Accesos embed en DO `147.182.128.128`:
+- `/opt/EVENTOS-app/panel` → rebuild `eventos_panel_web` con nav Accesos + iframe Nest.
+- `NEST_ACCESS_BASE_URL` en compose + `.env` del servidor (default manager.demo).
+- Local: `panel/docker-compose.panel.yml` ahora exporta `NEST_ACCESS_BASE_URL`.
 
-Archivos: `panel/templates/panel.html`, `panel/static/js/panel.js`,
-`panel/static/css/panel.css`, `panel/app.py` (`NEST_ACCESS_BASE_URL`).
+Smoke: panel login/health 200; Accesos + embed/access en imagen.
 
-## Deploy
-Redeploy `eventos_panel_web` en DO. Motor Nest requiere A `manager.demo` → Hetzner
-y rebuild manager con `/embed/*` (repo EXPERIENCEBT-app).
+## Blocker
+DNS A `manager.demo.experiencebt.com.mx` → `5.78.215.109` (Hetzner) para que el iframe cargue HTTPS. Panel Flask **no** se mueve de DO.
 
 ## No tocar
-Cutover panel DNS a Nest; demo./apex/admin cutover; apagar Flask registros.
+Cutover panel DNS a Nest; secretos en git/RELEVO.
