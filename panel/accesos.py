@@ -12,8 +12,20 @@ from sqlalchemy import text
 import consultas
 import gafete_pdf
 from db import conexion, escalar, filas
+from seguridad import origen_confiable, rate_limit
 
 bp = Blueprint("accesos", __name__, url_prefix="/api/accesos")
+
+
+@bp.before_request
+def _proteger_accesos():
+    """AuthN obligatoria: sin sesión no hay datos (antes caía a alcance promotor)."""
+    if not session.get("usuario"):
+        return jsonify(ok=False, error="sesion_expirada"), 401
+    if not origen_confiable():
+        return jsonify(ok=False, error="csrf_origen"), 403
+    return None
+
 
 TIPOS = {
     "empresas": {
@@ -69,11 +81,13 @@ def _forbid_ops():
 
 
 @bp.get("/sesion")
+@rate_limit("api")
 def sesion():
     return jsonify(_sesion_json())
 
 
 @bp.get("/resumen")
+@rate_limit("api")
 def resumen():
     tipos = _tipos_ok()
     with conexion() as con:
@@ -130,10 +144,16 @@ def _fila_escaneo(r) -> dict:
 
 
 @bp.get("/buscar")
+@rate_limit("api")
 def buscar():
     q = (request.args.get("q") or "").strip()
+    if len(q) > 120:
+        return jsonify(ok=False, error="q_larga"), 400
     if len(q) < 2:
         return jsonify(q=q, results=[])
+    # Bloquea wildcards / patrones abusivos
+    if any(c in q for c in ("%", "_", ";", "--", "/*")):
+        q = q.replace("%", "").replace("_", "")
     tipo_filtro = request.args.get("tipo") or ""
     tipos = [tipo_filtro] if tipo_filtro in _tipos_ok() else _tipos_ok()
     hits = _buscar_exacto(q, tipos) or _buscar_texto(q, tipos)
@@ -239,6 +259,7 @@ def _hit(clave: str, fila: dict, match: str) -> dict:
 
 
 @bp.get("/gafete/<tipo>/<int:id_>.pdf")
+@rate_limit("api")
 def gafete_pdf_ruta(tipo, id_):
     if not _ops():
         return _forbid_ops()
@@ -267,6 +288,7 @@ def gafete_pdf_ruta(tipo, id_):
 
 
 @bp.get("/zonas")
+@rate_limit("api")
 def zonas():
     with conexion() as con:
         rows = filas(con, """
@@ -277,6 +299,7 @@ def zonas():
 
 
 @bp.post("/zonas")
+@rate_limit("mutacion")
 def zonas_guardar():
     if not _ops():
         return _forbid_ops()
@@ -302,6 +325,7 @@ def zonas_guardar():
 
 
 @bp.post("/escanear")
+@rate_limit("mutacion")
 def escanear():
     if not _ops():
         return _forbid_ops()
@@ -309,8 +333,15 @@ def escanear():
     qr = (datos.get("qr") or datos.get("qr_data") or "").strip()
     modo = (datos.get("modo") or "entrada").strip().lower()
     zona_clave = (datos.get("zona") or ZONA_DEFECTO).strip().lower()
+    if len(qr) > 80:
+        return jsonify(ok=False, error="qr_largo"), 400
+    if not re.fullmatch(r"[A-Za-z0-9_\-]{1,80}", qr):
+        return jsonify(_resultado(
+            False, "CODIGO INVALIDO", "El QR no tiene un formato reconocido.", "", "", 0)), 400
     if modo not in ("entrada", "salida"):
         return jsonify(ok=False, error="modo"), 400
+    if not re.fullmatch(r"[a-z0-9_-]{1,40}", zona_clave):
+        return jsonify(ok=False, error="zona"), 400
     if not qr:
         return jsonify(_resultado(False, "SIN DATOS", "No se recibió ningún código.", "", "", 0)), 400
     return jsonify(_procesar(qr, modo, zona_clave, session.get("usuario") or "", "panel"))
@@ -453,13 +484,19 @@ def _log_con(con, tipo, registro_id, nombre, modo, ok, mensaje, zona, origen, op
 
 
 @bp.get("/reportes")
+@rate_limit("api")
 def reportes():
     modo = request.args.get("modo") or ""
     ok_arg = request.args.get("ok")
     zona = request.args.get("zona") or ""
     q = (request.args.get("q") or "").strip()
+    if len(q) > 120:
+        return jsonify(ok=False, error="q_larga"), 400
     formato = (request.args.get("formato") or "json").lower()
-    limite = min(int(request.args.get("limite") or 200), 2000)
+    try:
+        limite = min(int(request.args.get("limite") or 200), 2000)
+    except (TypeError, ValueError):
+        return jsonify(ok=False, error="limite"), 400
 
     cond = ["TRUE"]
     params = {"limite": limite}
@@ -470,6 +507,8 @@ def reportes():
         cond.append("ok = :ok")
         params["ok"] = ok_arg in ("1", "true")
     if zona:
+        if not re.fullmatch(r"[a-z0-9_-]{1,40}", zona):
+            return jsonify(ok=False, error="zona"), 400
         cond.append("zona_clave = :zona")
         params["zona"] = zona
     if q:
