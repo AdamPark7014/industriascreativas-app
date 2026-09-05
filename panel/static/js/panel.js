@@ -368,8 +368,15 @@
   const TITULOS = {
     resumen: ['Panel de control', 'Resumen del evento'],
     analisis: ['Panel de control', 'Análisis de registros'],
-    accesos: ['Control de accesos', 'Escáner, zonas e informes (Nest FICTI)'],
+    accesos: ['Control de accesos', 'Escáner y asistencias FICTI'],
   };
+
+  function pintarAccesos(d) {
+    const asis = $('accesosAsistencias');
+    const conf = $('accesosConfirmados');
+    if (asis) asis.textContent = d && d.asistencias != null ? String(d.asistencias) : '—';
+    if (conf) conf.textContent = d && d.confirmados != null ? String(d.confirmados) : '—';
+  }
 
   function irA(vista) {
     const esTipo = TIPOS.includes(vista);
@@ -397,12 +404,10 @@
       $('vistaKicker').textContent = k;
       $('vistaTitulo').textContent = t;
       if (vista === 'accesos') {
-        const frame = $('accesosFrame');
-        const base = (window.NEST_ACCESS_BASE || 'https://panel.experiencebt.com.mx').replace(/\/$/, '');
-        if (frame && (!frame.dataset.loaded || frame.src.indexOf(base) !== 0)) {
-          frame.src = `${base}/embed/access`;
-          frame.dataset.loaded = '1';
-        }
+        fetch('/api/resumen')
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => pintarAccesos(d))
+          .catch(() => pintarAccesos(null));
       }
     }
     $('lateral').classList.remove('abierto');
@@ -462,6 +467,9 @@
   // -------------------------------------------------------------- eventos
   document.querySelectorAll('.lateral .navItem').forEach((b) =>
     b.addEventListener('click', () => irA(b.dataset.vista)));
+
+  document.querySelectorAll('[data-vista-jump]').forEach((b) =>
+    b.addEventListener('click', () => irA(b.dataset.vistaJump)));
 
   $('btnInsignia').addEventListener('click', (e) => {
     e.stopPropagation();

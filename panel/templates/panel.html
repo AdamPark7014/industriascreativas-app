@@ -31,10 +31,9 @@
         <span class="navIcono" aria-hidden="true">◔</span> Análisis
       </button>
 
-      {# Nest access-control (demo tenant) same-origin — nginx /embed|/scanner|/access* → Hetzner. #}
       <p class="navTitulo">Control de accesos</p>
       <button class="navItem" data-vista="accesos"
-              data-label="Accesos Nest" data-corto="Accesos">
+              data-label="Accesos" data-corto="Accesos">
         <span class="navIcono" aria-hidden="true">▣</span> Accesos
       </button>
 
@@ -182,43 +181,42 @@
         </div>
       </section>
 
-      <!-- Control de accesos Nest (tenant demo / FICTI) — iframe + deep links -->
+      <!-- Accesos FICTI nativo (DO) — usa escáner/asistencias del registro demo -->
       <section class="vista" id="vista-accesos">
         <article class="tarjeta accesosTarjeta">
           <div class="tarjetaCab">
-            <h2 class="tarjetaTitulo">Control de accesos · FICTI / demo</h2>
+            <h2 class="tarjetaTitulo">Control de accesos · FICTI</h2>
             <p class="tarjetaSub">
-              Módulos Nest (escáner ENTRY/EXIT, zonas, informes) en la misma
-              origen <code>panel.experiencebt.com.mx</code> (tenant demo / FICTI).
-              Terror es otro evento (<code>manager.terror</code>).
+              Operación de puerta del evento FICTI / Tech Capital. Vive en este
+              panel y en el registro <code>demo</code> (DigitalOcean). No usa
+              Nest ni Hetzner.
             </p>
           </div>
           <div class="tarjetaCuerpo accesosCuerpo">
-            <div class="accesosAcciones" id="accesosAcciones">
-              <a class="btn btnPrimario" id="accesosAbrirHub"
-                 href="{{ nest_access_base }}/embed/access" target="_blank" rel="noopener">
-                Abrir hub de accesos
+            <div class="accesosKpis" id="accesosKpis" aria-live="polite">
+              <div class="accesosKpi">
+                <span class="accesosKpiLabel">Asistencias escaneadas</span>
+                <strong class="accesosKpiVal" id="accesosAsistencias">—</strong>
+              </div>
+              <div class="accesosKpi">
+                <span class="accesosKpiLabel">Registros confirmados</span>
+                <strong class="accesosKpiVal" id="accesosConfirmados">—</strong>
+              </div>
+            </div>
+            <div class="accesosAcciones">
+              <a class="btn btnPrimario"
+                 href="https://demo.experiencebt.com.mx/escanear"
+                 target="_blank" rel="noopener">
+                Abrir escáner de gafetes
               </a>
-              <a class="btn" href="{{ nest_access_base }}/scanner?embed=1" target="_blank" rel="noopener">Escáner</a>
-              <a class="btn" href="{{ nest_access_base }}/access-zones?embed=1" target="_blank" rel="noopener">Zonas</a>
-              <a class="btn" href="{{ nest_access_base }}/access/reports?embed=1" target="_blank" rel="noopener">Informes</a>
+              <button type="button" class="btn" data-vista-jump="resumen">Ver resumen</button>
             </div>
-            <p class="accesosHint" id="accesosHint">
-              Login Nest (dentro del iframe): <code>admin@demo.experiencebt.com.mx</code> (ops) o
-              <code>promotor@demo…</code> (solo informes). Misma origen — sin
-              <code>manager.demo</code>.
+            <p class="accesosHint">
+              El escáner (<code>/escanear</code>) y el contador de
+              <strong>asistencias</strong> ya existen en el backend de registro
+              demo. Las tablas de Registros muestran la columna Asist. por
+              persona. Casa del Terror / boletera Nest es otro producto.
             </p>
-            <div class="accesosFrameWrap">
-              <iframe
-                id="accesosFrame"
-                class="accesosFrame"
-                title="Control de accesos Nest FICTI"
-                src="{{ nest_access_base }}/embed/access"
-                loading="lazy"
-                referrerpolicy="strict-origin-when-cross-origin"
-                allow="camera; microphone; clipboard-read; clipboard-write"
-              ></iframe>
-            </div>
           </div>
         </article>
       </section>
@@ -270,7 +268,6 @@
 
 <script>
   window.CATALOGO = {{ catalogo | tojson }};
-  window.NEST_ACCESS_BASE = {{ nest_access_base | tojson }};
 </script>
 <script src="{{ url_for('static', filename='js/panel.js') }}"></script>
 </body>

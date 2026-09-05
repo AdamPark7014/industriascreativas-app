@@ -5,15 +5,27 @@
 - **Rama:** main
 
 ## 3 líneas
-Accesos same-origin: nginx `zz-panel.conf` proxea Nest bajo panel; `NEST_ACCESS_BASE_URL=https://panel.experiencebt.com.mx`. Sin `manager.demo`.
+FICTI Accesos vuelve a ser **nativo en el panel Flask DO**. Se quitó el proxy/iframe Nest→Hetzner. `demo` = registro + `/escanear`; terror Nest no se toca.
 
 ## Hecho
-- `panel/deploy/zz-panel.conf` (+ssl): locations Nest → manager.terror + X-EBT-Public-Host.
-- app.py / panel.html / panel.js / compose: base URL panel (no NXDOMAIN).
-- Deploy DO: reload nginx + recreate `eventos_panel_web`.
+- `zz-panel.conf` (+ssl): solo Flask `eventos_panel_web` — sin locations Nest/`manager.terror`.
+- Quitado `NEST_ACCESS_BASE_URL`, iframe `/embed/access`, deep-links Nest.
+- Vista Accesos mínima: KPIs asistencias/confirmados + botón a `demo…/escanear`.
+- Deploy DO: rebuild `eventos_panel_web`, nginx sin terror proxy.
 
 ## Smoke
-panel `/login` 200; `/embed/access` 200 FICTI; scanner/zones/reports 200.
+- `panel…/login` 200
+- `panel…/embed/access` → **404 Flask** (ya no Nest)
+- `panel…/scanner` → **404 Flask**
+- `demo…/escanear` 200 (intacto)
+- `manager.terror…/scanner` 200 (intacto)
+
+## Frontera
+| Host | Rol |
+|------|-----|
+| `panel.` | FICTI ops Flask |
+| `demo.` | FICTI registro + escáner |
+| Hetzner terror | boletera Nest — aparte |
 
 ## No tocar
-Cutover panel DNS a Nest; secretos en git/RELEVO.
+Cutover DNS panel/demo a Hetzner; secretos; mezclar FICTI con Nest.

@@ -156,10 +156,6 @@ def panel():
         alcance=alcance,
         alcance_nombre={"interno": "Interno", "promotor": "Promotor"}.get(
             alcance, alcance.capitalize()),
-        nest_access_base=os.getenv(
-            "NEST_ACCESS_BASE_URL",
-            "https://panel.experiencebt.com.mx",
-        ).rstrip("/"),
         catalogo={
             clave: {"nombre": consultas.CATALOGO[clave]["nombre"],
                     "corto": consultas.CATALOGO[clave]["corto"],

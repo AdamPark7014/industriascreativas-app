@@ -19,7 +19,6 @@ services:
       PANEL_PROMOTOR_PASSWORD: ${PANEL_PROMOTOR_PASSWORD:?Set PANEL_PROMOTOR_PASSWORD}
       PANEL_PROMOTOR_NOMBRE: ${PANEL_PROMOTOR_NOMBRE:-Promotor}
       PANEL_COOKIE_SECURE: "1"
-      NEST_ACCESS_BASE_URL: ${NEST_ACCESS_BASE_URL:-https://panel.experiencebt.com.mx}
     expose:
       - "5000"
     networks:

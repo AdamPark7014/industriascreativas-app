@@ -712,14 +712,37 @@ button { font-family: inherit; cursor: pointer; }
 }
 .loginPie { margin-top: 20px; text-align: center; font-size: 0.75rem; color: var(--text-muted); }
 
-/* ======================================================= Accesos Nest embed */
+/* ======================================================= Accesos FICTI (nativo) */
 .accesosCuerpo { display: grid; gap: 14px; }
+.accesosKpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+.accesosKpi {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2, #f6f7f9);
+}
+.accesosKpiLabel {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.accesosKpiVal {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--navy);
+}
 .accesosAcciones { display: flex; flex-wrap: wrap; gap: 8px; }
 .accesosAcciones .btn {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 9px 14px; border-radius: 10px;
   border: 1px solid var(--border-strong); background: var(--card);
   color: var(--navy); font-size: 0.84rem; font-weight: 600; text-decoration: none;
+  cursor: pointer; font-family: inherit;
 }
 .accesosAcciones .btn:hover { background: var(--surface-2); }
 .accesosAcciones .btnPrimario {
@@ -728,20 +751,3 @@ button { font-family: inherit; cursor: pointer; }
 .accesosAcciones .btnPrimario:hover { background: var(--navy-mid); }
 .accesosHint { margin: 0; font-size: 0.8rem; color: var(--text-muted); line-height: 1.45; }
 .accesosHint code { font-size: 0.78rem; }
-.accesosFrameWrap {
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  overflow: hidden;
-  background: #0a0a0a;
-  min-height: 62vh;
-}
-.accesosFrame {
-  display: block;
-  width: 100%;
-  height: min(72vh, 820px);
-  border: 0;
-  background: #0a0a0a;
-}
-@media (max-width: 720px) {
-  .accesosFrame { height: 58vh; }
-}

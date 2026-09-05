@@ -1,10 +1,7 @@
 # HTTP → ACME + redirect; HTTPS → panel de control (eventos_panel_web)
 # Se carga junto a zz-demo.conf en el nginx compartido (nginx_registro_proxy).
 #
-# Accesos Nest (FICTI/demo): same-origin under panel → Hetzner manager.
-# Traefik needs Host manager.terror (working TLS). Nest tenant comes from
-# X-EBT-Public-Host=panel.experiencebt.com.mx → legacy_panel → slug demo.
-# Do NOT point iframe at manager.demo (NXDOMAIN / no ACME cert).
+# FICTI panel only (DigitalOcean). No proxy a Hetzner / Nest / terror.
 
 server {
     listen 80;
@@ -28,7 +25,7 @@ server {
     ssl_certificate     /etc/letsencrypt/live/panel.experiencebt.com.mx/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/panel.experiencebt.com.mx/privkey.pem;
 
-    resolver 1.1.1.1 8.8.8.8 valid=300s ipv6=off;
+    resolver 127.0.0.11 valid=30s ipv6=off;
     client_max_body_size 8m;
 
     # El panel expone datos personales: fuera de buscadores y del historial ajeno.
@@ -37,73 +34,6 @@ server {
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "same-origin" always;
     add_header Strict-Transport-Security "max-age=31536000" always;
-
-    # --- Nest Accesos (before Flask catch-all) ---
-    # Literal upstream host so nginx resolves at reload (not Docker 127.0.0.11).
-    location ^~ /_next/ {
-        proxy_pass https://manager.terror.experiencebt.com.mx;
-        proxy_http_version 1.1;
-        proxy_ssl_server_name on;
-        proxy_set_header Host manager.terror.experiencebt.com.mx;
-        proxy_set_header X-EBT-Public-Host panel.experiencebt.com.mx;
-        proxy_set_header X-Forwarded-Host panel.experiencebt.com.mx;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_buffering off;
-    }
-
-    location ^~ /embed/ {
-        proxy_pass https://manager.terror.experiencebt.com.mx;
-        proxy_http_version 1.1;
-        proxy_ssl_server_name on;
-        proxy_set_header Host manager.terror.experiencebt.com.mx;
-        proxy_set_header X-EBT-Public-Host panel.experiencebt.com.mx;
-        proxy_set_header X-Forwarded-Host panel.experiencebt.com.mx;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_buffering off;
-    }
-
-    location ^~ /scanner {
-        proxy_pass https://manager.terror.experiencebt.com.mx;
-        proxy_http_version 1.1;
-        proxy_ssl_server_name on;
-        proxy_set_header Host manager.terror.experiencebt.com.mx;
-        proxy_set_header X-EBT-Public-Host panel.experiencebt.com.mx;
-        proxy_set_header X-Forwarded-Host panel.experiencebt.com.mx;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_buffering off;
-    }
-
-    location ^~ /access-zones {
-        proxy_pass https://manager.terror.experiencebt.com.mx;
-        proxy_http_version 1.1;
-        proxy_ssl_server_name on;
-        proxy_set_header Host manager.terror.experiencebt.com.mx;
-        proxy_set_header X-EBT-Public-Host panel.experiencebt.com.mx;
-        proxy_set_header X-Forwarded-Host panel.experiencebt.com.mx;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_buffering off;
-    }
-
-    location ^~ /access/ {
-        proxy_pass https://manager.terror.experiencebt.com.mx;
-        proxy_http_version 1.1;
-        proxy_ssl_server_name on;
-        proxy_set_header Host manager.terror.experiencebt.com.mx;
-        proxy_set_header X-EBT-Public-Host panel.experiencebt.com.mx;
-        proxy_set_header X-Forwarded-Host panel.experiencebt.com.mx;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_buffering off;
-    }
 
     location / {
         set $panel_backend "http://eventos_panel_web:5000";
