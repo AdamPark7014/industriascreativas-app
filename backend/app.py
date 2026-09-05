@@ -1553,87 +1553,27 @@ def procesar_escaneo(qr_data, modo, zona_clave=None):
 
 @app.route('/api/zonas', methods=['GET'])
 def api_zonas_pda():
-    """Lista zonas/aforo para el PDA demo (misma clave X-Scan-Key)."""
-    if not _scan_autorizado():
-        return jsonify(ok=False, error='no_autorizado'), 401
-    try:
-        rows = db.session.execute(text(
-            'SELECT clave, nombre, aforo, dentro, activo FROM accesos_zonas '
-            'WHERE activo ORDER BY id'
-        )).mappings().all()
-        return jsonify(zonas=[dict(r) for r in rows])
-    except Exception as exc:
-        print(f'aviso api_zonas: {exc}')
-        return jsonify(zonas=[])
+    """Movido a Accesos TypeScript (nginx → eventos_accesos_api)."""
+    return jsonify(
+        ok=False,
+        error='moved',
+        detalle='GET /api/zonas ahora lo sirve accesos-api (TS). Revisa nginx.',
+    ), 410
 
 
 @app.route('/api/escanear', methods=['POST'])
 def api_escanear():
-    """Escaneo sin recargar la página.
+    """Movido a Accesos TypeScript (nginx → eventos_accesos_api)."""
+    return jsonify({
+        'ok': False,
+        'mensaje': 'MOVED',
+        'detalles': 'POST /api/escanear ahora lo sirve accesos-api (TS). Revisa nginx.',
+        'pitido': 'error',
+        'nombre': '',
+        'tipo': '',
+        'asistencias': 0,
+    }), 410
 
-    Requiere cabecera X-Scan-Key (SCAN_API_KEY) en producción.
-    """
-    if not _scan_autorizado():
-        return jsonify({
-            'ok': False,
-            'mensaje': 'NO AUTORIZADO',
-            'detalles': 'Falta o es inválida la clave de escáner (X-Scan-Key).',
-            'pitido': 'error',
-            'nombre': '',
-            'tipo': '',
-            'asistencias': 0,
-        }), 401
-
-    if not _scan_rate_ok(_ip_cliente()):
-        return jsonify({
-            'ok': False,
-            'mensaje': 'DEMASIADOS INTENTOS',
-            'detalles': 'Espera un momento antes de seguir escaneando.',
-            'pitido': 'error',
-            'nombre': '',
-            'tipo': '',
-            'asistencias': 0,
-        }), 429
-
-    datos = request.get_json(silent=True) or request.form
-    qr_data = (datos.get('qr_data') or datos.get('qr') or '').strip()
-    modo = (datos.get('modo') or 'entrada').strip().lower()
-    zona = (datos.get('zona') or ZONA_DEFECTO_DEMO).strip().lower()
-
-    if modo not in ('entrada', 'salida'):
-        return jsonify({
-            'ok': False,
-            'mensaje': 'MODO INVALIDO',
-            'detalles': 'Usa entrada o salida.',
-            'pitido': 'error',
-            'nombre': '',
-            'tipo': '',
-            'asistencias': 0,
-        }), 400
-
-    if len(qr_data) > 80:
-        return jsonify({
-            'ok': False,
-            'mensaje': 'CODIGO INVALIDO',
-            'detalles': 'El código es demasiado largo.',
-            'pitido': 'error',
-            'nombre': '',
-            'tipo': '',
-            'asistencias': 0,
-        }), 400
-
-    if not qr_data:
-        return jsonify({
-            'ok': False,
-            'mensaje': '❌ SIN DATOS',
-            'detalles': 'No se recibió ningún código.',
-            'pitido': 'error',
-            'nombre': '',
-            'tipo': '',
-            'asistencias': 0,
-        }), 400
-
-    return jsonify(procesar_escaneo(qr_data, modo, zona))
 
 
 @app.route('/escanear', methods=['GET', 'POST'])

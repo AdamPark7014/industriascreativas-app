@@ -1,4 +1,5 @@
 # Panel de control — se conecta a la red y la base que ya usa el registro demo.
+# Accesos API (TypeScript) comparte DB + PANEL_SECRET_KEY (cookie Flask).
 name: eventos-panel
 
 services:
@@ -29,6 +30,35 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  accesos_api:
+    build: ./accesos-api
+    image: eventos-accesos-api:latest
+    container_name: eventos_accesos_api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
+      PANEL_SECRET_KEY: ${PANEL_SECRET_KEY:?Set PANEL_SECRET_KEY}
+      SCAN_API_KEY: ${SCAN_API_KEY:?Set SCAN_API_KEY}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://demo.experiencebt.com.mx}
+      PORT: "3080"
+      PG_POOL_MAX: "12"
+    expose:
+      - "3080"
+    networks:
+      - eventos-demo-net
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
 networks:
   eventos-demo-net:

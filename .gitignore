@@ -10,11 +10,17 @@ backend/.env
 backend/gafetes_guardados/
 backend/qrs_para_imprimir/
 
-# Accesos SPA
+# Accesos SPA + API TS
 panel/ui/node_modules/
 panel/ui/dist/
+panel/accesos-api/node_modules/
+panel/accesos-api/dist/
 
 # Helper local SSH / deploy (nunca commitear)
 .ai/_ssh_do.py
 .ai/_deploy_accesos.py
 .ai/_deploy_*.py
+.ai/_do_*.py
+.ai/_smoke*.py
+.ai/_debug*.py
+.ai/_cookie*

@@ -1,5 +1,12 @@
 # -*- coding: utf-8 -*-
-"""APIs de control de accesos FICTI — las consume el SPA React en /accesos."""
+"""LEGACY — Accesos APIs ya no se registran en Flask.
+
+Runtime: panel/accesos-api (TypeScript / Hono) en eventos_accesos_api:3080.
+nginx enruta /api/accesos/* (panel) y /api/escanear|/api/zonas (demo) allí.
+
+Este archivo se conserva solo como referencia de comportamiento previo.
+NO importar ni register_blueprint.
+"""
 from datetime import datetime
 from io import BytesIO, StringIO
 import csv
@@ -14,7 +21,8 @@ import gafete_pdf
 from db import conexion, escalar, filas
 from seguridad import origen_confiable, rate_limit
 
-bp = Blueprint("accesos", __name__, url_prefix="/api/accesos")
+bp = Blueprint("accesos_legacy_unused", __name__, url_prefix="/api/accesos_legacy_unused")
+
 
 
 @bp.before_request

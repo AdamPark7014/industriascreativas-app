@@ -22,7 +22,6 @@ from flask import (
 from sqlalchemy import text
 from werkzeug.security import check_password_hash
 
-import accesos
 import consultas
 import exportar
 from db import CacheCorto, ErrorBaseDatos, conexion, estado
@@ -34,7 +33,8 @@ log = logging.getLogger("panel")
 TZ = ZoneInfo("America/Mexico_City")
 
 app = Flask(__name__)
-app.register_blueprint(accesos.bp)
+# Accesos APIs viven en panel/accesos-api (TypeScript/Hono). nginx enruta
+# /api/accesos/* → eventos_accesos_api:3080. No registrar blueprint Python.
 UI_DIST = Path(__file__).resolve().parent / "ui" / "dist"
 app.config["SECRET_KEY"] = os.getenv("PANEL_SECRET_KEY", os.urandom(32).hex())
 app.config.update(

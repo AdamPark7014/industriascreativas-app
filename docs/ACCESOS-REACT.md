@@ -1,35 +1,29 @@
-# FICTI Accesos — React en panel (DO)
+# FICTI Accesos — React + TypeScript (no Python en runtime Accesos)
 
-**Actualizado 2026-09-05:** consola de accesos profesional en
-`https://panel.experiencebt.com.mx/accesos` (EVENTO-ELISA `panel/ui`).
+**Actualizado 2026-09-05:** Accesos FICTI es **React (UI) + TypeScript/Hono (API)**
+en DigitalOcean. Flask ya **no** sirve `/api/accesos/*` ni el PDA
+`/api/escanear`|/api/zonas`.
 
-| Host | Rol |
-|------|-----|
-| `panel.experiencebt.com.mx` | Registros Flask + **Accesos React** (auth de sesión) |
-| `demo.experiencebt.com.mx` | Registro público + `/escanear` (requiere `X-Scan-Key`) |
-| Hetzner terror | Nest boletera — **aparte** |
+| Pieza | Host | Stack |
+|-------|------|--------|
+| Panel ops + Accesos SPA | `panel.experiencebt.com.mx` | Flask (login/registros/Excel) + React `/accesos` |
+| Accesos API | same-origin `/api/accesos/*` | **Hono/Node** `eventos_accesos_api:3080` |
+| Registro público | `demo.experiencebt.com.mx` | Flask registro + React `/escanear` |
+| PDA scan/zonas | `demo…/api/escanear`, `/api/zonas` | **mismo** Accesos TS (`X-Scan-Key`) |
+| Boletera / terror | `manager.terror…` | Nest Hetzner — **aparte, no tocar** |
+
+Código: `panel/accesos-api/` (EVENTO-ELISA). Cookie de sesión Flask
+(`panel_session` + `PANEL_SECRET_KEY`) la valida el API TS.
 
 ## Módulos
-- Resumen / “qué hacer ahora” + pulso
-- Escáner ENTRY/EXIT/reingreso + zonas/aforo (solo `interno`)
-- Cámara web (BarcodeDetector) + cola offline local
-- Buscar → **vista previa del boleto** → imprimir 5×8 (React `@media print` + PDF)
-- Informes + filtros (zona/modo/ok) + reingresos + CSV/Excel + refresco en vivo
-- Zonas Acreditación / VIP
-
-## Demo PDA ↔ aforo
-`POST /api/escanear` acepta `zona` y actualiza `accesos_zonas.dentro` (misma DB
-que el panel). `GET /api/zonas` con `X-Scan-Key` alimenta el selector del PDA.
-
-## Boleto 5×8
-- Cara oscura FICTI / Tech Capital, nombre grande, QR en placa blanca, marcas de corte
-- `GET /api/accesos/gafete/<tipo>/<id>` → JSON + QR (preview React)
-- `GET /api/accesos/gafete/<tipo>/<id>.pdf` → PDF print-ready (`panel/gafete_pdf.py`)
+- Resumen / pulso (caché corta ~2.5s, queries en paralelo)
+- Escáner ENTRY/EXIT/reingreso + zonas/aforo
+- Cámara + cola offline
+- Buscar (prefijo + `pg_trgm`) + boleto 5×8 (JSON QR + PDF `pdf-lib`)
+- Informes zona/reingresos/CSV/XLSX
+- Pool Postgres + gzip nginx
 
 ## Seguridad
-- `/api/accesos/*` exige sesión panel + Origin/Referer same-site + rate limit
-- Demo `/api/escanear` y `/api/zonas` exigen `SCAN_API_KEY` (`X-Scan-Key`); fail-closed en https
-- Cookies `HttpOnly` + `Secure` + `SameSite=Lax`
-- Cabeceras `X-Frame-Options`, `nosniff`, `Referrer-Policy`
-- `Permissions-Policy: camera=(self)` para escáner; mic/geo cerrados
-- Cola offline **no** cuenta como acceso confirmado hasta sync OK
+- Panel: sesión + Origin/Referer + rate limit
+- Demo PDA: `SCAN_API_KEY` via `X-Scan-Key` (fail-closed en https)
+- Terror / Nest: intacto
