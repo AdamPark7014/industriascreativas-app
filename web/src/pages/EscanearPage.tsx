@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import CameraScan from '../components/CameraScan'
+import { getDeviceId, setDeviceId } from '../lib/deviceId'
 import { enqueueScan, flushQueue, readQueue } from '../lib/offlineQueue'
 import styles from '../styles/escanear.module.scss'
 
@@ -15,6 +16,7 @@ type Zona = {
 
 type Resultado = {
   ok: boolean
+  codigo?: string
   mensaje: string
   detalles: string
   pitido: 'exito' | 'error'
@@ -22,10 +24,14 @@ type Resultado = {
   tipo: string
   asistencias: number
   dentro?: boolean
+  currentlyInside?: boolean
   zona?: string
   zonaNombre?: string
   zonaDentro?: number
   zonaAforo?: number
+  serverMs?: number
+  dispositivo?: string
+  reentry?: boolean
 }
 
 type Registro = Resultado & { clave: number; hora: string }
@@ -81,6 +87,9 @@ export default function EscanearPage() {
   const [ocupado, setOcupado] = useState(false)
   const [camara, setCamara] = useState(false)
   const [cola, setCola] = useState(0)
+  const [deviceId, setDeviceIdState] = useState(() => getDeviceId())
+  const [latenciaMs, setLatenciaMs] = useState<number | null>(null)
+  const [serverMs, setServerMs] = useState<number | null>(null)
   const [scanKey, setScanKey] = useState(() => sessionStorage.getItem('ficti_scan_key') || '')
   const [claveInput, setClaveInput] = useState('')
   const [needsKey, setNeedsKey] = useState(() => !sessionStorage.getItem('ficti_scan_key'))
@@ -88,10 +97,12 @@ export default function EscanearPage() {
   const enVueloRef = useRef(false)
   const modoRef = useRef<Modo>('entrada')
   const zonaRef = useRef('acreditacion')
+  const deviceRef = useRef(deviceId)
   const { sonar, asegurar } = usePitido()
 
   modoRef.current = modo
   zonaRef.current = zona
+  deviceRef.current = deviceId
 
   const enfocar = useCallback(() => {
     if (camara) return
@@ -149,7 +160,7 @@ export default function EscanearPage() {
           'Content-Type': 'application/json',
           'X-Scan-Key': key,
         },
-        body: JSON.stringify({ qr_data: codigo, modo: currentModo, zona: currentZona }),
+        body: JSON.stringify({ qr_data: codigo, modo: currentModo, zona: currentZona, dispositivo: deviceRef.current }),
       })
       return res
     },
@@ -193,6 +204,7 @@ export default function EscanearPage() {
       if (!codigo || enVueloRef.current) return
       enVueloRef.current = true
       setOcupado(true)
+      const t0 = performance.now()
       const currentModo = modoRef.current
       const currentZona = zonaRef.current
       try {
@@ -230,6 +242,8 @@ export default function EscanearPage() {
           return
         }
         const datos: Resultado = await res.json()
+        setLatenciaMs(Math.round(performance.now() - t0))
+        setServerMs(typeof datos.serverMs === 'number' ? datos.serverMs : null)
         setResultado(datos)
         if (datos.zona && datos.zonaDentro != null) {
           setZonas((prev) =>
@@ -412,10 +426,23 @@ export default function EscanearPage() {
           onScan={(code) => void escanear(code)}
         />
 
+        <label className={styles.hint} htmlFor="device_id">Estación / PDA</label>
+        <input
+          id="device_id"
+          className={styles.input}
+          value={deviceId}
+          onChange={(e) => { setDeviceIdState(e.target.value); setDeviceId(e.target.value) }}
+          onBlur={() => setDeviceIdState(setDeviceId(deviceId))}
+          placeholder="puerta-1"
+          autoComplete="off"
+        />
+
         <p className={styles.hint}>
           {ocupado
             ? 'Registrando…'
-            : 'USB, PDA o cámara. El cursor vuelve solo al campo.'}
+            : 'USB (más rápido), PDA o cámara. Sin debounce en HID.'}
+          {latenciaMs != null ? ` · cliente ${latenciaMs} ms` : ''}
+          {serverMs != null ? ` · server ${serverMs} ms` : ''}
           {zonaActiva ? ` · ${zonaActiva.nombre}` : ''}
           {cola > 0 ? ` · Cola offline: ${cola}` : ''}
         </p>

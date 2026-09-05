@@ -6,6 +6,9 @@ export default function ReportesPage() {
   const [modo, setModo] = useState('')
   const [ok, setOk] = useState('')
   const [zona, setZona] = useState('')
+  const [codigo, setCodigo] = useState('')
+  const [dispositivo, setDispositivo] = useState('')
+  const [origen, setOrigen] = useState('')
   const [q, setQ] = useState('')
   const [kpis, setKpis] = useState({
     total: 0,
@@ -13,8 +16,11 @@ export default function ReportesPage() {
     salidas: 0,
     rechazos: 0,
     reingresos: 0,
+    p50_server: null as number | null,
+    p95_server: null as number | null,
   })
   const [zonas, setZonas] = useState<{ clave: string; nombre: string }[]>([])
+  const [dispositivos, setDispositivos] = useState<string[]>([])
   const [rows, setRows] = useState<Escaneo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -25,6 +31,9 @@ export default function ReportesPage() {
     if (modo) p.set('modo', modo)
     if (ok) p.set('ok', ok)
     if (zona) p.set('zona', zona)
+    if (codigo) p.set('codigo', codigo)
+    if (dispositivo) p.set('dispositivo', dispositivo)
+    if (origen) p.set('origen', origen)
     if (q.trim()) p.set('q', q.trim())
     p.set('limite', '300')
     setLoading(true)
@@ -37,9 +46,12 @@ export default function ReportesPage() {
         salidas: data.kpis.salidas ?? 0,
         rechazos: data.kpis.rechazos ?? 0,
         reingresos: data.kpis.reingresos ?? 0,
+        p50_server: data.kpis.p50_server ?? null,
+        p95_server: data.kpis.p95_server ?? null,
       })
       setRows(data.registros)
       if (data.zonas?.length) setZonas(data.zonas)
+      if (data.dispositivos) setDispositivos(data.dispositivos)
       setError(null)
     } catch (e) {
       if (signal?.aborted) return
@@ -47,7 +59,7 @@ export default function ReportesPage() {
     } finally {
       if (!signal?.aborted) setLoading(false)
     }
-  }, [modo, ok, zona, q])
+  }, [modo, ok, zona, codigo, dispositivo, origen, q])
 
   useEffect(() => {
     const ac = new AbortController()
@@ -69,6 +81,9 @@ export default function ReportesPage() {
     if (modo) p.set('modo', modo)
     if (ok) p.set('ok', ok)
     if (zona) p.set('zona', zona)
+    if (codigo) p.set('codigo', codigo)
+    if (dispositivo) p.set('dispositivo', dispositivo)
+    if (origen) p.set('origen', origen)
     if (q.trim()) p.set('q', q.trim())
     p.set('formato', formato)
     p.set('limite', '2000')
@@ -78,8 +93,8 @@ export default function ReportesPage() {
   return (
     <main className={styles.page}>
       <p className={styles.lead}>
-        Revisa quién entró o salió. Filtra por zona, movimiento o resultado,
-        y descarga CSV o Excel. Reingresos = entradas OK tras una salida previa.
+        Revisa quién entró o salió. Filtra por zona, código de rechazo, estación,
+        origen y latencia. Reingresos = código OK_REENTRY.
       </p>
 
       <section className={styles.kpis} aria-label="Totales filtrados">
@@ -103,13 +118,21 @@ export default function ReportesPage() {
           <span>Rechazos</span>
           <strong className={styles.warn}>{kpis.rechazos.toLocaleString('es-MX')}</strong>
         </article>
+        <article>
+          <span>p50 server</span>
+          <strong>{kpis.p50_server != null ? `${Math.round(kpis.p50_server)} ms` : '—'}</strong>
+        </article>
+        <article>
+          <span>p95 server</span>
+          <strong>{kpis.p95_server != null ? `${Math.round(kpis.p95_server)} ms` : '—'}</strong>
+        </article>
       </section>
 
       <div className={styles.filtros}>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Filtrar por nombre o folio…"
+          placeholder="Filtrar por nombre, folio, código o estación…"
         />
         <select value={modo} onChange={(e) => setModo(e.target.value)}>
           <option value="">Entrada y salida</option>
@@ -128,6 +151,43 @@ export default function ReportesPage() {
               {z.nombre}
             </option>
           ))}
+        </select>
+        <select value={codigo} onChange={(e) => setCodigo(e.target.value)} aria-label="Código">
+          <option value="">Todos los códigos</option>
+          {[
+            'OK_ENTRY',
+            'OK_EXIT',
+            'OK_REENTRY',
+            'NOT_FOUND',
+            'UNCONFIRMED',
+            'BLACKLISTED',
+            'ALREADY_INSIDE',
+            'NOT_INSIDE',
+            'ZONE_FULL',
+            'COOLDOWN',
+            'OUTSIDE_HOURS',
+          ].map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <select
+          value={dispositivo}
+          onChange={(e) => setDispositivo(e.target.value)}
+          aria-label="Dispositivo"
+        >
+          <option value="">Todas las estaciones</option>
+          {dispositivos.map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </select>
+        <select value={origen} onChange={(e) => setOrigen(e.target.value)} aria-label="Origen">
+          <option value="">Panel y demo</option>
+          <option value="panel">Solo panel</option>
+          <option value="demo">Solo PDA demo</option>
         </select>
         <label className={styles.live}>
           <input
@@ -161,7 +221,10 @@ export default function ReportesPage() {
                 <th>Hora</th>
                 <th>Nombre</th>
                 <th>Movimiento</th>
+                <th>Código</th>
                 <th>Zona</th>
+                <th>Estación</th>
+                <th>ms</th>
                 <th>Resultado</th>
                 <th>Desde</th>
               </tr>
@@ -184,7 +247,13 @@ export default function ReportesPage() {
                       {r.modo === 'entrada' ? 'Entrada' : r.modo === 'salida' ? 'Salida' : r.modo}
                     </span>
                   </td>
+                  <td>{r.codigo || '—'}</td>
                   <td>{r.zona_clave || '—'}</td>
+                  <td>{r.dispositivo || '—'}</td>
+                  <td>
+                    {r.server_ms != null ? r.server_ms : '—'}
+                    {r.client_ms != null ? `/${r.client_ms}` : ''}
+                  </td>
                   <td className={r.ok ? styles.ok : styles.mal}>{r.mensaje}</td>
                   <td>{r.origen || '—'}</td>
                 </tr>

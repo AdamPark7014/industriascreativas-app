@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Navigate, useOutletContext } from 'react-router-dom'
 import { api, type ScanResult, type Sesion, type Zona } from '../api'
 import CameraScan from '../components/CameraScan'
+import { getDeviceId, setDeviceId } from '../lib/deviceId'
 import { enqueueScan, flushQueue, readQueue } from '../lib/offlineQueue'
 import styles from './escanear.module.scss'
 
@@ -69,8 +70,10 @@ export default function EscanearPage() {
   const [historial, setHistorial] = useState<(ScanResult & { clave: number; hora: string })[]>([])
   const [ocupado, setOcupado] = useState(false)
   const [latenciaMs, setLatenciaMs] = useState<number | null>(null)
+  const [serverMs, setServerMs] = useState<number | null>(null)
   const [camara, setCamara] = useState(false)
   const [cola, setCola] = useState(0)
+  const [deviceId, setDeviceIdState] = useState(() => getDeviceId())
   const [online, setOnline] = useState(
     typeof navigator === 'undefined' ? true : navigator.onLine,
   )
@@ -78,14 +81,17 @@ export default function EscanearPage() {
   const enVuelo = useRef(false)
   const modoRef = useRef<Modo>('entrada')
   const zonaRef = useRef('acreditacion')
+  const deviceRef = useRef(deviceId)
   const { sonar, asegurar } = usePitido()
   const enfocar = useCallback(() => {
     if (camara) return
-    inputRef.current?.focus()
+    // Instant focus for HID wedge — no debounce
+    inputRef.current?.focus({ preventScroll: true })
   }, [camara])
 
   modoRef.current = modo
   zonaRef.current = zona
+  deviceRef.current = deviceId
 
   const refrescarZonas = useCallback(() => {
     void api.zonas().then((d) => {
@@ -131,7 +137,9 @@ export default function EscanearPage() {
 
   const vaciarCola = useCallback(async () => {
     const { left } = await flushQueue(async (item) => {
-      const datos = await api.escanear(item.qr, item.modo, item.zona)
+      const datos = await api.escanear(item.qr, item.modo, item.zona, {
+        dispositivo: item.dispositivo || deviceRef.current,
+      })
       setZonas((prev) =>
         aplicarAforo(prev, datos.zona, datos.zonaDentro, datos.zonaAforo),
       )
@@ -164,16 +172,35 @@ export default function EscanearPage() {
       const codigo = qr.trim()
       if (!codigo || enVuelo.current) return
       enVuelo.current = true
+      // Optimistic UI — show pending before round-trip
+      setResultado({
+        ok: true,
+        codigo: 'PENDING',
+        mensaje: 'VALIDANDO…',
+        detalles: codigo,
+        pitido: 'exito',
+        nombre: '',
+        tipo: '',
+        asistencias: 0,
+        dentro: false,
+      })
       setOcupado(true)
       const t0 = performance.now()
       const currentModo = modoRef.current
       const currentZona = zonaRef.current
+      const currentDevice = deviceRef.current
       try {
         if (!navigator.onLine) {
-          enqueueScan({ qr: codigo, modo: currentModo, zona: currentZona })
+          enqueueScan({
+            qr: codigo,
+            modo: currentModo,
+            zona: currentZona,
+            dispositivo: currentDevice,
+          })
           setCola(readQueue().length)
           const fail: ScanResult = {
             ok: false,
+            codigo: 'OFFLINE',
             mensaje: 'EN COLA OFFLINE',
             detalles: 'Sin red: se enviará al recuperar conexión. No es acceso confirmado.',
             pitido: 'error',
@@ -186,20 +213,29 @@ export default function EscanearPage() {
           sonar('error')
           return
         }
-        const datos = await api.escanear(codigo, currentModo, currentZona)
-        setLatenciaMs(Math.round(performance.now() - t0))
+        const datos = await api.escanear(codigo, currentModo, currentZona, {
+          dispositivo: currentDevice,
+        })
+        const clientMs = Math.round(performance.now() - t0)
+        setLatenciaMs(clientMs)
+        setServerMs(typeof datos.serverMs === 'number' ? datos.serverMs : null)
         setResultado(datos)
         setZonas((prev) =>
           aplicarAforo(prev, datos.zona, datos.zonaDentro, datos.zonaAforo),
         )
         sonar(datos.pitido)
         registrarHistorial(datos)
+        if (datos.scanId) {
+          void api.reportarLatencia(datos.scanId, clientMs).catch(() => undefined)
+        }
       } catch (e) {
         setLatenciaMs(Math.round(performance.now() - t0))
+        setServerMs(null)
         const msg = e instanceof Error ? e.message : 'No se pudo contactar al servidor'
         if (msg === 'sesion' || msg === 'sesion_expirada') {
           setResultado({
             ok: false,
+            codigo: 'UNAUTHORIZED',
             mensaje: 'SESIÓN EXPIRADA',
             detalles: 'Vuelve a iniciar sesión.',
             pitido: 'error',
@@ -209,10 +245,16 @@ export default function EscanearPage() {
             dentro: false,
           })
         } else {
-          enqueueScan({ qr: codigo, modo: currentModo, zona: currentZona })
+          enqueueScan({
+            qr: codigo,
+            modo: currentModo,
+            zona: currentZona,
+            dispositivo: currentDevice,
+          })
           setCola(readQueue().length)
           setResultado({
             ok: false,
+            codigo: 'OFFLINE',
             mensaje: 'EN COLA OFFLINE',
             detalles: `${msg}. Quedó en cola local hasta recuperar red.`,
             pitido: 'error',
@@ -288,6 +330,24 @@ export default function EscanearPage() {
           </div>
         ) : null}
 
+        <label className={styles.label} htmlFor="device_id">
+          Estación / PDA
+        </label>
+        <input
+          id="device_id"
+          className={styles.input}
+          type="text"
+          value={deviceId}
+          onChange={(e) => {
+            const v = e.target.value
+            setDeviceIdState(v)
+            setDeviceId(v)
+          }}
+          onBlur={() => setDeviceIdState(setDeviceId(deviceId))}
+          placeholder="ej. puerta-1"
+          autoComplete="off"
+        />
+
         <form
           className={styles.form}
           onSubmit={(e) => {
@@ -296,7 +356,7 @@ export default function EscanearPage() {
           }}
         >
           <label className={styles.label} htmlFor="qr_input">
-            Lector USB / teclado
+            Lector USB / teclado (sin debounce)
           </label>
           <input
             ref={inputRef}
@@ -308,6 +368,7 @@ export default function EscanearPage() {
             autoFocus
             autoComplete="off"
             inputMode="none"
+            enterKeyHint="go"
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault()
@@ -330,7 +391,10 @@ export default function EscanearPage() {
             : modo === 'entrada'
               ? 'Listo para ENTRADA. Si ya está dentro, se rechaza hasta registrar una salida.'
               : 'Listo para SALIDA. Libera el aforo y permite que vuelva a entrar.'}
-          {latenciaMs != null ? ` · ${latenciaMs} ms` : ''}
+          {latenciaMs != null
+            ? ` · cliente ${latenciaMs} ms${serverMs != null ? ` · server ${serverMs} ms` : ''}`
+            : ''}
+          {resultado?.codigo && resultado.codigo !== 'PENDING' ? ` · ${resultado.codigo}` : ''}
           {zonaActiva ? ` · Zona: ${zonaActiva.nombre}` : ''}
           {!online ? ' · Sin red' : ''}
           {cola > 0 ? ` · Cola offline: ${cola}` : ''}
@@ -338,7 +402,13 @@ export default function EscanearPage() {
 
         {resultado ? (
           <div
-            className={`${styles.resultado} ${resultado.ok ? styles.exito : styles.fallo}`}
+            className={`${styles.resultado} ${
+              resultado.codigo === 'PENDING'
+                ? styles.espera
+                : resultado.ok
+                  ? styles.exito
+                  : styles.fallo
+            }`}
             role="status"
             aria-live="assertive"
           >
@@ -348,10 +418,15 @@ export default function EscanearPage() {
               <span className={styles.persona}>
                 {resultado.nombre}
                 {resultado.tipo ? ` · ${resultado.tipo}` : ''}
+                {resultado.folio ? ` · ${resultado.folio}` : ''}
               </span>
             ) : null}
             <span className={styles.conteo}>
-              {resultado.dentro || resultado.asistencias > 0 ? 'Ahora: DENTRO' : 'Ahora: FUERA'}
+              {resultado.currentlyInside || resultado.dentro || resultado.asistencias > 0
+                ? 'Ahora: DENTRO'
+                : 'Ahora: FUERA'}
+              {resultado.reentry ? ' · REINGRESO' : ''}
+              {resultado.lastDirection ? ` · último ${resultado.lastDirection}` : ''}
               {resultado.zonaNombre
                 ? ` · ${resultado.zonaNombre} ${resultado.zonaDentro ?? '—'}/${resultado.zonaAforo || '∞'}`
                 : ''}
@@ -360,7 +435,7 @@ export default function EscanearPage() {
         ) : (
           <div className={styles.espera}>
             <strong>Esperando el siguiente boleto</strong>
-            <span>USB, PDA o cámara — elige el modo y la zona primero.</span>
+            <span>USB (más rápido), PDA o cámara — elige el modo y la zona primero.</span>
           </div>
         )}
       </div>

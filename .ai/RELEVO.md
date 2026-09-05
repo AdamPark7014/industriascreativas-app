@@ -5,25 +5,31 @@
 - **Rama:** main
 
 ## 3 líneas
-Accesos APIs + PDA scan/zonas migrados a TypeScript (Hono) en DO; Flask ya no enruta Accesos.
-UI React intacta; terror Nest intacto.
+Accesos FICTI: variables de control completas (códigos, dispositivo, latencia, cooldown, blacklist, horarios) + hot-path QR más rápido.
+Deploy DO OK; smoke ENTRY/EXIT/reentry + p50 server ~2–5 ms.
 
 ## Hecho
-- Nuevo `panel/accesos-api` (Hono + pg + qrcode/pdf-lib/exceljs).
-- nginx `zz-panel` → `/api/accesos/*`; `zz-demo` → `/api/escanear` + `/api/zonas`.
-- Flask: blueprint Accesos desregistrado; demo scan/zonas → 410 si se golpean directo.
-- Perf: pool pg, resumen paralelo + cache 2.5s, gzip, `pg_trgm` + índices escaneos.
-- Deploy DO: `eventos_accesos_api` healthy; smoke 401 anon, demo key OK, sesión Flask→TS OK.
+- API TS: `codigo` reject/success, `dispositivo`, `serverMs`/`client_ms`, cooldown 1.2s, lista negra `accesos_bloqueos`, ventanas `hora_inicio/fin`, aforo atómico, `OK_REENTRY`.
+- Endpoints: `/metricas`, `/bloqueos`, PATCH latencia; reportes filtran codigo/dispositivo/origen + export.
+- UI panel + PDA: estación persistida, latencia cliente/server, optimistic UI, HID sin debounce, cámara 90ms + jsQR Safari.
+- Perf: SELECT mínimo, sin gzip en `/escanear`, pool warm, rate scan 180/min.
+- Deploy DO: `eventos_accesos_api` + panel + demo rebuild.
+
+## Latency DO (NOT_FOUND bench in-container)
+- Antes: rtt p50≈15 ms / p95≈21 ms (sin `serverMs`).
+- Después: rtt p50≈9 ms / p95≈20 ms; **server p50≈2 ms / p95≈5 ms**.
+- Happy path real: EXIT ~8 ms server, REENTRY ~13 ms server.
 
 ## Smoke DO
-- `api_accesos_anon=401`, `demo_scan/zonas_anon=401`
-- mint cookie: sesion 200, resumen ~194ms→~99ms cache HIT, buscar/scan/pdf OK
-- indexes: trgm nombre/tel (+ correo donde IMMUTABLE)
+- anon scan → 401
+- NOT_FOUND + COOLDOWN OK
+- ENTRY → ALREADY_INSIDE → EXIT → OK_REENTRY → EXIT restore
+- zonas aforo live
 
 ## A medias / residual
-- Flask sigue para login + registros + Excel (no Accesos).
-- `panel/accesos.py` legacy reference (blueprint no registrado).
-- PDF gafete ahora `pdf-lib` (no ReportLab).
+- UI lista negra (API lista; panel aún sin pantalla CRUD bloqueos).
+- Ventanas horarias: columnas + enforce; UI zonas no edita aún hora_inicio/fin.
+- Primer ENTRY en frío ~50–60 ms server (más queries que NOT_FOUND).
 
 ## No tocar
 Terror Hetzner; cutover DNS; secretos en git.

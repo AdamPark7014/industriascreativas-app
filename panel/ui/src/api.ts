@@ -27,6 +27,10 @@ export type Escaneo = {
   zona_clave?: string | null
   origen?: string
   operador?: string | null
+  codigo?: string | null
+  dispositivo?: string | null
+  server_ms?: number | null
+  client_ms?: number | null
 }
 
 export type Resumen = Sesion & {
@@ -57,17 +61,26 @@ export type GafeteHit = {
 
 export type ScanResult = {
   ok: boolean
+  codigo?: string
   mensaje: string
   detalles: string
   pitido: 'exito' | 'error'
   nombre: string
   tipo: string
+  folio?: string
   asistencias: number
   dentro: boolean
+  currentlyInside?: boolean
+  lastDirection?: 'entrada' | 'salida' | null
+  lastScanAt?: string | null
   zona?: string
   zonaNombre?: string
   zonaDentro?: number
   zonaAforo?: number
+  dispositivo?: string
+  scanId?: number
+  serverMs?: number
+  reentry?: boolean
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -113,11 +126,40 @@ export const api = {
       signal ? { signal } : undefined,
     )
   },
-  escanear: (qr: string, modo: 'entrada' | 'salida', zona: string) =>
+  escanear: (
+    qr: string,
+    modo: 'entrada' | 'salida',
+    zona: string,
+    extra?: { dispositivo?: string; clientLatencyMs?: number },
+  ) =>
     req<ScanResult>('/api/accesos/escanear', {
       method: 'POST',
-      body: JSON.stringify({ qr, modo, zona }),
+      body: JSON.stringify({
+        qr,
+        modo,
+        zona,
+        dispositivo: extra?.dispositivo,
+        clientLatencyMs: extra?.clientLatencyMs,
+      }),
     }),
+  reportarLatencia: (scanId: number, clientLatencyMs: number) =>
+    req<{ ok: boolean }>(`/api/accesos/escaneos/${scanId}/latencia`, {
+      method: 'PATCH',
+      body: JSON.stringify({ clientLatencyMs }),
+    }),
+  metricas: () =>
+    req<{
+      hoy: {
+        n: number
+        p50: number | null
+        p95: number | null
+        avg_server: number | null
+        avg_client: number | null
+      }
+      devices: { dispositivo: string; n: number; p50: number | null; ok_rate: number | null }[]
+      codigos: { codigo: string; n: number }[]
+      puedeOperar: boolean
+    }>('/api/accesos/metricas'),
   reportes: (params: URLSearchParams, signal?: AbortSignal) =>
     req<{
       kpis: {
@@ -126,9 +168,12 @@ export const api = {
         salidas: number
         rechazos: number
         reingresos?: number
+        p50_server?: number | null
+        p95_server?: number | null
       }
       registros: Escaneo[]
       zonas?: { clave: string; nombre: string }[]
+      dispositivos?: string[]
       puedeOperar: boolean
     }>(`/api/accesos/reportes?${params}`, signal ? { signal } : undefined),
 }

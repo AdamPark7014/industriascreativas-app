@@ -15,6 +15,7 @@ import {
 import { ensureIndexes, pool, query, queryOne, withClient } from './db.js'
 import { decodeFlaskSession } from './flaskSession.js'
 import { boletoPayload, boletoPdf } from './gafete.js'
+import { CODIGOS } from './codes.js'
 import { clientIp, origenConfiable, rateOk, safeEq } from './security.js'
 import { buscarExacto, buscarTexto, procesarEscaneo } from './scan.js'
 
@@ -30,9 +31,31 @@ if (!PANEL_SECRET) {
 type Vars = { usuario: string; nombre: string; alcance: string }
 
 const app = new Hono<{ Variables: Vars }>()
-app.use('*', compress())
+app.use('*', async (c, next) => {
+  // Skip gzip on the scan hot path — tiny JSON, compression adds latency.
+  if (c.req.path.endsWith('/escanear')) {
+    await next()
+    return
+  }
+  return compress()(c, next)
+})
 
-app.get('/health', (c) => c.json({ ok: true, stack: 'accesos-ts' }))
+app.get('/health', (c) =>
+  c.json({ ok: true, stack: 'accesos-ts', cooldownMs: Number(process.env.SCAN_COOLDOWN_MS || 1200) }),
+)
+
+function sanitizeDevice(v: unknown): string {
+  return String(v || '')
+    .trim()
+    .slice(0, 60)
+    .replace(/[^\w.\-:@ ]+/g, '')
+}
+
+function parseClientMs(v: unknown): number | undefined {
+  const n = Number(v)
+  if (!Number.isFinite(n) || n < 0 || n > 120_000) return undefined
+  return Math.round(n)
+}
 
 // ---------- short TTL cache for resumen (safe, shared reads) ----------
 type CacheEntry = { at: number; body: unknown }
@@ -68,8 +91,9 @@ panel.use('*', async (c, next) => {
   }
   const ip = clientIp(c.req.raw.headers)
   const kind = c.req.method === 'POST' ? 'mutacion' : 'api'
-  const max = kind === 'mutacion' ? 40 : 90
-  if (!rateOk(`${kind}:${ip}:${c.req.path}`, max, 60_000)) {
+  const isScan = c.req.path.endsWith('/escanear')
+  const max = isScan ? 180 : kind === 'mutacion' ? 40 : 90
+  if (!rateOk(`${kind}:${ip}:${isScan ? 'scan' : c.req.path}`, max, 60_000)) {
     return c.json({ ok: false, error: 'rate_limit' }, 429)
   }
   c.set('usuario', String(sess.usuario))
@@ -169,7 +193,8 @@ panel.get('/buscar', async (c) => {
 
 panel.get('/zonas', async (c) => {
   const zonas = await query(
-    `SELECT id, clave, nombre, aforo, dentro, activo FROM accesos_zonas ORDER BY id`,
+    `SELECT id, clave, nombre, aforo, dentro, activo, hora_inicio, hora_fin, zona_requerida
+     FROM accesos_zonas ORDER BY id`,
   )
   return c.json({
     zonas,
@@ -179,7 +204,7 @@ panel.get('/zonas', async (c) => {
 
 panel.post('/zonas', async (c) => {
   if (c.get('alcance') !== 'interno') {
-    return c.json({ ok: false, error: 'solo_interno' }, 403)
+    return c.json({ ok: false, error: 'solo_interno', codigo: CODIGOS.SOLO_INTERNO }, 403)
   }
   const datos = await c.req.json().catch(() => ({}))
   const clave = String(datos.clave || '')
@@ -190,34 +215,141 @@ panel.post('/zonas', async (c) => {
   let aforo = Number(datos.aforo || 0)
   if (!Number.isFinite(aforo) || aforo < 0) aforo = 0
   aforo = Math.floor(aforo)
+  const horaInicio = datos.hora_inicio ? String(datos.hora_inicio).slice(0, 8) : null
+  const horaFin = datos.hora_fin ? String(datos.hora_fin).slice(0, 8) : null
+  const zonaRequerida = Boolean(datos.zona_requerida)
   if (!clave || !nombre) return c.json({ ok: false, error: 'datos' }, 400)
   await query(
-    `INSERT INTO accesos_zonas (clave, nombre, aforo)
-     VALUES ($1,$2,$3)
+    `INSERT INTO accesos_zonas (clave, nombre, aforo, hora_inicio, hora_fin, zona_requerida)
+     VALUES ($1,$2,$3,$4,$5,$6)
      ON CONFLICT (clave) DO UPDATE
-       SET nombre = EXCLUDED.nombre, aforo = EXCLUDED.aforo, activo = TRUE`,
-    [clave, nombre, aforo],
+       SET nombre = EXCLUDED.nombre,
+           aforo = EXCLUDED.aforo,
+           hora_inicio = EXCLUDED.hora_inicio,
+           hora_fin = EXCLUDED.hora_fin,
+           zona_requerida = EXCLUDED.zona_requerida,
+           activo = TRUE`,
+    [clave, nombre, aforo, horaInicio, horaFin, zonaRequerida],
   )
   const zonas = await query(
-    `SELECT id, clave, nombre, aforo, dentro, activo FROM accesos_zonas ORDER BY id`,
+    `SELECT id, clave, nombre, aforo, dentro, activo, hora_inicio, hora_fin, zona_requerida
+     FROM accesos_zonas ORDER BY id`,
   )
   resumenCache.clear()
   return c.json({ ok: true, zonas })
 })
 
+panel.get('/bloqueos', async (c) => {
+  if (c.get('alcance') !== 'interno') {
+    return c.json({ ok: false, error: 'solo_interno', codigo: CODIGOS.SOLO_INTERNO }, 403)
+  }
+  const rows = await query(
+    `SELECT id, tipo, registro_id, motivo, activo, creado
+     FROM accesos_bloqueos WHERE activo ORDER BY creado DESC LIMIT 500`,
+  )
+  return c.json({ bloqueos: rows.map(escaneoJson) })
+})
+
+panel.post('/bloqueos', async (c) => {
+  if (c.get('alcance') !== 'interno') {
+    return c.json({ ok: false, error: 'solo_interno', codigo: CODIGOS.SOLO_INTERNO }, 403)
+  }
+  const datos = await c.req.json().catch(() => ({}))
+  const tipo = String(datos.tipo || '').trim()
+  const registroId = Number(datos.registro_id || datos.registroId || 0)
+  const motivo = String(datos.motivo || 'Lista negra').trim().slice(0, 160)
+  const activo = datos.activo === false ? false : true
+  if (!tiposDe('interno').includes(tipo as TipoClave) || !Number.isFinite(registroId) || registroId < 1) {
+    return c.json({ ok: false, error: 'datos' }, 400)
+  }
+  if (activo) {
+    await query(
+      `INSERT INTO accesos_bloqueos (tipo, registro_id, motivo, activo)
+       VALUES ($1,$2,$3,TRUE)
+       ON CONFLICT (tipo, registro_id) DO UPDATE
+         SET motivo = EXCLUDED.motivo, activo = TRUE`,
+      [tipo, registroId, motivo],
+    )
+  } else {
+    await query(
+      `UPDATE accesos_bloqueos SET activo = FALSE WHERE tipo = $1 AND registro_id = $2`,
+      [tipo, registroId],
+    )
+  }
+  return c.json({ ok: true })
+})
+
+panel.get('/metricas', async (c) => {
+  const hoy = await queryOne<{
+    n: number
+    p50: number | null
+    p95: number | null
+    avg_server: number | null
+    avg_client: number | null
+  }>(`
+    SELECT
+      COUNT(*)::int AS n,
+      percentile_cont(0.5) WITHIN GROUP (ORDER BY server_ms)::float AS p50,
+      percentile_cont(0.95) WITHIN GROUP (ORDER BY server_ms)::float AS p95,
+      AVG(server_ms)::float AS avg_server,
+      AVG(client_ms)::float AS avg_client
+    FROM accesos_escaneos
+    WHERE creado >= date_trunc('day', NOW() AT TIME ZONE 'America/Mexico_City')
+          AT TIME ZONE 'America/Mexico_City'
+      AND server_ms IS NOT NULL
+  `)
+  const devices = await query<{
+    dispositivo: string
+    n: number
+    p50: number | null
+    ok_rate: number | null
+  }>(`
+    SELECT
+      COALESCE(NULLIF(dispositivo,''), '(sin etiqueta)') AS dispositivo,
+      COUNT(*)::int AS n,
+      percentile_cont(0.5) WITHIN GROUP (ORDER BY server_ms)::float AS p50,
+      (AVG(CASE WHEN ok THEN 1.0 ELSE 0.0 END))::float AS ok_rate
+    FROM accesos_escaneos
+    WHERE creado >= date_trunc('day', NOW() AT TIME ZONE 'America/Mexico_City')
+          AT TIME ZONE 'America/Mexico_City'
+    GROUP BY 1
+    ORDER BY n DESC
+    LIMIT 40
+  `)
+  const codigos = await query<{ codigo: string; n: number }>(`
+    SELECT COALESCE(codigo,'(sin)') AS codigo, COUNT(*)::int AS n
+    FROM accesos_escaneos
+    WHERE creado >= date_trunc('day', NOW() AT TIME ZONE 'America/Mexico_City')
+          AT TIME ZONE 'America/Mexico_City'
+    GROUP BY 1
+    ORDER BY n DESC
+    LIMIT 30
+  `)
+  return c.json({
+    hoy: hoy || { n: 0, p50: null, p95: null, avg_server: null, avg_client: null },
+    devices,
+    codigos,
+    puedeOperar: c.get('alcance') === 'interno',
+  })
+})
+
 panel.post('/escanear', async (c) => {
   if (c.get('alcance') !== 'interno') {
-    return c.json({ ok: false, error: 'solo_interno' }, 403)
+    return c.json({ ok: false, error: 'solo_interno', codigo: CODIGOS.SOLO_INTERNO }, 403)
   }
+  const startedAt = Date.now()
   const datos = await c.req.json().catch(() => ({}))
   const qr = String(datos.qr || datos.qr_data || '').trim()
   const modo = String(datos.modo || 'entrada').trim().toLowerCase()
   let zonaClave = String(datos.zona || ZONA_DEFECTO).trim().toLowerCase()
-  if (qr.length > 80) return c.json({ ok: false, error: 'qr_largo' }, 400)
+  const dispositivo = sanitizeDevice(datos.dispositivo || datos.device || datos.station)
+  const clientMs = parseClientMs(datos.clientLatencyMs ?? datos.client_ms)
+  if (qr.length > 80) return c.json({ ok: false, error: 'qr_largo', codigo: CODIGOS.INVALID_QR }, 400)
   if (!/^[A-Za-z0-9_-]{1,80}$/.test(qr)) {
     return c.json(
       {
         ok: false,
+        codigo: CODIGOS.INVALID_QR,
         mensaje: 'CODIGO INVALIDO',
         detalles: 'El QR no tiene un formato reconocido.',
         pitido: 'error',
@@ -225,6 +357,8 @@ panel.post('/escanear', async (c) => {
         tipo: '',
         asistencias: 0,
         dentro: false,
+        currentlyInside: false,
+        serverMs: Math.max(0, Date.now() - startedAt),
       },
       400,
     )
@@ -233,11 +367,12 @@ panel.post('/escanear', async (c) => {
     return c.json({ ok: false, error: 'modo' }, 400)
   }
   if (!/^[a-z0-9_-]{1,40}$/.test(zonaClave)) {
-    return c.json({ ok: false, error: 'zona' }, 400)
+    return c.json({ ok: false, error: 'zona', codigo: CODIGOS.ZONE_REQUIRED }, 400)
   }
   if (!qr) {
     return c.json({
       ok: false,
+      codigo: CODIGOS.SIN_DATOS,
       mensaje: 'SIN DATOS',
       detalles: 'No se recibió ningún código.',
       pitido: 'error',
@@ -245,6 +380,8 @@ panel.post('/escanear', async (c) => {
       tipo: '',
       asistencias: 0,
       dentro: false,
+      currentlyInside: false,
+      serverMs: Math.max(0, Date.now() - startedAt),
     })
   }
 
@@ -258,6 +395,9 @@ panel.post('/escanear', async (c) => {
         operador: c.get('usuario'),
         origen: 'panel',
         alcance: c.get('alcance'),
+        dispositivo: dispositivo || undefined,
+        clientMs,
+        startedAt,
       })
       await client.query('COMMIT')
       return r
@@ -268,6 +408,26 @@ panel.post('/escanear', async (c) => {
   })
   resumenCache.clear()
   return c.json(result)
+})
+
+panel.patch('/escaneos/:id/latencia', async (c) => {
+  if (c.get('alcance') !== 'interno') {
+    return c.json({ ok: false, error: 'solo_interno' }, 403)
+  }
+  const id = Number(c.req.param('id'))
+  if (!Number.isFinite(id)) return c.json({ ok: false, error: 'id' }, 400)
+  const datos = await c.req.json().catch(() => ({}))
+  const ms = parseClientMs(datos.clientLatencyMs ?? datos.client_ms)
+  if (ms == null) return c.json({ ok: false, error: 'clientLatencyMs' }, 400)
+  const updated = await query(
+    `UPDATE accesos_escaneos
+     SET client_ms = COALESCE(client_ms, $2)
+     WHERE id = $1 AND operador = $3
+     RETURNING id, client_ms, server_ms`,
+    [id, ms, c.get('usuario')],
+  )
+  if (!updated[0]) return c.json({ ok: false, error: 'no_encontrado' }, 404)
+  return c.json({ ok: true, scan: updated[0] })
 })
 
 type GafeteOk = { nombre: string; folio: string; tipo: string; subtitulo: string }
@@ -323,6 +483,10 @@ panel.get('/reportes', async (c) => {
   const modo = c.req.query('modo') || ''
   const okArg = c.req.query('ok')
   const zona = c.req.query('zona') || ''
+  const codigo = c.req.query('codigo') || ''
+  const dispositivo = c.req.query('dispositivo') || ''
+  const origen = c.req.query('origen') || ''
+  const operador = c.req.query('operador') || ''
   let q = (c.req.query('q') || '').trim()
   if (q.length > 120) return c.json({ ok: false, error: 'q_larga' }, 400)
   const formato = (c.req.query('formato') || 'json').toLowerCase()
@@ -344,59 +508,73 @@ panel.get('/reportes', async (c) => {
     if (!/^[a-z0-9_-]{1,40}$/.test(zona)) return c.json({ ok: false, error: 'zona' }, 400)
     add('zona_clave = ?', zona)
   }
+  if (codigo) {
+    if (!/^[A-Z0-9_]{1,40}$/i.test(codigo)) return c.json({ ok: false, error: 'codigo' }, 400)
+    add('codigo = ?', codigo.toUpperCase())
+  }
+  if (dispositivo) {
+    add('dispositivo = ?', sanitizeDevice(dispositivo))
+  }
+  if (origen === 'panel' || origen === 'demo') add('origen = ?', origen)
+  if (operador) add('operador = ?', operador.slice(0, 50))
   if (q) {
     params.push(`%${q}%`)
     const p = `$${params.length}`
-    cond.push(`(nombre ILIKE ${p} OR CAST(registro_id AS TEXT) ILIKE ${p})`)
+    cond.push(
+      `(nombre ILIKE ${p} OR CAST(registro_id AS TEXT) ILIKE ${p} OR COALESCE(dispositivo,'') ILIKE ${p} OR COALESCE(codigo,'') ILIKE ${p})`,
+    )
   }
   const donde = cond.join(' AND ')
   params.push(limite)
   const limP = `$${params.length}`
 
   const kpiParams = params.slice(0, -1)
-  const [kpis, zonasOpts, rows] = await Promise.all([
+  const [kpis, zonasOpts, rows, devices] = await Promise.all([
     queryOne<{
       total: number
       entradas: number
       salidas: number
       rechazos: number
       reingresos: number
+      p50_server: number | null
+      p95_server: number | null
     }>(
       `SELECT
         COUNT(*)::int AS total,
         COUNT(*) FILTER (WHERE ok AND modo = 'entrada')::int AS entradas,
         COUNT(*) FILTER (WHERE ok AND modo = 'salida')::int AS salidas,
         COUNT(*) FILTER (WHERE NOT ok)::int AS rechazos,
-        COUNT(*) FILTER (
-          WHERE ok AND modo = 'entrada'
-            AND EXISTS (
-              SELECT 1 FROM accesos_escaneos s2
-              WHERE s2.ok AND s2.modo = 'salida'
-                AND s2.tipo = accesos_escaneos.tipo
-                AND s2.registro_id = accesos_escaneos.registro_id
-                AND s2.creado < accesos_escaneos.creado
-            )
-        )::int AS reingresos
+        COUNT(*) FILTER (WHERE ok AND codigo = 'OK_REENTRY')::int AS reingresos,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY server_ms)::float AS p50_server,
+        percentile_cont(0.95) WITHIN GROUP (ORDER BY server_ms)::float AS p95_server
       FROM accesos_escaneos WHERE ${donde}`,
       kpiParams,
     ),
     query(`SELECT clave, nombre FROM accesos_zonas WHERE activo ORDER BY id`),
     query(
-      `SELECT id, creado, tipo, registro_id, nombre, modo, ok, mensaje, zona_clave, origen, operador
+      `SELECT id, creado, tipo, registro_id, nombre, modo, ok, mensaje, zona_clave, origen, operador,
+              codigo, dispositivo, server_ms, client_ms
        FROM accesos_escaneos WHERE ${donde}
        ORDER BY creado DESC LIMIT ${limP}`,
       params,
+    ),
+    query<{ dispositivo: string }>(
+      `SELECT DISTINCT COALESCE(dispositivo,'') AS dispositivo
+       FROM accesos_escaneos
+       WHERE dispositivo IS NOT NULL AND dispositivo <> ''
+       ORDER BY 1 LIMIT 80`,
     ),
   ])
 
   const registros = rows.map(escaneoJson)
   if (formato === 'csv') {
     const header =
-      'hora,ok,modo,nombre,tipo,folio_id,zona,mensaje,origen,operador\n'
+      'hora,ok,codigo,modo,nombre,tipo,folio_id,zona,mensaje,origen,operador,dispositivo,server_ms,client_ms\n'
     const lines = registros.map((r) =>
       [
         r.creado,
         r.ok,
+        r.codigo,
         r.modo,
         r.nombre,
         r.tipo,
@@ -405,6 +583,9 @@ panel.get('/reportes', async (c) => {
         r.mensaje,
         r.origen,
         r.operador,
+        r.dispositivo,
+        r.server_ms,
+        r.client_ms,
       ]
         .map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`)
         .join(','),
@@ -424,6 +605,7 @@ panel.get('/reportes', async (c) => {
     ws.addRow([
       'Hora',
       'OK',
+      'Codigo',
       'Modo',
       'Nombre',
       'Tipo',
@@ -432,11 +614,15 @@ panel.get('/reportes', async (c) => {
       'Mensaje',
       'Origen',
       'Operador',
+      'Dispositivo',
+      'ServerMs',
+      'ClientMs',
     ])
     for (const r of registros) {
       ws.addRow([
         r.creado,
         r.ok,
+        r.codigo,
         r.modo,
         r.nombre,
         r.tipo,
@@ -445,6 +631,9 @@ panel.get('/reportes', async (c) => {
         r.mensaje,
         r.origen,
         r.operador,
+        r.dispositivo,
+        r.server_ms,
+        r.client_ms,
       ])
     }
     const buf = await wb.xlsx.writeBuffer()
@@ -459,9 +648,18 @@ panel.get('/reportes', async (c) => {
   }
 
   return c.json({
-    kpis: kpis || { total: 0, entradas: 0, salidas: 0, rechazos: 0, reingresos: 0 },
+    kpis: kpis || {
+      total: 0,
+      entradas: 0,
+      salidas: 0,
+      rechazos: 0,
+      reingresos: 0,
+      p50_server: null,
+      p95_server: null,
+    },
     registros,
     zonas: zonasOpts,
+    dispositivos: devices.map((d) => d.dispositivo).filter(Boolean),
     puedeOperar: c.get('alcance') === 'interno',
   })
 })
@@ -493,31 +691,40 @@ app.get('/api/zonas', async (c) => {
 })
 
 app.post('/api/escanear', async (c) => {
+  const startedAt = Date.now()
   if (!scanAutorizado(c)) {
     return c.json(
       {
         ok: false,
+        codigo: CODIGOS.UNAUTHORIZED,
         mensaje: 'NO AUTORIZADO',
         detalles: 'Falta o es inválida la clave de escáner (X-Scan-Key).',
         pitido: 'error',
         nombre: '',
         tipo: '',
         asistencias: 0,
+        dentro: false,
+        currentlyInside: false,
+        serverMs: Math.max(0, Date.now() - startedAt),
       },
       401,
     )
   }
   const ip = clientIp(c.req.raw.headers)
-  if (!rateOk(`demo-scan:${ip}`, 40, 60_000)) {
+  if (!rateOk(`demo-scan:${ip}`, 120, 60_000)) {
     return c.json(
       {
         ok: false,
+        codigo: CODIGOS.RATE_LIMIT,
         mensaje: 'DEMASIADOS INTENTOS',
         detalles: 'Espera un momento antes de seguir escaneando.',
         pitido: 'error',
         nombre: '',
         tipo: '',
         asistencias: 0,
+        dentro: false,
+        currentlyInside: false,
+        serverMs: Math.max(0, Date.now() - startedAt),
       },
       429,
     )
@@ -528,38 +735,58 @@ app.post('/api/escanear', async (c) => {
   const modo = String(datos.modo || 'entrada').trim().toLowerCase()
   let zona = String(datos.zona || ZONA_DEFECTO).trim().toLowerCase()
   if (!/^[a-z0-9_-]{1,40}$/.test(zona)) zona = ZONA_DEFECTO
+  const dispositivo = sanitizeDevice(datos.dispositivo || datos.device || datos.station)
+  const clientMs = parseClientMs(datos.clientLatencyMs ?? datos.client_ms)
 
   if (modo !== 'entrada' && modo !== 'salida') {
-    return c.json({
-      ok: false,
-      mensaje: 'MODO INVALIDO',
-      detalles: 'Usa entrada o salida.',
-      pitido: 'error',
-      nombre: '',
-      tipo: '',
-      asistencias: 0,
-    }, 400)
+    return c.json(
+      {
+        ok: false,
+        codigo: CODIGOS.INVALID_QR,
+        mensaje: 'MODO INVALIDO',
+        detalles: 'Usa entrada o salida.',
+        pitido: 'error',
+        nombre: '',
+        tipo: '',
+        asistencias: 0,
+        dentro: false,
+        currentlyInside: false,
+        serverMs: Math.max(0, Date.now() - startedAt),
+      },
+      400,
+    )
   }
   if (qr.length > 80) {
-    return c.json({
-      ok: false,
-      mensaje: 'CODIGO INVALIDO',
-      detalles: 'El código es demasiado largo.',
-      pitido: 'error',
-      nombre: '',
-      tipo: '',
-      asistencias: 0,
-    }, 400)
+    return c.json(
+      {
+        ok: false,
+        codigo: CODIGOS.INVALID_QR,
+        mensaje: 'CODIGO INVALIDO',
+        detalles: 'El código es demasiado largo.',
+        pitido: 'error',
+        nombre: '',
+        tipo: '',
+        asistencias: 0,
+        dentro: false,
+        currentlyInside: false,
+        serverMs: Math.max(0, Date.now() - startedAt),
+      },
+      400,
+    )
   }
   if (!qr) {
     return c.json({
       ok: false,
+      codigo: CODIGOS.SIN_DATOS,
       mensaje: '❌ SIN DATOS',
       detalles: 'No se recibió ningún código.',
       pitido: 'error',
       nombre: '',
       tipo: '',
       asistencias: 0,
+      dentro: false,
+      currentlyInside: false,
+      serverMs: Math.max(0, Date.now() - startedAt),
     })
   }
 
@@ -570,9 +797,12 @@ app.post('/api/escanear', async (c) => {
         qr,
         modo: modo as 'entrada' | 'salida',
         zonaClave: zona,
-        operador: 'pda',
+        operador: dispositivo || 'pda',
         origen: 'demo',
         alcance: 'interno',
+        dispositivo: dispositivo || 'pda',
+        clientMs,
+        startedAt,
       })
       await client.query('COMMIT')
       return r
@@ -588,7 +818,9 @@ app.post('/api/escanear', async (c) => {
 async function boot() {
   try {
     await ensureIndexes()
-    console.log('accesos-api indexes OK')
+    // Warm pool: one cheap round-trip so first scan isn't cold.
+    await pool.query('SELECT 1')
+    console.log('accesos-api indexes OK + pool warm')
   } catch (e) {
     console.error('indexes warn', e)
   }

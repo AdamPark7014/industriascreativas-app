@@ -5,17 +5,24 @@ export type QueuedScan = {
   qr: string
   modo: 'entrada' | 'salida'
   zona: string
+  dispositivo?: string
   at: number
 }
 
 const KEY = 'ficti_offline_scans'
+/** Descarta escaneos offline más viejos que esto al leer/flush. */
+const MAX_AGE_MS = 6 * 60 * 60 * 1000
 
 export function readQueue(): QueuedScan[] {
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw) as QueuedScan[]
-    return Array.isArray(parsed) ? parsed : []
+    if (!Array.isArray(parsed)) return []
+    const now = Date.now()
+    const fresh = parsed.filter((x) => x && now - (x.at || 0) < MAX_AGE_MS)
+    if (fresh.length !== parsed.length) writeQueue(fresh)
+    return fresh
   } catch {
     return []
   }

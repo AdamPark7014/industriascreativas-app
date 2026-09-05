@@ -52,9 +52,51 @@ async function trySql(sql: string, label: string): Promise<void> {
   }
 }
 
-/** Ensure Accesos indexes (idempotent). Called once on boot. */
+/** Ensure Accesos schema + indexes (idempotent). Called once on boot. */
 export async function ensureIndexes(): Promise<void> {
   await trySql(`CREATE EXTENSION IF NOT EXISTS pg_trgm`, 'pg_trgm')
+
+  await trySql(
+    `ALTER TABLE accesos_escaneos ADD COLUMN IF NOT EXISTS codigo VARCHAR(40)`,
+    'col_codigo',
+  )
+  await trySql(
+    `ALTER TABLE accesos_escaneos ADD COLUMN IF NOT EXISTS dispositivo VARCHAR(60)`,
+    'col_dispositivo',
+  )
+  await trySql(
+    `ALTER TABLE accesos_escaneos ADD COLUMN IF NOT EXISTS server_ms INTEGER`,
+    'col_server_ms',
+  )
+  await trySql(
+    `ALTER TABLE accesos_escaneos ADD COLUMN IF NOT EXISTS client_ms INTEGER`,
+    'col_client_ms',
+  )
+  await trySql(
+    `ALTER TABLE accesos_zonas ADD COLUMN IF NOT EXISTS hora_inicio TIME`,
+    'col_hora_inicio',
+  )
+  await trySql(
+    `ALTER TABLE accesos_zonas ADD COLUMN IF NOT EXISTS hora_fin TIME`,
+    'col_hora_fin',
+  )
+  await trySql(
+    `ALTER TABLE accesos_zonas ADD COLUMN IF NOT EXISTS zona_requerida BOOLEAN NOT NULL DEFAULT FALSE`,
+    'col_zona_requerida',
+  )
+  await trySql(
+    `CREATE TABLE IF NOT EXISTS accesos_bloqueos (
+      id SERIAL PRIMARY KEY,
+      tipo VARCHAR(20) NOT NULL,
+      registro_id INTEGER NOT NULL,
+      motivo VARCHAR(160) NOT NULL DEFAULT '',
+      activo BOOLEAN NOT NULL DEFAULT TRUE,
+      creado TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (tipo, registro_id)
+    )`,
+    'bloqueos',
+  )
+
   await trySql(
     `CREATE INDEX IF NOT EXISTS accesos_escaneos_zona_creado_idx
       ON accesos_escaneos (zona_clave, creado DESC)`,
@@ -64,6 +106,17 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS accesos_escaneos_reg_modo_idx
       ON accesos_escaneos (tipo, registro_id, modo, ok, creado)`,
     'escaneos_reg',
+  )
+  await trySql(
+    `CREATE INDEX IF NOT EXISTS accesos_escaneos_codigo_idx
+      ON accesos_escaneos (codigo, creado DESC)`,
+    'escaneos_codigo',
+  )
+  await trySql(
+    `CREATE INDEX IF NOT EXISTS accesos_escaneos_dispositivo_idx
+      ON accesos_escaneos (dispositivo, creado DESC)
+      WHERE dispositivo IS NOT NULL AND dispositivo <> ''`,
+    'escaneos_dispositivo',
   )
 
   // Nombre / teléfono are plain text → gin_trgm OK.

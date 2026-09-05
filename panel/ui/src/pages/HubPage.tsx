@@ -6,13 +6,19 @@ import styles from './hub.module.scss'
 export default function HubPage() {
   const sesion = useOutletContext<Sesion | null>()
   const [data, setData] = useState<Resumen | null>(null)
+  const [latency, setLatency] = useState<{
+    p50: number | null
+    p95: number | null
+    n: number
+    devices: { dispositivo: string; n: number; p50: number | null }[]
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let vivo = true
-    const cargar = () =>
-      api
+    const cargar = () => {
+      void api
         .resumen()
         .then((d) => {
           if (vivo) {
@@ -26,6 +32,23 @@ export default function HubPage() {
         .finally(() => {
           if (vivo) setLoading(false)
         })
+      void api
+        .metricas()
+        .then((m) => {
+          if (!vivo) return
+          setLatency({
+            p50: m.hoy.p50,
+            p95: m.hoy.p95,
+            n: m.hoy.n,
+            devices: m.devices.slice(0, 6).map((d) => ({
+              dispositivo: d.dispositivo,
+              n: d.n,
+              p50: d.p50,
+            })),
+          })
+        })
+        .catch(() => undefined)
+    }
 
     void cargar()
     const id = window.setInterval(() => void cargar(), 15000)
@@ -43,6 +66,33 @@ export default function HubPage() {
       </p>
 
       {error ? <div className={styles.alerta}>{error}</div> : null}
+
+      {latency ? (
+        <section className={styles.kpis} aria-label="Latencia de escaneo hoy">
+          <Kpi
+            label="Escaneos medidos"
+            value={latency.n}
+            loading={false}
+          />
+          <Kpi
+            label="p50 server"
+            value={latency.p50 != null ? Math.round(latency.p50) : null}
+            loading={false}
+            suffix="ms"
+          />
+          <Kpi
+            label="p95 server"
+            value={latency.p95 != null ? Math.round(latency.p95) : null}
+            loading={false}
+            suffix="ms"
+            accent="warn"
+          />
+          <article className={styles.kpi}>
+            <span>Estaciones activas</span>
+            <strong>{latency.devices.length || '—'}</strong>
+          </article>
+        </section>
+      ) : null}
 
       <section className={styles.ahora} aria-label="Qué hacer ahora">
         <h2>¿Qué necesitas hacer?</h2>
@@ -166,11 +216,13 @@ function Kpi({
   value,
   loading,
   accent,
+  suffix,
 }: {
   label: string
-  value?: number
+  value?: number | null
   loading?: boolean
   accent?: 'navy' | 'warn'
+  suffix?: string
 }) {
   return (
     <article
@@ -178,7 +230,11 @@ function Kpi({
     >
       <span>{label}</span>
       <strong>
-        {loading && value == null ? '…' : value == null ? '—' : value.toLocaleString('es-MX')}
+        {loading && value == null
+          ? '…'
+          : value == null
+            ? '—'
+            : `${value.toLocaleString('es-MX')}${suffix ? ` ${suffix}` : ''}`}
       </strong>
     </article>
   )

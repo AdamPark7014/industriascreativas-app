@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import jsQR from 'jsqr'
 
 type DetectedCode = { rawValue: string }
 type BarcodeDetectorLike = {
@@ -14,8 +15,10 @@ export type CameraStatus =
   | 'unsupported'
   | 'error'
 
-const DECODE_INTERVAL_MS = 160
-const REPEAT_WINDOW_MS = 2800
+/** Continuous decode interval — keep low for hyper-fast camera path. */
+const DECODE_INTERVAL_MS = 90
+/** Debounce only for camera continuous reads (HID wedge has no debounce). */
+const REPEAT_WINDOW_MS = 2000
 
 function detectorCtor(): BarcodeDetectorCtor | null {
   if (typeof window === 'undefined') return null
@@ -48,6 +51,7 @@ export function useCameraCapture(options: {
   const onDecodeRef = useRef(onDecode)
   const pausedRef = useRef(paused)
   const lastValueRef = useRef<{ value: string; at: number } | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [active, setActive] = useState(false)
   const [status, setStatus] = useState<CameraStatus>('idle')
   const [error, setError] = useState('')
@@ -57,7 +61,8 @@ export function useCameraCapture(options: {
   pausedRef.current = paused
 
   useEffect(() => {
-    setDecoderSupported(detectorCtor() !== null)
+    // Native BarcodeDetector OR jsQR fallback (Safari)
+    setDecoderSupported(true)
   }, [])
 
   const stop = useCallback(() => {
@@ -82,7 +87,7 @@ export function useCameraCapture(options: {
           audio: false,
           video: {
             facingMode: { ideal: 'environment' },
-            width: { ideal: 1280 },
+            width: { ideal: 960 },
             height: { ideal: 720 },
           },
         })
@@ -112,27 +117,50 @@ export function useCameraCapture(options: {
   useEffect(() => {
     if (!active || status !== 'running') return
     const Ctor = detectorCtor()
-    if (!Ctor) return
     let cancelled = false
-    let detector: BarcodeDetectorLike
-    try {
-      detector = new Ctor({ formats: ['qr_code'] })
-    } catch {
-      return
+    let detector: BarcodeDetectorLike | null = null
+    if (Ctor) {
+      try {
+        detector = new Ctor({ formats: ['qr_code'] })
+      } catch {
+        detector = null
+      }
     }
+    if (!canvasRef.current) canvasRef.current = document.createElement('canvas')
+
+    const emit = (raw: string) => {
+      const now = Date.now()
+      const last = lastValueRef.current
+      if (last && last.value === raw && now - last.at < REPEAT_WINDOW_MS) return
+      lastValueRef.current = { value: raw, at: now }
+      onDecodeRef.current(raw)
+    }
+
     const tick = async () => {
       if (cancelled || pausedRef.current) return
       const video = videoRef.current
       if (!video || video.readyState < 2) return
       try {
-        const codes = await detector.detect(video)
-        const raw = codes[0]?.rawValue?.trim()
-        if (!raw) return
-        const now = Date.now()
-        const last = lastValueRef.current
-        if (last && last.value === raw && now - last.at < REPEAT_WINDOW_MS) return
-        lastValueRef.current = { value: raw, at: now }
-        onDecodeRef.current(raw)
+        if (detector) {
+          const codes = await detector.detect(video)
+          const raw = codes[0]?.rawValue?.trim()
+          if (raw) emit(raw)
+          return
+        }
+        // Safari / no BarcodeDetector → jsQR on downscaled canvas
+        const canvas = canvasRef.current!
+        const w = Math.min(480, video.videoWidth || 480)
+        const h = Math.min(480, video.videoHeight || 480)
+        if (w < 8 || h < 8) return
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d', { willReadFrequently: true })
+        if (!ctx) return
+        ctx.drawImage(video, 0, 0, w, h)
+        const img = ctx.getImageData(0, 0, w, h)
+        const code = jsQR(img.data, w, h, { inversionAttempts: 'dontInvert' })
+        const raw = code?.data?.trim()
+        if (raw) emit(raw)
       } catch {
         /* frame skip */
       }
