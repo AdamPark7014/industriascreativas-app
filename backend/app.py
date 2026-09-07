@@ -147,6 +147,14 @@ class Alumno(db.Model):
     Correo = db.Column('Correo', ARRAY(db.String(50)), nullable=False)
     InstitucionEducativa = db.Column('InstitucionEducativa', db.String(200), nullable=True)
     Grado = db.Column('Grado', db.String(100), nullable=True)
+    # Cambios del cliente (sep-2026): el texto libre de institución se sustituye
+    # por tipo + carrera. Las columnas viejas se conservan para no perder los
+    # registros ya capturados con el formulario anterior.
+    Edad = db.Column('Edad', db.String(40), nullable=True)
+    TipoInstitucion = db.Column('TipoInstitucion', db.String(40), nullable=True)
+    Carrera = db.Column('Carrera', db.String(150), nullable=True)
+    Competencia = db.Column('Competencia', db.String(120), nullable=True)
+    AreaInteresGeneral = db.Column('AreaInteresGeneral', db.String(120), nullable=True)
     confirmado = db.Column('confirmado', db.Boolean, default=False)
     qr_code = db.Column('qr_code', db.LargeBinary, nullable=True)
     asistencias = db.Column(db.Integer, default=0)      
@@ -193,6 +201,9 @@ class Empresario(db.Model):
     Presupuesto = db.Column('Presupuesto', db.String(100), nullable=True)
     TiempoInversion = db.Column('TiempoInversion', db.String(100), nullable=True)
     ProductosInteres = db.Column('ProductosInteres', ARRAY(db.String(100)), nullable=True)
+    # Cambios del cliente (sep-2026).
+    Edad = db.Column('Edad', db.String(40), nullable=True)
+    AreaInteresGeneral = db.Column('AreaInteresGeneral', db.String(120), nullable=True)
 
     confirmado = db.Column('confirmado', db.Boolean, default=False)
     qr_code = db.Column('qr_code', db.LargeBinary, nullable=True)
@@ -417,17 +428,37 @@ def pagina_confirmacion(titulo, cuerpo_html='', tipo_usuario='ALUMNO'):
 
 
 def ensure_schema():
-    """Agrega columnas nuevas de estudiantes sin romper tablas existentes."""
+    """Agrega columnas nuevas sin romper tablas existentes.
+
+    Todo va con ADD COLUMN IF NOT EXISTS y nullable: la tabla está viva con
+    registros reales, así que ninguna columna nueva puede ser obligatoria ni
+    puede reescribir lo ya capturado.
+    """
+    alumnos = 'ALTER TABLE public."Registro_Alumnos" ADD COLUMN IF NOT EXISTS '
+    empresarios = 'ALTER TABLE public."Registro_Empresarios" ADD COLUMN IF NOT EXISTS '
     statements = [
-        'ALTER TABLE public."Registro_Alumnos" ADD COLUMN IF NOT EXISTS "ApellidoPaterno" VARCHAR(100)',
-        'ALTER TABLE public."Registro_Alumnos" ADD COLUMN IF NOT EXISTS "Telefono" VARCHAR(20)',
+        # Venían sueltas en deploy/entrypoint.sh, que llevaba su propia lista
+        # duplicada. Se traen aquí para que exista una sola fuente de verdad.
+        'ALTER TABLE public."Registro_Empresarios" ADD COLUMN IF NOT EXISTS "Estado" VARCHAR(100)',
+        alumnos + '"InstitucionEducativa" VARCHAR(200)',
+        alumnos + '"Grado" VARCHAR(100)',
+        alumnos + '"ApellidoPaterno" VARCHAR(100)',
+        alumnos + '"Telefono" VARCHAR(20)',
+        # Cambios del cliente (sep-2026)
+        alumnos + '"Edad" VARCHAR(40)',
+        alumnos + '"TipoInstitucion" VARCHAR(40)',
+        alumnos + '"Carrera" VARCHAR(150)',
+        alumnos + '"Competencia" VARCHAR(120)',
+        alumnos + '"AreaInteresGeneral" VARCHAR(120)',
+        empresarios + '"Edad" VARCHAR(40)',
+        empresarios + '"AreaInteresGeneral" VARCHAR(120)',
     ]
     try:
         with db.engine.begin() as conn:
             for stmt in statements:
                 conn.execute(text(stmt))
     except Exception as e:
-        print(f'⚠️ No se pudo actualizar esquema Alumnos: {e}')
+        print(f'⚠️ No se pudo actualizar esquema: {e}')
 
 
 def generar_bytes_qr(contenido):
@@ -621,16 +652,20 @@ def partir_en_lineas(texto, fuente, tam, ancho_max, medir):
     return lineas
 
 
-def crear_pdf_gafete(id_usuario, nombre_usuario, tipo_usuario="ALUMNO", empresa="", cargo=""):
+def crear_pdf_gafete(id_usuario, nombre_usuario, tipo_usuario="ALUMNO", detalles=None):
     """Boleto digital en tema oscuro Tech Capital 2026.
 
     El QR va sobre una placa blanca con margen: los lectores necesitan zona de
     silencio clara alrededor del código, y sobre el fondo oscuro no leería.
+
+    `detalles` son las líneas bajo el folio. Es una lista y no los antiguos
+    `empresa`/`cargo` porque el cliente pidió datos distintos según el tipo:
+    empresa y puesto para el empresario, institución y competencia para el
+    estudiante. Las líneas vacías se descartan.
     """
     nombre_usuario = str(nombre_usuario).upper() if nombre_usuario else ""
     tipo_usuario = str(tipo_usuario).upper()
-    empresa = str(empresa).upper() if empresa else ""
-    cargo = str(cargo).upper() if cargo else ""
+    lineas_detalle = [str(d).upper().strip() for d in (detalles or []) if str(d).strip()]
     es_empresa = es_tipo_empresa(tipo_usuario)
     accent = COLOR_ROSA_FICTI if es_empresa else COLOR_VERDE_FICTI
 
@@ -717,13 +752,14 @@ def crear_pdf_gafete(id_usuario, nombre_usuario, tipo_usuario="ALUMNO", empresa=
     c.setFont("Helvetica", 12)
     c.drawCentredString(ANCHO / 2, y, f"Folio: {id_usuario}")
     y -= 18
-    if empresa:
-        c.setFont("Helvetica", 10)
-        c.drawCentredString(ANCHO / 2, y, empresa)
-        y -= 14
-    if cargo:
-        c.setFont("Helvetica", 10)
-        c.drawCentredString(ANCHO / 2, y, cargo)
+    # Cada línea encoge si no cabe: una institución o un puesto largos se salían
+    # del gafete y quedaban cortados a la mitad.
+    for linea in lineas_detalle:
+        tam_detalle = 10
+        while tam_detalle > 7 and c.stringWidth(linea, "Helvetica", tam_detalle) > ancho_util:
+            tam_detalle -= 1
+        c.setFont("Helvetica", tam_detalle)
+        c.drawCentredString(ANCHO / 2, y, linea)
         y -= 14
 
     # Mascota
@@ -836,13 +872,46 @@ def enviar_correo_confirmacion(
         return False
 
 
+def detalles_gafete(tipo_usuario, objeto_usuario):
+    """Líneas que van bajo el folio en el gafete, según el tipo de registro.
+
+    Lo pidió el cliente (sep-2026): el empresario necesita empresa y puesto para
+    que el otro sepa con quién está hablando; el estudiante, institución y la
+    competencia en la que compite.
+
+    Ojo con el puesto: el gafete leía `Cargo`, que el formulario público nunca
+    ha llenado — manda `posicion_empresa` a la columna `PosicionEmpresa`. Por eso
+    todos los gafetes de empresario salían sin puesto. Se leen las dos, con
+    `PosicionEmpresa` primero, para cubrir también los registros viejos.
+    """
+    if objeto_usuario is None:
+        return []
+
+    def campo(nombre):
+        valor = getattr(objeto_usuario, nombre, '') or ''
+        return str(valor).strip()
+
+    if es_tipo_empresa(str(tipo_usuario).upper()):
+        return [campo('Empresa'), campo('PosicionEmpresa') or campo('Cargo')]
+
+    # Estudiante: tipo de institución (con carrera cuando aplica) y competencia.
+    institucion = campo('TipoInstitucion') or campo('InstitucionEducativa')
+    carrera = campo('Carrera')
+    if institucion and carrera:
+        institucion = f'{institucion} · {carrera}'
+    competencia = campo('Competencia')
+    # «Ninguna» no aporta nada en un gafete; ocupa una línea para decir que no.
+    if competencia.strip().lower() == 'ninguna':
+        competencia = ''
+    return [institucion, competencia]
+
+
 def enviar_correo_gafete(email_destino, nombre_usuario, id_usuario, tipo_usuario="ALUMNO", objeto_usuario=None):
     try:
         if not BREVO_API_KEY:
             print('❌ Error enviando gafete: BREVO API key ausente (backend/.env → API_KEYY)')
             return False
-        empresa = getattr(objeto_usuario, 'Empresa', '') if objeto_usuario is not None else ''
-        cargo = getattr(objeto_usuario, 'Cargo', '') if objeto_usuario is not None else ''
+        detalles = detalles_gafete(tipo_usuario, objeto_usuario)
 
         if tipo_usuario.upper() == "ELISA_CARRILLO" and objeto_usuario is not None:
             bytes_pdf = crear_pdf_gafete_elisa(objeto_usuario)
@@ -851,8 +920,7 @@ def enviar_correo_gafete(email_destino, nombre_usuario, id_usuario, tipo_usuario
                 id_usuario,
                 nombre_usuario,
                 tipo_usuario,
-                empresa=empresa or '',
-                cargo=cargo or '',
+                detalles=detalles,
             )
 
         nombre_mayus = nombre_usuario.upper()
@@ -1051,13 +1119,24 @@ def registro():
         Telefono_local = request.form.get('telefono', '').strip()
         Telefono = f"{lada} {Telefono_local}".strip()
         Correo = request.form.get('email', '').strip().lower()
-        Institucion = request.form.get('institucion_educativa', '').strip().upper()
-        Grado = request.form.get('grado', '').strip().upper()
+        Edad = request.form.get('edad', '').strip()
+        TipoInstitucion = request.form.get('tipo_institucion', '').strip()
+        Carrera = request.form.get('carrera', '').strip().upper()
+        Competencias = [c for c in request.form.getlist('competencias') if c.strip()]
+        AreaInteres = request.form.get('area_interes_general', '').strip()
+
+        # Compatibilidad: el formulario anterior mandaba texto libre. Si llega,
+        # se respeta; si no, las columnas viejas se alimentan con los datos
+        # nuevos para que el panel (listados, rankings y export) siga leyendo.
+        Institucion = request.form.get('institucion_educativa', '').strip().upper() or TipoInstitucion.upper()
+        Grado = request.form.get('grado', '').strip().upper() or Carrera
 
         if not Nombre or not Apellido or not Telefono_local or not Correo or not es_correo_valido(Correo):
             return api_message(False, 'Completa mail, nombre, apellido y teléfono correctamente.', 400)
-        if not Institucion or not Grado:
-            return api_message(False, 'Institución educativa y grado son obligatorios.', 400)
+        if not TipoInstitucion and not Institucion:
+            return api_message(False, 'El tipo de institución es obligatorio.', 400)
+        if TipoInstitucion == 'Universidad' and not Carrera:
+            return api_message(False, 'La carrera es obligatoria para universidad.', 400)
 
         alumno_existente = Alumno.query.filter(Alumno.Correo.any(Correo)).first()
         if alumno_existente:
@@ -1070,6 +1149,11 @@ def registro():
             Correo=[Correo],
             InstitucionEducativa=Institucion,
             Grado=Grado,
+            Edad=Edad or None,
+            TipoInstitucion=TipoInstitucion or None,
+            Carrera=Carrera or None,
+            Competencia=', '.join(Competencias) or None,
+            AreaInteresGeneral=AreaInteres or None,
             confirmado=False,
         )
         db.session.add(nuevo)
@@ -1171,6 +1255,8 @@ def registro_empresario():
         posicion_empresa = request.form.get('posicion_empresa', '').strip()
         area_responsabilidad = request.form.get('area_responsabilidad', '').strip()
         productos_interes = request.form.getlist('productos_interes')
+        edad = request.form.get('edad', '').strip()
+        area_interes_general = request.form.get('area_interes_general', '').strip()
 
         if not all([nombre, apellido_paterno, empresa, telefono, ciudad, estado]):
             return api_message(False, 'Faltan campos obligatorios del formulario empresa.', 400)
@@ -1192,6 +1278,8 @@ def registro_empresario():
             PosicionEmpresa=posicion_empresa or None,
             AreaResponsabilidad=area_responsabilidad or None,
             ProductosInteres=productos_interes or None,
+            Edad=edad or None,
+            AreaInteresGeneral=area_interes_general or None,
             confirmado=False,
         )
 

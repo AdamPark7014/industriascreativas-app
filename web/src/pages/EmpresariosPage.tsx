@@ -5,12 +5,15 @@ import AppShell from '../components/AppShell'
 import PhoneField from '../components/PhoneField'
 import { RegistrationSuccess } from '../components/RegistrationSuccess'
 import {
+  AREAS_INTERES_FICTI,
+  AREAS_INTERES_TECH,
   AREAS_RESPONSABILIDAD,
   emptyEmpresaForm,
   POSICIONES_EMPRESA,
-  PRODUCTOS_INTERES,
+  RANGOS_EDAD,
   type EmpresaFormData,
 } from '../constants/registro'
+import { leerAreaInteres } from '../lib/areaInteres'
 import { findDial, formatPhoneDisplay, validateLocalPhone } from '../constants/phone'
 import { toUpperCaseInput } from '../utils/forms'
 import styles from '../styles/flow.module.scss'
@@ -59,6 +62,7 @@ export default function EmpresariosPage() {
     if (form.email.trim().toLowerCase() !== form.emailConfirm.trim().toLowerCase()) {
       return 'Los correos no coinciden.'
     }
+    if (!form.edad) return 'Selecciona tu rango de edad.'
     if (!form.nombre || !form.apellidoPaterno || !form.empresa) {
       return 'Completa nombre, apellido y empresa.'
     }
@@ -99,9 +103,13 @@ export default function EmpresariosPage() {
       telefono: form.telefono.trim(),
       ciudad: form.ciudad.trim().toUpperCase(),
       estado: form.estado.trim().toUpperCase(),
+      edad: form.edad,
       posicion_empresa: posicionFinal,
       area_responsabilidad: form.areaResponsabilidad,
       productos_interes: form.productosInteres,
+      // Respuesta del pop-up de portada. Puede faltar si el visitante entró
+      // directo a /empresarios sin pasar por la home.
+      area_interes_general: leerAreaInteres() ?? '',
       pais: form.phoneCountry === 'MX' ? 'MEXICO' : form.phoneCountry,
       codigo_postal: '00000',
     })
@@ -186,6 +194,25 @@ export default function EmpresariosPage() {
                         onChange={(e) => update('emailConfirm', e.target.value)}
                       />
                     </div>
+                  </div>
+                  <div className={styles.group}>
+                    <label className={styles.label} htmlFor="edad">
+                      Edad<span className={styles.required}>*</span>
+                    </label>
+                    <select
+                      className={styles.select}
+                      id="edad"
+                      required
+                      value={form.edad}
+                      onChange={(e) => update('edad', e.target.value)}
+                    >
+                      <option value="">Selecciona tu rango de edad</option>
+                      {RANGOS_EDAD.map((rango) => (
+                        <option key={rango} value={rango}>
+                          {rango}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </section>
 
@@ -330,17 +357,46 @@ export default function EmpresariosPage() {
 
                 <section className={styles.section}>
                   <h2 className={styles.sectionTitle}>Áreas de interés</h2>
-                  <div className={styles.options}>
-                    {PRODUCTOS_INTERES.map((producto) => (
-                      <label className={styles.option} key={producto}>
-                        <input
-                          type="checkbox"
-                          checked={form.productosInteres.includes(producto)}
-                          onChange={() => toggleProducto(producto)}
-                        />
-                        {producto}
-                      </label>
-                    ))}
+                  {/* Dos bloques por marca: FICTI es impresión y manufactura,
+                      Tech Capital es turismo y negocio. La selección sigue
+                      viajando en un solo arreglo — los valores no se repiten
+                      entre bloques, así que el origen se deduce del valor. */}
+                  <div className={styles.brandGroups}>
+                    <div className={`${styles.brandGroup} ${styles.brandGroupFicti}`}>
+                      {/* Nombre en texto y no el PNG: los logotipos blancos
+                          traen mucho aire alrededor y dentro de la píldora
+                          quedaban diminutos. El mock del cliente también los
+                          muestra escritos. */}
+                      <span className={styles.brandGroupHead}>FICTI</span>
+                      <div className={styles.brandGroupList}>
+                        {AREAS_INTERES_FICTI.map((area) => (
+                          <label className={styles.option} key={area}>
+                            <input
+                              type="checkbox"
+                              checked={form.productosInteres.includes(area)}
+                              onChange={() => toggleProducto(area)}
+                            />
+                            {area}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className={`${styles.brandGroup} ${styles.brandGroupTech}`}>
+                      <span className={styles.brandGroupHead}>TECH CAPITAL</span>
+                      <div className={styles.brandGroupList}>
+                        {AREAS_INTERES_TECH.map((area) => (
+                          <label className={styles.option} key={area}>
+                            <input
+                              type="checkbox"
+                              checked={form.productosInteres.includes(area)}
+                              onChange={() => toggleProducto(area)}
+                            />
+                            {area}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </section>
 
@@ -389,6 +445,10 @@ export default function EmpresariosPage() {
                     <div className={styles.summaryRow}>
                       <strong>Responsabilidad</strong>
                       <span>{form.areaResponsabilidad}</span>
+                    </div>
+                    <div className={styles.summaryRow}>
+                      <strong>Edad</strong>
+                      <span>{form.edad}</span>
                     </div>
                     <div className={styles.summaryRow}>
                       <strong>Áreas de interés</strong>

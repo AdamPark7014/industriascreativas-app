@@ -1116,3 +1116,213 @@
   color: $dark-text-muted;
   font-size: 0.9rem;
 }
+
+// ---------------------------------------------------------------------------
+// Pop-up de portada — pregunta de área de interés (cliente, sep-2026)
+// Bloquea la interacción hasta responder. El mock del cliente venía en blanco
+// plano; se lleva al tema oscuro del front con los dos acentos de marca (rosa
+// FICTI, verde Tech Capital) para que no parezca un cuadro de otro sitio.
+// ---------------------------------------------------------------------------
+.gateOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(3, 7, 18, 0.82);
+  backdrop-filter: blur(6px);
+  animation: gateFade 0.22s ease-out;
+}
+
+@keyframes gateFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.gateDialog {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  max-width: 560px;
+  padding: 34px 30px 30px;
+  border: 1px solid $dark-border;
+  border-radius: 20px;
+  background: linear-gradient(180deg, $dark-surface-2 0%, $dark-surface 100%);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.6);
+  animation: gateRise 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+
+  @media (max-width: 520px) {
+    padding: 26px 20px 22px;
+  }
+}
+
+@keyframes gateRise {
+  from { opacity: 0; transform: translateY(14px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+// Filete superior con los dos colores: es la firma visual del evento.
+.gateGlow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, $rosa-tech 0%, $cyan-tech 52%, $verde-tech 100%);
+}
+
+.gateTitle {
+  margin: 0 0 22px;
+  font-family: $font-display;
+  font-size: 1.32rem;
+  font-weight: 800;
+  line-height: 1.3;
+  text-align: center;
+  color: $rosa-tech-bright;
+
+  @media (max-width: 520px) {
+    font-size: 1.12rem;
+  }
+}
+
+.gateTitleHint {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: $dark-text-muted;
+}
+
+.gateOptions {
+  display: grid;
+  gap: 12px;
+}
+
+.gateOption {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 16px;
+  border: 1px solid $dark-border;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.97rem;
+  font-weight: 600;
+  color: $dark-text;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+
+  input {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    accent-color: $rosa-tech;
+  }
+
+  &:hover {
+    border-color: rgba(125, 165, 225, 0.45);
+    background: rgba(255, 255, 255, 0.06);
+  }
+}
+
+.gateOptionOn {
+  border-color: $rosa-tech;
+  background: rgba(236, 30, 99, 0.12);
+  box-shadow: 0 0 0 3px rgba(236, 30, 99, 0.16);
+}
+
+.gateSubmit {
+  width: 100%;
+  margin-top: 22px;
+  padding: 14px 22px;
+  border: none;
+  border-radius: 12px;
+  background: $rosa-tech;
+  font-family: $font-body;
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.12s ease;
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  // Deshabilitado de verdad: sin respuesta no se avanza, y el botón lo dice.
+  &:disabled {
+    background: rgba(255, 255, 255, 0.08);
+    color: $dark-text-dim;
+    cursor: not-allowed;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Áreas de interés por marca — FICTI (rosa) y Tech Capital (verde)
+// Dos ofertas distintas: impresión/manufactura vs turismo/negocio. Antes era
+// una sola lista de 17 opciones donde el asistente leía las 17 para hallar la
+// suya.
+// ---------------------------------------------------------------------------
+.brandGroups {
+  display: grid;
+  grid-template-columns: 1.55fr 1fr;
+  gap: 16px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.brandGroup {
+  padding: 18px 16px 16px;
+  border: 1px solid $dark-border;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.brandGroupHead {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 15px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-family: $font-display;
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #fff;
+}
+
+.brandGroupFicti .brandGroupHead {
+  background: $rosa-tech;
+}
+
+.brandGroupTech .brandGroupHead {
+  background: $verde-tech-deep;
+}
+
+.brandGroupList {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+
+  @media (max-width: 1080px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+// La columna de Tech Capital lleva 6 opciones: en una sola columna se lee mejor
+// y queda a la altura del bloque de FICTI, que trae 16.
+.brandGroupTech .brandGroupList {
+  grid-template-columns: 1fr;
+}

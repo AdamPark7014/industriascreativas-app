@@ -441,7 +441,7 @@ def _hoja_analisis(wb, d, generado):
     for titulo, clave, color in (
         ("Productos de interés", "productos", TEAL_DEEP),
         ("Instituciones educativas", "instituciones", ROSA),
-        ("Grado escolar", "grados", ROSA),
+        ("Carrera", "grados", ROSA),
         ("Empresas registradas", "empresas", AZUL),
         ("Estado de procedencia", "estados", AZUL),
         ("Área de responsabilidad", "areas", AZUL),

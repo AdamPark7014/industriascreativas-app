@@ -1,10 +1,14 @@
 import { Link } from 'react-router-dom'
 import AppShell from '../components/AppShell'
+import AreaInteresGate from '../components/AreaInteresGate'
 import styles from '../styles/flow.module.scss'
 
 export default function HomePage() {
   return (
     <AppShell backTo="/" backLabel="Inicio" home>
+      {/* Bloquea la portada hasta responder el área de interés. Va aquí y no en
+          AppShell porque solo se pregunta en la entrada, no en cada paso. */}
+      <AreaInteresGate />
       <div className={styles.homeShell}>
         <div className={styles.homeLayout}>
           <div className={styles.homeHero}>
