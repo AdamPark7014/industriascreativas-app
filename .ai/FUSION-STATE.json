@@ -1,0 +1,19 @@
+{
+  "stamped": "2026-09-08 16:44:43",
+  "surface": "cursor",
+  "repo": "C:/dev/apps/NO TOCAR LIBREMENTE/EVENTO-ELISA-app",
+  "profile": "generic",
+  "tier": "CURSOR",
+  "task": "Fix Accesos 29x90 Brother mismatch; PDF+CSS 62x100 + optional print-bridge",
+  "tools": [
+    "relevo",
+    "project-index",
+    "rg",
+    "git",
+    "worktree-new",
+    "ollama:qwen2.5-coder:7b",
+    "open-webui"
+  ],
+  "hasExecPacket": false,
+  "arsenal": "C:\\Users\\adpoz\\Projects\\ai-oss-2026"
+}
