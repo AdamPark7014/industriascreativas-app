@@ -3,11 +3,12 @@
 - **Último turno:** cursor
 - **Fecha:** 2026-09-08
 - **Rama:** main
+- **HEAD:** 4287fc0 — fix(print) 62×100 mm QL-800
 
 ## 3 líneas
-Gafete Accesos FICTI pasa de 5×8 in a **62×100 mm cinta continua** (Brother
-QL-800). CSS `@page`, PDF Hono y ReportLab alineados. Adam imprime en
-`panel.experiencebt.com.mx` — requiere deploy DO.
+Gafete Accesos FICTI **62×100 mm** live en DO (`panel.experiencebt.com.mx`).
+Rebuild `panel_web` + `accesos_api` en `/opt/EVENTOS-app` (imagen ya traía el
+CSS; contenedores recreados). Adam: Chrome papel «62mm Cinta continua».
 
 ## Qué dejó el turno anterior y sigue en pie
 
@@ -18,22 +19,20 @@ QL-800). CSS `@page`, PDF Hono y ReportLab alineados. Adam imprime en
 
 ## Hecho en este turno
 
-- **Causa:** `@page 5in 8in` + job remapeado a 29×90 mm con cinta 62 mm → Brother
-  rechaza; Chrome 4 páginas + headers/footers.
-- `panel/ui/.../boleto-face.css`: `@page { size: 62mm 100mm; margin: 0 }` + cara
-  compacta (QR 36 mm).
-- `accesos-api/src/gafete.ts` + `panel/gafete_pdf.py`: PDF 62×100.
-- Copy UI (Buscar/Hub/Ops/modal): papel **62mm Cinta continua**, pies OFF.
-- Docs: `docs/ACCESOS-REACT.md`.
+- Confirmado en host `/opt/EVENTOS-app`: `boleto-face.css` `@page size: 62mm 100mm`.
+- Confirmado en imagen: `/app/ui/dist/assets/index-BO8gxu7P.css` contiene `62mm`.
+- `docker compose -f panel/docker-compose.panel.yml build/up panel_web accesos_api`
+  (con `.env` / `SCAN_API_KEY`). Contenedores recreados 2026-09-08 ~22:40Z.
+- Smoke: health Accesos TS 200; `/accesos/buscar` 302 (login); `-L` 200.
 
 ## A medias / siguiente
 
-- Deploy DO (`deploy_demo_getzy.py` o rebuild `panel_web` + `accesos_api`).
-- Confirmar en Chrome: 1 hoja, papel «62mm Cinta continua».
+- Adam en Chrome: 1 hoja, papel **62mm Cinta continua**, márgenes ninguno, pies OFF; Ctrl+F5.
+- **Rotar password root DO** (expuesto en chat).
 - Nombre de plantel en gafete estudiante (decisión cliente).
 
 ## No tocar
 
 - Terror / Hetzner (`EXPERIENCEBT-app`).
 - Recrear `accesos_api` sin conservar `SCAN_API_KEY` real.
-- Secretos en git.
+- Secretos en git / no guardar password DO en repo.
