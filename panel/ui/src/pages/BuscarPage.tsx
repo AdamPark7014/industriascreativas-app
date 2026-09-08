@@ -134,7 +134,7 @@ export default function BuscarPage() {
           </li>
           <li>
             <strong>3 · Imprime</strong>
-            <span>Enter o el botón del boleto 5×8</span>
+            <span>Enter o el botón del boleto 62 mm</span>
           </li>
         </ol>
       </section>

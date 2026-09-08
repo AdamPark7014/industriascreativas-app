@@ -12,6 +12,11 @@ export type BoletoPayload = {
   acento: string
 }
 
+/** Brother QL-800 cinta continua 62 mm — un corte ~100 mm. */
+const MM = 72 / 25.4
+const W = 62 * MM
+const H = 100 * MM
+
 function acentoHex(tipo: string): string {
   const t = (tipo || '').toUpperCase()
   if (t.includes('ESTUDI') || t.includes('ALUMN')) return '#35d95c'
@@ -46,21 +51,19 @@ export async function boletoPayload(
     tipo: (tipo || 'Acreditación').trim(),
     subtitulo: (subtitulo || '').trim(),
     evento: 'FICTI · Tech Capital 2026',
-    formato: '5×8 in',
+    formato: '62×100 mm (cinta continua)',
     qrDataUrl,
     acento: acentoHex(tipo),
   }
 }
 
-/** PDF 5×8 in print-ready (lean, no ReportLab). */
+/** PDF 62×100 mm print-ready para Brother QL-800 cinta continua. */
 export async function boletoPdf(
   nombre: string,
   folio: string,
   tipo: string,
   subtitulo = '',
 ): Promise<Uint8Array> {
-  const W = 5 * 72
-  const H = 8 * 72
   const doc = await PDFDocument.create()
   const page = doc.addPage([W, H])
   const font = await doc.embedFont(StandardFonts.Helvetica)
@@ -72,65 +75,71 @@ export async function boletoPdf(
   const blanco = rgb(1, 1, 1)
 
   page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: fondo })
-  const m = 14
+  const m = 6
   page.drawRectangle({
     x: m,
     y: m,
     width: W - 2 * m,
     height: H - 2 * m,
     borderColor: rgb(accent.r, accent.g, accent.b),
-    borderWidth: 4,
+    borderWidth: 2.2,
   })
 
-  const bandaH = 72
+  const bandaH = 22
   page.drawRectangle({
-    x: m + 3,
-    y: H - m - bandaH - 3,
-    width: W - 2 * m - 6,
+    x: m + 2,
+    y: H - m - bandaH - 2,
+    width: W - 2 * m - 4,
     height: bandaH,
     color: panel,
   })
-  page.drawText('FICTI  ·  TECH CAPITAL', {
-    x: W / 2 - 70,
-    y: H - m - 42,
-    size: 11,
+  const brand = 'FICTI  ·  TECH CAPITAL'
+  page.drawText(brand, {
+    x: W / 2 - bold.widthOfTextAtSize(brand, 7) / 2,
+    y: H - m - 15,
+    size: 7,
     font: bold,
     color: blanco,
   })
 
   const etiqueta = (tipo || 'ACREDITACIÓN').toUpperCase()
   page.drawText(etiqueta, {
-    x: W / 2 - bold.widthOfTextAtSize(etiqueta, 10) / 2,
-    y: H - m - bandaH - 28,
-    size: 10,
+    x: W / 2 - bold.widthOfTextAtSize(etiqueta, 7) / 2,
+    y: H - m - bandaH - 14,
+    size: 7,
     font: bold,
     color: rgb(accent.r, accent.g, accent.b),
   })
 
   const nombreTxt = (nombre || '—').trim().toUpperCase()
-  let size = 22
-  while (size > 12 && bold.widthOfTextAtSize(nombreTxt, size) > W - 56) size -= 1
-  page.drawText(nombreTxt.slice(0, 48), {
-    x: W / 2 - bold.widthOfTextAtSize(nombreTxt.slice(0, 48), size) / 2,
-    y: H / 2 + 40,
+  let size = 11
+  while (size > 7 && bold.widthOfTextAtSize(nombreTxt, size) > W - 18) size -= 0.5
+  const nombreLine = nombreTxt.slice(0, 42)
+  page.drawText(nombreLine, {
+    x: W / 2 - bold.widthOfTextAtSize(nombreLine, size) / 2,
+    y: H - m - bandaH - 32,
     size,
     font: bold,
     color: blanco,
   })
+
+  let y = H - m - bandaH - 44
   if (subtitulo) {
-    const sub = subtitulo.trim().toUpperCase().slice(0, 40)
+    const sub = subtitulo.trim().toUpperCase().slice(0, 36)
     page.drawText(sub, {
-      x: W / 2 - font.widthOfTextAtSize(sub, 10) / 2,
-      y: H / 2 + 18,
-      size: 10,
+      x: W / 2 - font.widthOfTextAtSize(sub, 6.5) / 2,
+      y,
+      size: 6.5,
       font,
       color: tenue,
     })
+    y -= 10
   }
-  page.drawText('FICTI · TECH CAPITAL 2026', {
-    x: W / 2 - font.widthOfTextAtSize('FICTI · TECH CAPITAL 2026', 8) / 2,
-    y: H / 2,
-    size: 8,
+  const evento = 'FICTI · TECH CAPITAL 2026'
+  page.drawText(evento, {
+    x: W / 2 - font.widthOfTextAtSize(evento, 5.5) / 2,
+    y,
+    size: 5.5,
     font,
     color: tenue,
   })
@@ -142,25 +151,26 @@ export async function boletoPdf(
     type: 'png',
   })
   const qrImg = await doc.embedPng(qrPng)
-  const qrSide = 2.55 * 72
-  const pad = 14
+  const qrSide = 36 * MM
+  const pad = 4
   const placa = qrSide + pad * 2
   const px = (W - placa) / 2
-  const py = 78
+  const py = 22
   page.drawRectangle({ x: px, y: py, width: placa, height: placa, color: blanco })
   page.drawImage(qrImg, { x: px + pad, y: py + pad, width: qrSide, height: qrSide })
 
-  page.drawText('PRESENTA ESTE CÓDIGO EN PUERTA', {
-    x: W / 2 - font.widthOfTextAtSize('PRESENTA ESTE CÓDIGO EN PUERTA', 8) / 2,
-    y: 52,
-    size: 8,
+  const pie = 'PRESENTA ESTE CÓDIGO EN PUERTA'
+  page.drawText(pie, {
+    x: W / 2 - font.widthOfTextAtSize(pie, 5) / 2,
+    y: 14,
+    size: 5,
     font,
     color: tenue,
   })
   page.drawText(folio, {
-    x: W / 2 - bold.widthOfTextAtSize(folio, 11) / 2,
-    y: 34,
-    size: 11,
+    x: W / 2 - bold.widthOfTextAtSize(folio, 8) / 2,
+    y: 6,
+    size: 8,
     font: bold,
     color: blanco,
   })

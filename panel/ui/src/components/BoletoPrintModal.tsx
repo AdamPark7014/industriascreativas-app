@@ -44,8 +44,9 @@ export default function BoletoPrintModal({ data, busy, onClose, onPrint, onPdf }
             <p className={styles.kicker}>Vista previa del boleto</p>
             <h2 id={tituloId}>¿Se ve bien para imprimir?</h2>
             <p className={styles.ayuda}>
-              Formato {data.formato}. En el diálogo de impresión elige papel 5×8 in (o
-              «Tamaño real» / sin márgenes).
+              Formato {data.formato}. En el diálogo elige papel{' '}
+              <b>62mm Cinta continua</b>, márgenes ninguno, y desactiva encabezados y
+              pies (Más ajustes).
             </p>
           </div>
           <button type="button" className={styles.cerrar} onClick={onClose} aria-label="Cerrar">

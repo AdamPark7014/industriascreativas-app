@@ -19,9 +19,18 @@ Código: `panel/accesos-api/` (EVENTO-ELISA). Cookie de sesión Flask
 - Resumen / pulso (caché corta ~2.5s, queries en paralelo)
 - Escáner ENTRY/EXIT/reingreso + zonas/aforo
 - Cámara + cola offline
-- Buscar (prefijo + `pg_trgm`) + boleto 5×8 (JSON QR + PDF `pdf-lib`)
+- Buscar (prefijo + `pg_trgm`) + boleto **62×100 mm** cinta continua QL-800
+  (JSON QR + `@media print` + PDF `pdf-lib`)
 - Informes zona/reingresos/CSV/XLSX
 - Pool Postgres + gzip nginx
+
+## Impresión QL-800 (cinta continua 62 mm)
+
+El gafete de puerta ya **no** es 5×8 in. `@page` y el PDF son **62 mm × 100 mm**
+para Brother QL-800 con **62mm Cinta continua**.
+
+En Chrome: papel `62mm Cinta continua`, márgenes ninguno, **encabezados y pies OFF**.
+Detalle operativo: `EXPERIENCEBT-app/docs/IMPRESORA-QL800.md`.
 
 ## Seguridad
 - Panel: sesión + Origin/Referer + rate limit

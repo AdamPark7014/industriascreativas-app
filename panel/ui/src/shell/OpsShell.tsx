@@ -28,7 +28,7 @@ const GROUPS: { titulo: string; items: NavItem[] }[] = [
   {
     titulo: 'Personas',
     items: [
-      { to: '/buscar', label: 'Buscar e imprimir', hint: 'Boleto 5×8 con QR' },
+      { to: '/buscar', label: 'Buscar e imprimir', hint: 'Boleto 62 mm QL-800' },
       { to: '/reportes', label: 'Informes', hint: 'Historial y Excel' },
     ],
   },

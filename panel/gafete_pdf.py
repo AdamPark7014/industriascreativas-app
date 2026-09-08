@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Gafete de puerta 5×8 — cara de impresión FICTI / Tech Capital.
+"""Gafete QL-800 — cinta continua 62 mm × ~100 mm (DK continuous).
 
-Nombre dominante + QR grande sobre placa clara (zona de silencio para lectores).
-Marcas de corte y tipografía de jerarquía clara para desk / badge printer.
+Nombre + QR sobre placa clara (zona de silencio). Una etiqueta por corte.
 """
 from __future__ import annotations
 
@@ -13,13 +12,13 @@ from typing import Any
 
 import qrcode
 from PIL import Image
-from reportlab.lib.units import inch
+from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
-# 5 in × 8 in (360 × 576 pt) — formato desk actual
-ANCHO = 5 * inch
-ALTO = 8 * inch
+# Brother QL-800 cinta continua 62 mm — largo de corte ~100 mm
+ANCHO = 62 * mm
+ALTO = 100 * mm
 
 # Tech Capital 2026
 FONDO = (0.020, 0.043, 0.110)  # #050b1c
@@ -136,7 +135,7 @@ def payload(
         "tipo": (tipo or "Acreditación").strip(),
         "subtitulo": (subtitulo or "").strip(),
         "evento": "FICTI · Tech Capital 2026",
-        "formato": "5×8 in",
+        "formato": "62×100 mm (cinta continua)",
         "qrDataUrl": f"data:image/png;base64,{b64}",
         "acento": (
             "#35d95c"
@@ -163,20 +162,20 @@ def construir(nombre: str, folio: str, tipo: str, subtitulo: str = "") -> bytes:
     c.rect(0, 0, ANCHO, ALTO, fill=1, stroke=0)
 
     # Marco de acento
-    margen = 14
+    margen = 6
     c.setStrokeColorRGB(*accent)
-    c.setLineWidth(5)
-    c.roundRect(margen, margen, ANCHO - 2 * margen, ALTO - 2 * margen, 14, fill=0, stroke=1)
+    c.setLineWidth(2.2)
+    c.roundRect(margen, margen, ANCHO - 2 * margen, ALTO - 2 * margen, 6, fill=0, stroke=1)
 
     # Banda superior
-    banda_h = 72
+    banda_h = 22
     c.setFillColorRGB(*PANEL)
-    c.roundRect(margen + 3, ALTO - margen - banda_h - 3, ANCHO - 2 * margen - 6, banda_h, 10, fill=1, stroke=0)
+    c.roundRect(margen + 2, ALTO - margen - banda_h - 2, ANCHO - 2 * margen - 4, banda_h, 4, fill=1, stroke=0)
 
     # Logos
-    logo_y = ALTO - margen - 52
-    logo_h = 28
-    gap = 12
+    logo_y = ALTO - margen - 16
+    logo_h = 11
+    gap = 5
     drawn: list[tuple[str, float]] = []
     for path in (
         _asset("ficti-logo.png", "ficti-logo-blanco.png"),
@@ -194,7 +193,7 @@ def construir(nombre: str, folio: str, tipo: str, subtitulo: str = "") -> bytes:
         x = (ANCHO - total_w) / 2
         for path, w in drawn:
             c.drawImage(
-                _logo_reader(path, int(logo_h * 3)),
+                _logo_reader(path, int(logo_h * 4)),
                 x,
                 logo_y,
                 width=w,
@@ -205,72 +204,71 @@ def construir(nombre: str, folio: str, tipo: str, subtitulo: str = "") -> bytes:
             x += w + gap
     else:
         c.setFillColorRGB(*TEXTO)
-        c.setFont("Helvetica-Bold", 11)
-        c.drawCentredString(ANCHO / 2, logo_y + 8, "FICTI  ·  TECH CAPITAL")
+        c.setFont("Helvetica-Bold", 7)
+        c.drawCentredString(ANCHO / 2, logo_y + 2, "FICTI  ·  TECH CAPITAL")
 
     # Etiqueta de tipo
-    y = ALTO - margen - banda_h - 28
+    y = ALTO - margen - banda_h - 12
     c.setFillColorRGB(*accent)
-    c.setFont("Helvetica-Bold", 10)
+    c.setFont("Helvetica-Bold", 7)
     etiqueta = (tipo or "ACREDITACIÓN").upper()
     c.drawCentredString(ANCHO / 2, y, etiqueta)
 
     # Filete
-    y -= 10
+    y -= 6
     c.setStrokeColorRGB(*BORDE)
-    c.setLineWidth(0.8)
-    c.line(48, y, ANCHO - 48, y)
+    c.setLineWidth(0.5)
+    c.line(14, y, ANCHO - 14, y)
 
     # Nombre (jerarquía principal)
-    y -= 36
+    y -= 14
     nombre_txt = (nombre or "—").strip().upper()
-    ancho_util = ANCHO - 56
-    tam = 26
-    while tam > 13 and c.stringWidth(nombre_txt, "Helvetica-Bold", tam) > ancho_util:
-        tam -= 1
+    ancho_util = ANCHO - 18
+    tam = 11
+    while tam > 7 and c.stringWidth(nombre_txt, "Helvetica-Bold", tam) > ancho_util:
+        tam -= 0.5
     lineas = _partir(nombre_txt, "Helvetica-Bold", tam, ancho_util, c.stringWidth)
-    if len(lineas) > 3:
-        lineas = lineas[:2] + [lineas[2][: max(1, len(lineas[2]) - 1)] + "…"]
-    # Si sigue cabiendo en una línea con tamaño grande, úsala; si no, baja y parte.
+    if len(lineas) > 2:
+        lineas = lineas[:1] + [lineas[1][: max(1, len(lineas[1]) - 1)] + "…"]
     if len(lineas) == 1:
         c.setFillColorRGB(*TEXTO)
         c.setFont("Helvetica-Bold", tam)
         c.drawCentredString(ANCHO / 2, y, lineas[0])
-        y -= tam + 6
+        y -= tam + 3
     else:
-        tam = min(tam, 18)
-        lineas = _partir(nombre_txt, "Helvetica-Bold", tam, ancho_util, c.stringWidth)[:3]
+        tam = min(tam, 9)
+        lineas = _partir(nombre_txt, "Helvetica-Bold", tam, ancho_util, c.stringWidth)[:2]
         c.setFillColorRGB(*TEXTO)
         c.setFont("Helvetica-Bold", tam)
         for ln in lineas:
             c.drawCentredString(ANCHO / 2, y, ln)
-            y -= tam + 4
+            y -= tam + 2
 
     if subtitulo:
         c.setFillColorRGB(*TENUE)
-        c.setFont("Helvetica", 10)
+        c.setFont("Helvetica", 6.5)
         sub = subtitulo.strip().upper()
-        for ln in _partir(sub, "Helvetica", 10, ancho_util, c.stringWidth)[:2]:
+        for ln in _partir(sub, "Helvetica", 6.5, ancho_util, c.stringWidth)[:2]:
             c.drawCentredString(ANCHO / 2, y, ln)
-            y -= 13
+            y -= 8
 
     # Evento
     c.setFillColorRGB(*TENUE)
-    c.setFont("Helvetica", 8)
-    c.drawCentredString(ANCHO / 2, y - 2, "FICTI · TECH CAPITAL 2026")
+    c.setFont("Helvetica", 5.5)
+    c.drawCentredString(ANCHO / 2, y - 1, "FICTI · TECH CAPITAL 2026")
 
     # QR sobre placa blanca (obligatorio sobre fondo oscuro)
-    qr_lado = 2.55 * inch
-    pad = 14
+    qr_lado = 36 * mm
+    pad = 4
     placa = qr_lado + pad * 2
     placa_x = (ANCHO - placa) / 2
-    placa_y = 78
+    placa_y = 20
 
     c.setFillColorRGB(1, 1, 1)
-    c.roundRect(placa_x, placa_y, placa, placa, 12, fill=1, stroke=0)
+    c.roundRect(placa_x, placa_y, placa, placa, 4, fill=1, stroke=0)
     c.setStrokeColorRGB(*BORDE)
-    c.setLineWidth(0.7)
-    c.roundRect(placa_x, placa_y, placa, placa, 12, fill=0, stroke=1)
+    c.setLineWidth(0.5)
+    c.roundRect(placa_x, placa_y, placa, placa, 4, fill=0, stroke=1)
 
     c.drawImage(
         ImageReader(qr_buf),
@@ -283,11 +281,11 @@ def construir(nombre: str, folio: str, tipo: str, subtitulo: str = "") -> bytes:
 
     # Pie: folio
     c.setFillColorRGB(*TENUE)
-    c.setFont("Helvetica", 8)
-    c.drawCentredString(ANCHO / 2, 52, "PRESENTA ESTE CÓDIGO EN PUERTA")
+    c.setFont("Helvetica", 5)
+    c.drawCentredString(ANCHO / 2, 13, "PRESENTA ESTE CÓDIGO EN PUERTA")
     c.setFillColorRGB(*TEXTO)
-    c.setFont("Helvetica-Bold", 11)
-    c.drawCentredString(ANCHO / 2, 34, folio)
+    c.setFont("Helvetica-Bold", 8)
+    c.drawCentredString(ANCHO / 2, 6, folio)
 
     _marcas_corte(c)
     c.showPage()

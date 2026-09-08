@@ -15,7 +15,7 @@ type Props = {
   className?: string
 }
 
-/** Cara del gafete 5×8 — pantalla y @media print. */
+/** Cara del gafete QL-800 62×100 mm — pantalla y @media print. */
 export default function BoletoFace({ data, className }: Props) {
   return (
     <article

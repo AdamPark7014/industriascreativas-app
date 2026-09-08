@@ -112,7 +112,7 @@ export default function HubPage() {
               <strong>{sesion?.puedeImprimir ? 'Imprimir un boleto' : 'Buscar una persona'}</strong>
               <p>
                 {sesion?.puedeImprimir
-                  ? 'Busca por nombre o folio y saca el gafete 5×8.'
+                  ? 'Busca por nombre o folio y saca el gafete 62 mm.'
                   : 'Consulta acreditaciones (sin imprimir).'}
               </p>
             </div>
@@ -152,7 +152,7 @@ export default function HubPage() {
         <Link className={styles.modulo} to="/buscar">
           <span className={styles.moduloTag}>Boletos</span>
           <strong>Buscar e imprimir</strong>
-          <span>Localiza a alguien e imprime su boleto con QR (5×8).</span>
+          <span>Localiza a alguien e imprime su boleto con QR (62 mm).</span>
         </Link>
         <Link className={styles.modulo} to="/reportes">
           <span className={styles.moduloTag}>Informes</span>

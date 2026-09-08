@@ -1,26 +1,29 @@
-/* Cara del gafete 5×8 — preview en pantalla e impresión exacta. */
+/* Cara del gafete QL-800 — cinta continua 62 mm (DK continuous).
+   Una sola etiqueta por corte (~100 mm de largo). */
 
 :root {
   --boleto-acento: #12b5b0;
+  --boleto-w: 62mm;
+  --boleto-h: 100mm;
 }
 
 [data-boleto-face] {
   position: relative;
-  width: 5in;
-  height: 8in;
+  width: var(--boleto-w);
+  height: var(--boleto-h);
   margin: 0 auto;
-  padding: 0.42in 0.38in 0.36in;
+  padding: 2.8mm 3.2mm 2.4mm;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
   background: #050b1c;
   color: #fff;
-  border-radius: 18px;
-  border: 5px solid var(--boleto-acento);
+  border-radius: 4mm;
+  border: 1.4mm solid var(--boleto-acento);
   font-family: 'Manrope', 'Segoe UI', system-ui, sans-serif;
   overflow: hidden;
-  box-shadow: 0 24px 60px rgba(5, 11, 28, 0.35);
+  box-shadow: 0 16px 40px rgba(5, 11, 28, 0.35);
 }
 
 .boletoCut {
@@ -30,36 +33,36 @@
 
   i {
     position: absolute;
-    width: 12px;
-    height: 12px;
+    width: 2.2mm;
+    height: 2.2mm;
     border-color: rgba(255, 255, 255, 0.35);
     border-style: solid;
     border-width: 0;
   }
 
   i[data-c='tl'] {
-    top: 6px;
-    left: 6px;
-    border-top-width: 1px;
-    border-left-width: 1px;
+    top: 1.2mm;
+    left: 1.2mm;
+    border-top-width: 0.35mm;
+    border-left-width: 0.35mm;
   }
   i[data-c='tr'] {
-    top: 6px;
-    right: 6px;
-    border-top-width: 1px;
-    border-right-width: 1px;
+    top: 1.2mm;
+    right: 1.2mm;
+    border-top-width: 0.35mm;
+    border-right-width: 0.35mm;
   }
   i[data-c='bl'] {
-    bottom: 6px;
-    left: 6px;
-    border-bottom-width: 1px;
-    border-left-width: 1px;
+    bottom: 1.2mm;
+    left: 1.2mm;
+    border-bottom-width: 0.35mm;
+    border-left-width: 0.35mm;
   }
   i[data-c='br'] {
-    bottom: 6px;
-    right: 6px;
-    border-bottom-width: 1px;
-    border-right-width: 1px;
+    bottom: 1.2mm;
+    right: 1.2mm;
+    border-bottom-width: 0.35mm;
+    border-right-width: 0.35mm;
   }
 }
 
@@ -67,85 +70,92 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: 2.4mm;
   width: 100%;
-  padding: 10px 12px 12px;
+  padding: 1.6mm 1.8mm 1.8mm;
   background: #0a1428;
-  border-radius: 12px;
-  margin-bottom: 14px;
+  border-radius: 2mm;
+  margin-bottom: 2mm;
+  flex: none;
 
   img {
-    height: 28px;
+    height: 5.5mm;
     width: auto;
-    max-width: 42%;
+    max-width: 44%;
     object-fit: contain;
   }
 }
 
 .boletoTipo {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: 2.4mm;
   font-weight: 800;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--boleto-acento);
+  flex: none;
 }
 
 .boletoRule {
-  width: 68%;
-  margin: 10px 0 16px;
+  width: 70%;
+  margin: 1.4mm 0 1.8mm;
   border: none;
-  border-top: 1px solid #1b2b4d;
+  border-top: 0.3mm solid #1b2b4d;
+  flex: none;
 }
 
 .boletoNombre {
   margin: 0;
   max-width: 100%;
-  padding: 0 4px;
+  padding: 0 0.5mm;
   text-align: center;
-  font-size: 1.55rem;
+  font-size: 4.2mm;
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1.12;
   letter-spacing: 0.01em;
   text-transform: uppercase;
   color: #fff;
   overflow-wrap: anywhere;
+  flex: none;
 }
 
 .boletoSub {
-  margin: 10px 0 0;
+  margin: 1.4mm 0 0;
   max-width: 100%;
   text-align: center;
-  font-size: 0.78rem;
+  font-size: 2.3mm;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: #93a6c4;
   overflow-wrap: anywhere;
+  flex: none;
 }
 
 .boletoEvento {
-  margin: 10px 0 0;
-  font-size: 0.68rem;
-  letter-spacing: 0.12em;
+  margin: 1.2mm 0 0;
+  font-size: 2mm;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: #6b80a3;
+  flex: none;
 }
 
 .boletoQrWrap {
   margin-top: auto;
-  margin-bottom: 10px;
-  padding: 14px;
+  margin-bottom: 1.6mm;
+  padding: 2mm;
   background: #fff;
-  border-radius: 14px;
-  border: 1px solid #1b2b4d;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  border-radius: 2mm;
+  border: 0.3mm solid #1b2b4d;
+  box-shadow: none;
+  flex: none;
 }
 
 .boletoQr {
   display: block;
-  width: 2.55in;
-  height: 2.55in;
+  width: 36mm;
+  height: 36mm;
   image-rendering: pixelated;
 }
 
@@ -153,37 +163,41 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 0.6mm;
   width: 100%;
-  padding-top: 4px;
+  padding-top: 0.4mm;
+  flex: none;
 
   span {
-    font-size: 0.62rem;
-    letter-spacing: 0.1em;
+    font-size: 1.9mm;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     color: #93a6c4;
   }
 
   strong {
-    font-size: 0.95rem;
+    font-size: 2.8mm;
     font-weight: 800;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.03em;
     color: #fff;
   }
 }
 
-/* ——— Impresión: una hoja 5×8, sin chrome del panel ——— */
+/* ——— Impresión QL-800: una etiqueta 62×100 mm, sin chrome ——— */
 @media print {
   @page {
-    size: 5in 8in;
+    size: 62mm 100mm;
     margin: 0;
   }
 
   html,
   body {
+    width: 62mm !important;
+    height: 100mm !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
+    overflow: hidden !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
@@ -198,23 +212,26 @@
   }
 
   [data-boleto-print-root] {
-    position: fixed !important;
-    inset: 0 !important;
-    display: flex !important;
-    align-items: stretch !important;
-    justify-content: center !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 62mm !important;
+    height: 100mm !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
+    overflow: hidden !important;
     z-index: 99999 !important;
   }
 
   [data-boleto-face] {
-    width: 5in !important;
-    height: 8in !important;
+    width: 62mm !important;
+    height: 100mm !important;
     margin: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
