@@ -160,6 +160,7 @@
         </div>
       </article>`).join('');
 
+    dibujarBarras('rk-areainteres', d.rankings.areainteres);
     dibujarBarras('rk-productos', d.rankings.productos);
     dibujarBarras('rk-instituciones', d.rankings.instituciones, 'rosa');
     dibujarBarras('rk-grados', d.rankings.grados, 'rosa');

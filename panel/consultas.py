@@ -57,7 +57,7 @@ CATALOGO = {
             ("TiempoInversion", "Tiempo de inversión", "texto", False),
             ("ProductosInteres", "Áreas de interés", "lista", False),
             ("Edad", "Edad", "texto", True),
-            ("AreaInteresGeneral", "Área que quiso explorar", "texto", False),
+            ("AreaInteresGeneral", "Área de interés (pop-up)", "texto", True),
             ("confirmado", "Confirmado", "bool", True),
             ("asistencias", "Asist.", "entero", True),
             ("FechaRegistro", "Fecha y hora de registro", "fecha", True),
@@ -81,7 +81,7 @@ CATALOGO = {
             ("Grado", "Carrera", "texto", True),
             ("Edad", "Edad", "texto", True),
             ("Competencia", "Competencia", "texto", True),
-            ("AreaInteresGeneral", "Área que quiso explorar", "texto", False),
+            ("AreaInteresGeneral", "Área de interés (pop-up)", "texto", True),
             ("Correo", "Correo", "lista", True),
             ("Telefono", "Teléfono", "tel", True),
             ("confirmado", "Confirmado", "bool", True),
@@ -283,6 +283,25 @@ def _ranking(con, tabla, columna, limite=None):
     return _con_porcentaje(registros, limite)
 
 
+def _ranking_union(con, columna, tablas, limite=None):
+    """Ranking de una columna que existe en varias tablas, sumadas.
+
+    El pop-up de portada se le muestra a cualquiera que entre, sea estudiante o
+    empresario, así que contarlo por tabla partiría la respuesta en dos mitades
+    que nadie sabría volver a juntar.
+    """
+    base = f"""COALESCE(NULLIF(BTRIM("{columna}"), ''), 'Sin responder')"""
+    partes = " UNION ALL ".join(
+        f'SELECT {base} AS crudo FROM "{t}"' for t in tablas
+    )
+    registros = filas(con, f'''
+        SELECT MODE() WITHIN GROUP (ORDER BY crudo) AS etiqueta, COUNT(*) AS total
+        FROM (SELECT crudo, {_norm("crudo")} AS clave FROM ({partes}) u) s
+        GROUP BY clave ORDER BY 2 DESC, 1
+    ''')
+    return _con_porcentaje(registros, limite)
+
+
 def _ranking_lista(con, tabla, columna, limite=None):
     """Ranking de una columna ARRAY (se desdobla con unnest)."""
     registros = filas(con, f'''
@@ -326,6 +345,16 @@ def resumen(tipos=None) -> dict:
         # Cada ranking depende de una tabla: si el usuario no la tiene en su
         # alcance, ni siquiera se consulta.
         rankings = {}
+        # Respuesta al pop-up de portada: se pregunta a todos, así que se suma
+        # sobre las tablas que el usuario tenga en su alcance.
+        tablas_area = []
+        if "estudiantes" in tipos:
+            tablas_area.append("Registro_Alumnos")
+        if "empresas" in tipos:
+            tablas_area.append("Registro_Empresarios")
+        if tablas_area:
+            rankings["areainteres"] = _ranking_union(
+                con, "AreaInteresGeneral", tablas_area)
         if "estudiantes" in tipos:
             rankings["instituciones"] = _ranking(
                 con, "Registro_Alumnos", "InstitucionEducativa", 10)

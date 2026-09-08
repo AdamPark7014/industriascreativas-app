@@ -1,7 +1,7 @@
 # RELEVO
 
 - **Último turno:** claude-code
-- **Fecha:** 2026-09-07
+- **Fecha:** 2026-09-08
 - **Rama:** main
 
 ## 3 líneas
@@ -101,3 +101,41 @@ quiso explorar».
   recrees con compose sin conocer el valor real.
 - Secretos en git. La contraseña de root del droplet viaja solo como
   `REGISTRO_SSH_PASSWORD` en el entorno del comando.
+
+---
+
+# Turno claude-code — 2026-09-08 (respuestas del pop-up en el panel)
+
+## 3 líneas
+El cliente pidió ver en el panel las respuestas del pop-up de portada y quién
+las dio. El dato ya se guardaba desde el 07-09; lo que faltaba era mostrarlo:
+la columna estaba marcada como no visible y no había desglose en el tablero.
+
+## Hecho
+- `panel/consultas.py`: `AreaInteresGeneral` pasa de `False` a `True` en los dos
+  catálogos, y se renombra a «Área de interés (pop-up)». Con eso la respuesta
+  aparece en el listado **junto al nombre**, que es el «quién lo hizo».
+- Nueva `_ranking_union(con, columna, tablas)`: suma la misma columna sobre
+  varias tablas. Hacía falta porque el pop-up se le muestra a todo el que entra,
+  sea estudiante o empresario; contarlo por tabla partía la respuesta en dos
+  mitades que nadie sabría volver a juntar. Respeta el alcance del usuario: solo
+  suma las tablas que tenga permitidas.
+- Tarjeta «Área de interés (pop-up)» en el tablero + su `dibujarBarras`.
+- Como está en `campos`, entra también en el export de Excel.
+
+## Verificado en producción (2026-09-08)
+- `/api/resumen` devuelve `areainteres`: 53 impresión · 10 turismo · 769 sin
+  responder (los 769 son registros anteriores a que existiera la pregunta).
+- La columna aparece en el listado de empresas y de estudiantes.
+- Emparejamiento nombre↔respuesta comprobado en base.
+- Panel sano tras el despliegue; 275 alumnos / 557 empresarios intactos.
+
+## Nota
+`demo.` y `panel.` están en **DigitalOcean** (147.182.128.128), no en Hetzner.
+La llave `id_ed25519_nexara_hetzner` no abre ese droplet: va por contraseña.
+
+## Pendiente
+Quien contesta el pop-up y **no se registra** no queda en ningún lado: la
+respuesta viaja con el formulario. Si el cliente quiere medir a todo el que
+entra —incluido el que se va sin registrarse— hace falta un endpoint que
+guarde la respuesta en cuanto se contesta. Hoy solo se miden los que completan.
