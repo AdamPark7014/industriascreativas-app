@@ -6,6 +6,12 @@
 const STORAGE_KEY = 'ficti_print_agent_url'
 const DEFAULT_URL = 'http://127.0.0.1:9631'
 
+/** ZIP standalone del agente (panel_web static). */
+export const PRINT_BRIDGE_ZIP_URL = '/static/print-bridge.zip'
+
+export const PRINT_BRIDGE_HELP =
+  'En esta PC: 1) conecta Brother QL-800 por USB 2) instala drivers Brother 3) descarga el agente, descomprime y ejecuta start.cmd'
+
 export function getPrintAgentUrl(): string {
   const stored = (localStorage.getItem(STORAGE_KEY) ?? '').trim().replace(/\/$/, '')
   if (stored) return stored
@@ -23,6 +29,7 @@ export type PrintAgentHealth = {
   reachable: boolean
   error?: string
   printerName?: string | null
+  jobName?: string | null
   label?: { widthMm?: number; heightMm?: number; mediaName?: string | null }
 }
 
@@ -34,12 +41,14 @@ export async function probePrintAgent(baseUrl?: string): Promise<PrintAgentHealt
       ok?: boolean
       reachable?: boolean
       printerName?: string | null
+      jobName?: string | null
       label?: { widthMm?: number; heightMm?: number; mediaName?: string | null }
     }
     return {
       ok: Boolean(data?.ok),
       reachable: Boolean(data?.reachable),
-      printerName: data?.printerName,
+      printerName: data?.printerName ?? null,
+      jobName: data?.jobName ?? null,
       label: data?.label,
     }
   } catch (cause) {
@@ -56,7 +65,14 @@ export async function printPngViaAgent(
   pngBase64: string,
   meta: { title: string; body?: string; footer?: string },
   baseUrl?: string,
-): Promise<{ ok: boolean; error?: string; printer?: string }> {
+): Promise<{
+  ok: boolean
+  error?: string
+  printer?: string
+  paper?: string
+  jobName?: string
+  mediaName?: string
+}> {
   const base = (baseUrl ?? getPrintAgentUrl()).replace(/\/$/, '')
   const png = pngBase64.replace(/^data:image\/\w+;base64,/, '')
   try {
@@ -75,17 +91,33 @@ export async function printPngViaAgent(
       signal: AbortSignal.timeout(45_000),
     })
     const data = (await res.json().catch(() => null)) as
-      | { ok?: boolean; error?: string; printer?: string }
+      | {
+          ok?: boolean
+          error?: string
+          printer?: string
+          paper?: string
+          jobName?: string
+          mediaName?: string
+        }
       | null
-    if (res.ok && data?.ok) return { ok: true, printer: data.printer }
-    return { ok: false, error: data?.error ?? `HTTP ${res.status}` }
-  } catch (cause) {
+    if (res.ok && data?.ok) {
+      return {
+        ok: true,
+        printer: data.printer,
+        paper: data.paper,
+        jobName: data.jobName,
+        mediaName: data.mediaName,
+      }
+    }
     return {
       ok: false,
-      error:
-        cause instanceof Error
-          ? cause.message
-          : 'Agente inaccesible — corre tools/print-bridge/start.cmd',
+      error: data?.error ?? `HTTP ${res.status} desde ${base}/print-label (sin fallback Chrome)`,
     }
+  } catch (cause) {
+    const msg = cause instanceof Error ? cause.message : String(cause)
+    const hint = /Failed to fetch|NetworkError|Load failed|fetch/i.test(msg)
+      ? `Agente inaccesible en ${base} (¿offline o CORS?). Corre start.cmd — NO se usará Chrome.`
+      : msg
+    return { ok: false, error: hint }
   }
 }

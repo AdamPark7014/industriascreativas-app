@@ -135,7 +135,7 @@ export function printBoletoIsolated(faceHtml: string): void {
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <title>Gafete 62x100 mm</title>
+  <title>ExperienceBT-QL-62x100</title>
   <style>
 ${boletoCss}
 @page { size: 62mm 100mm; margin: 0; }

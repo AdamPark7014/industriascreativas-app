@@ -92,18 +92,6 @@
     font-size: 0.82rem;
     color: #071a3a;
   }
-
-  ol {
-    margin: 0 0 18px;
-    padding-left: 1.15rem;
-    color: #5b6b82;
-    font-size: 0.84rem;
-    line-height: 1.45;
-  }
-
-  li + li {
-    margin-top: 8px;
-  }
 }
 
 .acciones {
@@ -112,8 +100,111 @@
   gap: 8px;
 }
 
+.estadoOk {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #e6f7f2;
+  color: #0a5c4c;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.estadoProbe {
+  margin: 0 0 12px;
+  font-size: 0.82rem;
+  color: #5b6b82;
+}
+
+.offline {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #f0c2a0;
+  background: #fff7f0;
+  color: #5a2e12;
+
+  strong {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+  }
+
+  p {
+    margin: 0 0 8px;
+    font-size: 0.82rem;
+    line-height: 1.4;
+  }
+
+  ol {
+    margin: 0 0 10px;
+    padding-left: 1.15rem;
+    font-size: 0.82rem;
+    line-height: 1.45;
+  }
+
+  code {
+    font-size: 0.78rem;
+    background: rgba(0, 0, 0, 0.06);
+    padding: 1px 4px;
+    border-radius: 4px;
+  }
+}
+
+.offlineHint {
+  margin: 8px 0 0 !important;
+  font-size: 0.75rem !important;
+  opacity: 0.85;
+}
+
+.descarga {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #071a3a;
+  color: #fff !important;
+  font-weight: 700;
+  font-size: 0.84rem;
+  text-decoration: none;
+}
+
+.descarga:hover {
+  background: #0f2d5c;
+}
+
+.pasosLista {
+  margin: 0 0 18px;
+  padding-left: 1.15rem;
+  color: #5b6b82;
+  font-size: 0.84rem;
+  line-height: 1.45;
+
+  li + li {
+    margin-top: 8px;
+  }
+}
+
+.avisoChrome {
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  border: 1px dashed #c9a227;
+  background: #fffbeb;
+
+  p {
+    margin: 0 0 8px;
+    font-size: 0.78rem;
+    color: #6b5200;
+    line-height: 1.4;
+  }
+}
+
 .primario,
+.qlPrimary,
 .secundario,
+.secundarioPeligro,
 .fantasma {
   padding: 12px 14px;
   border-radius: 11px;
@@ -128,8 +219,8 @@
   color: #fff;
 
   &:disabled {
-    opacity: 0.6;
-    cursor: wait;
+    opacity: 0.55;
+    cursor: not-allowed;
   }
 
   &:hover:not(:disabled) {
@@ -137,10 +228,34 @@
   }
 }
 
+.qlPrimary {
+  border: none;
+  background: #0d8f4c;
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(13, 143, 76, 0.28);
+  font-size: 0.92rem;
+
+  &:disabled {
+    opacity: 0.65;
+    cursor: wait;
+  }
+
+  &:hover:not(:disabled) {
+    background: #0a7a40;
+  }
+}
+
 .secundario {
   border: 1px solid #b7c4d8;
   background: #fff;
   color: #071a3a;
+}
+
+.secundarioPeligro {
+  width: 100%;
+  border: 1px solid #d4a017;
+  background: #fff;
+  color: #5a4300;
 }
 
 .fantasma {

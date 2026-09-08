@@ -36,18 +36,21 @@ rechaza el job aunque el rollo físico sea cinta 62 mm.
 
 ### Camino recomendado (evita el diálogo Chrome)
 
-1. En la PC del operador: `EXPERIENCEBT-app\tools\print-bridge\start.cmd`
-2. En Accesos → buscar → preview → **Imprimir en QL (agente local)**
+1. En la PC: descarga `https://panel.experiencebt.com.mx/static/print-bridge.zip`
+   → descomprime → `start.cmd` (Node 20+). Alternativa monorepo:
+   `EXPERIENCEBT-app\tools\print-bridge\start.cmd`
+2. En Accesos → buscar → preview → si dice **QL lista** → **Imprimir en QL (agente local)**
 3. El panel manda un PNG 62×100 a `http://127.0.0.1:9631/print-label` con
-   `mediaName=62mm Cinta continua` (GDI Windows, no Chrome).
+   `mediaName=62mm Cinta continua` y job `ExperienceBT-QL-62x100` (GDI, no Chrome).
+4. Offline: panel ES + link al ZIP. **Sin** fallback silencioso a `window.print`.
 
-### Camino Chrome (si no hay agente)
+### Camino Chrome (secundario, con aviso)
 
-1. **Imprimir boleto** abre ventana aislada `Gafete 62x100 mm`.
+1. Botón **Imprimir con Chrome (no recomendado)** — aviso grande en UI.
 2. Destino Brother QL-800 → papel **62mm Cinta continua**, márgenes ninguno,
    encabezados/pies OFF.
-3. Una sola vez: Impresoras → Brother QL-800 → Preferencias de impresión →
-   papel por defecto **62mm Cinta continua**.
+3. Una sola vez: `set-ql-media.ps1` o Impresoras → QL-800 → Preferencias →
+   **62mm Cinta continua**.
 
 Detalle: `EXPERIENCEBT-app/docs/IMPRESORA-QL800.md`.
 

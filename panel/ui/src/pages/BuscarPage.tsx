@@ -28,6 +28,8 @@ export default function BuscarPage() {
   )
   const [active, setActive] = useState(0)
   const [bridgeReady, setBridgeReady] = useState<boolean | null>(null)
+  const [bridgePrinter, setBridgePrinter] = useState<string | null>(null)
+  const [bridgeProbing, setBridgeProbing] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
@@ -70,9 +72,14 @@ export default function BuscarPage() {
   }, [])
 
   useEffect(() => {
+    if (!boleto) return
     let cancelled = false
+    setBridgeProbing(true)
     void probePrintAgent().then((h) => {
-      if (!cancelled) setBridgeReady(Boolean(h.ok && h.reachable))
+      if (cancelled) return
+      setBridgeReady(Boolean(h.ok && h.reachable))
+      setBridgePrinter(h.printerName ?? null)
+      setBridgeProbing(false)
     })
     return () => {
       cancelled = true
@@ -97,20 +104,24 @@ export default function BuscarPage() {
     }
   }
 
-  const imprimirPantalla = () => {
+  /** Secundario: ventana aislada 62×100. NUNCA cae a window.print silencioso. */
+  const imprimirChrome = () => {
     if (!boleto) return
     const root = document.querySelector('[data-boleto-print-root] [data-boleto-face]')
-    if (root) {
-      try {
-        printBoletoIsolated(root.outerHTML)
-        setToast(`Impresión 62×100 · ${boleto.nombre}`)
-        return
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'No se abrió la ventana de impresión')
-      }
+    if (!root) {
+      setError(
+        'No hay preview del boleto. Cierra y vuelve a abrir. (Chrome print no es el camino principal — usa Imprimir en QL.)',
+      )
+      return
     }
-    window.print()
-    setToast(`Diálogo de impresión abierto · ${boleto.nombre}`)
+    try {
+      printBoletoIsolated(root.outerHTML)
+      setToast(
+        `Chrome · Gafete 62x100 · AVISO: puede mandar 29×90 si el default Windows no es cinta 62mm · ${boleto.nombre}`,
+      )
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se abrió la ventana de impresión')
+    }
   }
 
   const imprimirQl = async () => {
@@ -126,13 +137,20 @@ export default function BuscarPage() {
       })
       if (!res.ok) {
         setBridgeReady(false)
-        throw new Error(
+        const detail =
           res.error ||
-            'Agente QL offline. En esta PC: EXPERIENCEBT-app\\tools\\print-bridge\\start.cmd',
+          'Agente QL offline. Descarga /static/print-bridge.zip → start.cmd en esta PC.'
+        // NEVER window.print() fallback — that sends SPA title as 29×90
+        window.alert(
+          `Imprimir en QL falló:\n\n${detail}\n\nNo se usó Chrome. Corrige el agente e inténtalo de nuevo.`,
         )
+        throw new Error(detail)
       }
       setBridgeReady(true)
-      setToast(`QL · ${res.printer ?? 'impreso'} · ${boleto.nombre}`)
+      setBridgePrinter(res.printer ?? null)
+      setToast(
+        `QL · ${res.printer ?? 'impreso'} · ${res.mediaName ?? '62mm Cinta continua'} · ${boleto.nombre}`,
+      )
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo imprimir en QL')
     } finally {
@@ -288,8 +306,10 @@ export default function BuscarPage() {
           data={boleto}
           busy={printing === boleto.folio}
           bridgeReady={bridgeReady}
+          bridgePrinter={bridgePrinter}
+          bridgeProbing={bridgeProbing}
           onClose={() => setBoleto(null)}
-          onPrint={imprimirPantalla}
+          onPrintChrome={imprimirChrome}
           onPdf={() => void abrirPdf()}
           onPrintQl={() => void imprimirQl()}
         />
