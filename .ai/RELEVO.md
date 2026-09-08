@@ -3,12 +3,12 @@
 - **Último turno:** cursor
 - **Fecha:** 2026-09-08
 - **Rama:** main
-- **HEAD:** (cerrar) — Accesos QL no Chrome fallback + green primary + DO redeploy
+- **HEAD:** 37bed75 — Accesos QL zero-friction + zip estático
 
 ## 3 líneas
-Job Brother «Accesos · FICTI» 29×90 = Chrome SPA print, no el agente. UI ahora:
-botón verde **Imprimir en QL** → solo `127.0.0.1:9631`; fallo = alert, sin
-`window.print()`. Live asset `index-DUx04nJC.js` + `/static/print-bridge.zip`.
+Modal: probe `/health` → «QL lista · {printer}» o offline ES + ZIP
+`/static/print-bridge.zip`. Primario QL; Chrome secundario con aviso.
+Deploy DO: `index-DUx04nJC.js`, zip HTTP 200. Bridge local job 62mm OK.
 
 ## Qué dejó el turno anterior y sigue en pie
 
@@ -18,21 +18,18 @@ botón verde **Imprimir en QL** → solo `127.0.0.1:9631`; fallo = alert, sin
 
 ## Hecho en este turno
 
-- BuscarPage: QL fail → `alert` exacto; Chrome path aislado con título
-  `ExperienceBT-QL-62x100`; sin fallback silencioso.
-- Modal: QL primary verde; Chrome «no recomendado / puede 29×90»; probe status.
-- `printAgent.ts`: errores CORS/offline claros; paper/jobName en respuesta.
-- Deploy DO `panel_web`+`accesos_api`: asset sin 29mm/90mm; zip agente en static.
+- UI probe + offline panel + download ZIP; sin `window.print` silencioso.
+- `panel/static/print-bridge.zip` embebido; live en panel DO.
+- EXPERIENCEBT print-bridge: `762f615` (ZIP pack, CORS, job name, set-ql-media).
 
 ## A medias / siguiente
 
-- Adam: hard-refresh Accesos → **solo** botón verde QL (con `start.cmd` corriendo).
-- Si Brother muestra «Accesos · FICTI» otra vez → clicó Chrome, no QL.
+- Cada PC recepción: ZIP → `start.cmd` (+ opcional `set-ql-media.ps1`).
 - **Rotar password root DO**.
 - Nombre de plantel en gafete estudiante (decisión cliente).
 
 ## No tocar
 
-- Terror / Hetzner app code (salvo print-bridge en EXPERIENCEBT).
+- Terror / Hetzner app code (salvo print-bridge en EXPERIENCEBT-app).
 - Recrear `accesos_api` sin `SCAN_API_KEY`.
-- Secretos en git / no guardar password DO nuevo en repo.
+- Secretos en git / no guardar password DO en repo.
