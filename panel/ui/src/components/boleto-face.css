@@ -186,6 +186,9 @@
 /* ——— Impresión QL-800: una etiqueta 62×100 mm, sin chrome ——— */
 @media print {
   @page {
+    /* mm explícito; Brother/Windows a veces ignora esto y usa preferencias
+       del driver (p. ej. 29×90). Preferir «Imprimir en QL» o fijar papel
+       por defecto en Impresoras → QL-800 → Preferencias. */
     size: 62mm 100mm;
     margin: 0;
   }

@@ -9,6 +9,8 @@ import {
   type Sesion,
 } from '../api'
 import BoletoPrintModal from '../components/BoletoPrintModal'
+import { printBoletoIsolated, renderBoletoPngBase64 } from '../lib/boletoRender'
+import { printPngViaAgent, probePrintAgent } from '../lib/printAgent'
 import styles from './buscar.module.scss'
 
 export default function BuscarPage() {
@@ -25,6 +27,7 @@ export default function BuscarPage() {
     null,
   )
   const [active, setActive] = useState(0)
+  const [bridgeReady, setBridgeReady] = useState<boolean | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
@@ -66,6 +69,16 @@ export default function BuscarPage() {
     inputRef.current?.focus()
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    void probePrintAgent().then((h) => {
+      if (!cancelled) setBridgeReady(Boolean(h.ok && h.reachable))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [boleto])
+
   const abrirPreview = async (hit: GafeteHit) => {
     if (!sesion?.puedeImprimir) {
       setError('Tu rol puede consultar acreditaciones, pero no imprimir boletos. Pide ayuda a operación interna.')
@@ -85,8 +98,46 @@ export default function BuscarPage() {
   }
 
   const imprimirPantalla = () => {
+    if (!boleto) return
+    const root = document.querySelector('[data-boleto-print-root] [data-boleto-face]')
+    if (root) {
+      try {
+        printBoletoIsolated(root.outerHTML)
+        setToast(`Impresión 62×100 · ${boleto.nombre}`)
+        return
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'No se abrió la ventana de impresión')
+      }
+    }
     window.print()
-    setToast(`Diálogo de impresión abierto · ${boleto?.nombre ?? ''}`)
+    setToast(`Diálogo de impresión abierto · ${boleto.nombre}`)
+  }
+
+  const imprimirQl = async () => {
+    if (!boleto) return
+    setPrinting(boleto.folio)
+    setError(null)
+    try {
+      const png = await renderBoletoPngBase64(boleto)
+      const res = await printPngViaAgent(png, {
+        title: boleto.nombre,
+        body: `${boleto.tipo}\n${boleto.folio}`,
+        footer: 'FICTI Accesos',
+      })
+      if (!res.ok) {
+        setBridgeReady(false)
+        throw new Error(
+          res.error ||
+            'Agente QL offline. En esta PC: EXPERIENCEBT-app\\tools\\print-bridge\\start.cmd',
+        )
+      }
+      setBridgeReady(true)
+      setToast(`QL · ${res.printer ?? 'impreso'} · ${boleto.nombre}`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo imprimir en QL')
+    } finally {
+      setPrinting(null)
+    }
   }
 
   const abrirPdf = async () => {
@@ -94,7 +145,7 @@ export default function BuscarPage() {
     setPrinting(boleto.folio)
     try {
       await abrirPdfGafete(boleto.tipoKey, boleto.id)
-      setToast(`PDF listo · ${boleto.nombre}`)
+      setToast(`PDF 62×100 · ${boleto.nombre}`)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo abrir el PDF')
     } finally {
@@ -236,9 +287,11 @@ export default function BuscarPage() {
         <BoletoPrintModal
           data={boleto}
           busy={printing === boleto.folio}
+          bridgeReady={bridgeReady}
           onClose={() => setBoleto(null)}
           onPrint={imprimirPantalla}
           onPdf={() => void abrirPdf()}
+          onPrintQl={() => void imprimirQl()}
         />
       ) : null}
     </main>

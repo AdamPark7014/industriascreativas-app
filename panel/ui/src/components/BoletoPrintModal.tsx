@@ -6,13 +6,23 @@ import './boleto-face.css'
 type Props = {
   data: BoletoData
   busy?: boolean
+  bridgeReady?: boolean | null
   onClose: () => void
   onPrint: () => void
   onPdf: () => void
+  onPrintQl?: () => void
 }
 
-/** Modal de preview + acciones Imprimir / PDF. */
-export default function BoletoPrintModal({ data, busy, onClose, onPrint, onPdf }: Props) {
+/** Modal de preview + acciones Imprimir / PDF / QL local. */
+export default function BoletoPrintModal({
+  data,
+  busy,
+  bridgeReady,
+  onClose,
+  onPrint,
+  onPdf,
+  onPrintQl,
+}: Props) {
   const tituloId = useId()
   const printRef = useRef<HTMLDivElement>(null)
 
@@ -44,9 +54,9 @@ export default function BoletoPrintModal({ data, busy, onClose, onPrint, onPdf }
             <p className={styles.kicker}>Vista previa del boleto</p>
             <h2 id={tituloId}>¿Se ve bien para imprimir?</h2>
             <p className={styles.ayuda}>
-              Formato {data.formato}. En el diálogo elige papel{' '}
-              <b>62mm Cinta continua</b>, márgenes ninguno, y desactiva encabezados y
-              pies (Más ajustes).
+              Formato {data.formato}. Si Chrome manda el job como 29×90, usa{' '}
+              <b>Imprimir en QL (agente local)</b> o elige a mano papel{' '}
+              <b>62mm Cinta continua</b>, márgenes ninguno, pies OFF.
             </p>
           </div>
           <button type="button" className={styles.cerrar} onClick={onClose} aria-label="Cerrar">
@@ -64,12 +74,39 @@ export default function BoletoPrintModal({ data, busy, onClose, onPrint, onPdf }
             <ol>
               <li>Revisa nombre, tipo y folio.</li>
               <li>
-                Pulsa <b>Imprimir boleto</b> (recomendado).
+                Con el puente local: <b>Imprimir en QL</b> (fuerza 62×100, evita 29×90).
               </li>
-              <li>Si tu impresora pide PDF, usa <b>Abrir PDF</b>.</li>
+              <li>
+                Sin puente: <b>Imprimir boleto</b> → papel <b>62mm Cinta continua</b>.
+              </li>
+              <li>Si hace falta, <b>Abrir PDF</b>.</li>
             </ol>
             <div className={styles.acciones}>
-              <button type="button" className={styles.primario} disabled={busy} onClick={onPrint}>
+              {onPrintQl ? (
+                <button
+                  type="button"
+                  className={styles.primario}
+                  disabled={busy}
+                  onClick={onPrintQl}
+                  title={
+                    bridgeReady === false
+                      ? 'Arranca tools/print-bridge/start.cmd en esta PC'
+                      : 'POST al agente local 127.0.0.1:9631'
+                  }
+                >
+                  {busy
+                    ? 'Enviando a QL…'
+                    : bridgeReady === false
+                      ? 'QL agente (offline)'
+                      : 'Imprimir en QL (agente local)'}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className={onPrintQl ? styles.secundario : styles.primario}
+                disabled={busy}
+                onClick={onPrint}
+              >
                 {busy ? 'Preparando…' : 'Imprimir boleto'}
               </button>
               <button type="button" className={styles.secundario} disabled={busy} onClick={onPdf}>

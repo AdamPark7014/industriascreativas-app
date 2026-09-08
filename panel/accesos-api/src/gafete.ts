@@ -65,7 +65,11 @@ export async function boletoPdf(
   subtitulo = '',
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create()
+  doc.setTitle(`Gafete 62x100 — ${nombre}`)
+  doc.setSubject('Brother QL-800 · 62mm Cinta continua · 100mm')
+  doc.setProducer('FICTI Accesos')
   const page = doc.addPage([W, H])
+  page.setSize(W, H)
   const font = await doc.embedFont(StandardFonts.Helvetica)
   const bold = await doc.embedFont(StandardFonts.HelveticaBold)
   const accent = hexRgb(acentoHex(tipo))
