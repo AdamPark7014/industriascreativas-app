@@ -1,9 +1,8 @@
-import { tamanosBoleto, textoNombre, textoSub, textoTipo, type BoletoData } from '../components/BoletoFace'
+import { tamanosBoleto, textoNombre, textoSub, type BoletoData } from '../components/BoletoFace'
 import boletoCss from '../components/boleto-face.css?raw'
 import {
   BOLETO_BLANCO,
   BOLETO_NEGRO,
-  BOLETO_ROJO,
   COL_W,
   GEO,
   aplicarFuente,
@@ -71,7 +70,7 @@ export async function renderBoletoPngBase64(data: BoletoData): Promise<string> {
   const colW = mm(COL_W)
   const colH = mm(GEO.colH)
   const colTop = (h - colH) / 2
-  const { tipoMm, nombreMm } = tamanosBoleto(data)
+  const { nombreMm } = tamanosBoleto(data)
 
   ctx.save()
   ctx.beginPath()
@@ -80,18 +79,10 @@ export async function renderBoletoPngBase64(data: BoletoData): Promise<string> {
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
 
-  // Banda roja compacta con el tipo en blanco
+  // Sin banda del tipo: el nombre arranca arriba de la columna.
   let y = colTop
-  const tipoH = mm(GEO.tipoH)
-  ctx.fillStyle = BOLETO_ROJO
-  roundRect(ctx, colX, y, colW, tipoH, mm(GEO.tipoRadio))
-  ctx.fill()
-  ctx.fillStyle = BOLETO_BLANCO
-  aplicarFuente(ctx, 800, mm(tipoMm), GEO.tipoTracking)
-  ctx.fillText(textoTipo(data), colX + mm(GEO.tipoPadX), y + tipoH / 2)
-  y += tipoH + mm(GEO.nombreGap)
 
-  // Nombre: negritas, tamaño auto-ajustado (misma cuenta que el DOM), hasta 3 líneas
+  // Nombre: negritas, tamaño auto-ajustado (misma cuenta que el DOM), hasta 4 líneas
   ctx.fillStyle = BOLETO_NEGRO
   aplicarFuente(ctx, 800, mm(nombreMm), GEO.nombreTracking)
   const lineaNombre = mm(nombreMm) * GEO.nombreLh
@@ -183,22 +174,4 @@ html, body {
 </body>
 </html>`)
   doc.close()
-}
-
-function roundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number,
-) {
-  const r = Math.min(radius, width / 2, height / 2)
-  ctx.beginPath()
-  ctx.moveTo(x + r, y)
-  ctx.arcTo(x + width, y, x + width, y + height, r)
-  ctx.arcTo(x + width, y + height, x, y + height, r)
-  ctx.arcTo(x, y + height, x, y, r)
-  ctx.arcTo(x, y, x + width, y, r)
-  ctx.closePath()
 }

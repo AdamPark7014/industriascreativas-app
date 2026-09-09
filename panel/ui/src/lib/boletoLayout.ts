@@ -31,19 +31,14 @@ export const GEO = {
   hueco: 4,
   /** Alto de la columna de texto (centrada en vertical). Ancho: COL_W. */
   colH: 49,
-  /** Banda roja del tipo: alto, relleno lateral, letra (auto max→min), tracking, radio. */
-  tipoH: 8,
-  tipoPadX: 2.5,
-  tipoMax: 4,
-  tipoMin: 2.6,
-  tipoTracking: 0.14,
-  tipoRadio: 1.2,
-  /** Nombre: auto-ajuste max→min, hasta 3 líneas. */
-  nombreGap: 2.5,
-  nombreMax: 6.2,
+  /** Nombre: auto-ajuste max→min, hasta 4 líneas. Arranca arriba de la columna:
+      la banda roja del tipo se retiró el 09-09-2026 a petición de Adam, y el
+      nombre se quedó con ese espacio. El tipo sigue legible en el folio
+      (EMPRESARIO-465), así que no se pierde información. */
+  nombreMax: 8,
   nombreMin: 3.2,
-  nombreLh: 1.1,
-  nombreLineas: 3,
+  nombreLh: 1.08,
+  nombreLineas: 4,
   nombreTracking: 0.01,
   /** Subtítulo (empresa o plantel), hasta 2 líneas. */
   subGap: 1.5,

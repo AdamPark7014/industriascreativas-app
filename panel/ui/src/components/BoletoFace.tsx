@@ -19,10 +19,6 @@ type Props = {
 }
 
 /** Textos tal como se imprimen (mayúsculas y respaldos): los usan el DOM y el PNG. */
-export function textoTipo(data: BoletoData): string {
-  return (data.tipo || 'Acreditación').trim().toUpperCase()
-}
-
 export function textoNombre(data: BoletoData): string {
   return (data.nombre || '—').trim().toUpperCase()
 }
@@ -31,18 +27,9 @@ export function textoSub(data: BoletoData): string {
   return (data.subtitulo || '').trim().toUpperCase()
 }
 
-/** Tamaños (mm) del tipo y del nombre: la misma cuenta en el DOM y en el PNG. */
-export function tamanosBoleto(data: BoletoData): { tipoMm: number; nombreMm: number } {
+/** Tamaño (mm) del nombre: la misma cuenta en el DOM y en el PNG. */
+export function tamanosBoleto(data: BoletoData): { nombreMm: number } {
   return {
-    tipoMm: ajustarFuenteMm({
-      texto: textoTipo(data),
-      peso: 800,
-      trackingEm: GEO.tipoTracking,
-      anchoMm: COL_W - 2 * GEO.tipoPadX,
-      maxLineas: 1,
-      maxMm: GEO.tipoMax,
-      minMm: GEO.tipoMin,
-    }),
     nombreMm: ajustarFuenteMm({
       texto: textoNombre(data),
       peso: 800,
@@ -57,8 +44,9 @@ export function tamanosBoleto(data: BoletoData): { tipoMm: number; nombreMm: num
 
 /**
  * Cara del boleto QL-800, apaisada 94 × 59 mm (papel térmico negro/rojo):
- * QR a la izquierda; a la derecha banda roja con el tipo, nombre, subtítulo y
- * folio. Misma geometría que renderBoletoPngBase64: lo que se ve es lo que sale.
+ * QR a la izquierda; a la derecha nombre, subtítulo y folio. Sin la banda roja
+ * del tipo (retirada el 09-09-2026: el tipo ya viaja en el folio).
+ * Misma geometría que renderBoletoPngBase64: lo que se ve es lo que sale.
  */
 export default function BoletoFace({ data, className }: Props) {
   // Las fuentes web pueden llegar después del primer render: se vuelve a medir.
@@ -73,7 +61,7 @@ export default function BoletoFace({ data, className }: Props) {
     }
   }, [])
 
-  const { tipoMm, nombreMm } = useMemo(() => tamanosBoleto(data), [data, fuentesTick])
+  const { nombreMm } = useMemo(() => tamanosBoleto(data), [data, fuentesTick])
   const sub = textoSub(data)
 
   return (
@@ -83,9 +71,6 @@ export default function BoletoFace({ data, className }: Props) {
       </div>
 
       <div className="boletoTexto">
-        <p className="boletoTipo" style={{ fontSize: `${tipoMm}mm` }}>
-          {textoTipo(data)}
-        </p>
         <h1 className="boletoNombre" style={{ fontSize: `${nombreMm}mm` }}>
           {textoNombre(data)}
         </h1>

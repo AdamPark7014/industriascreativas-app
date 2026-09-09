@@ -47,6 +47,32 @@ esta PC**, y cada impresión queda en `accesos_impresiones` con "Marcar como no 
   que sshd rechaza. `_deploy_print_fix.py` ahora prueba las dos y avisa cuál falla.
   Respaldo de `authorized_keys` en el droplet: `/root/.ssh/authorized_keys.bak.*`.
 
+## Turno 2026-09-09 tarde
+
+- **Impresion arreglada de raiz.** El agente daba "No se imprimio" con el boleto ya
+  saliendo: el driver de la QL-800 pausa y reanuda el trabajo mientras lo procesa, y
+  `Watch-SpoolJob` leia ese estado compuesto ('Paused, Error, Printing, Retained') como
+  rechazo, cancelaba y reintentaba. El log de Windows (PrintService/Operational) mostraba
+  evento 307 "Paginas imprimidas: 1" en los dos intentos. Corregido en EXPERIENCEBT-app
+  `tools/print-bridge/print-label.ps1` (commit 1a5b96a, agente 0.3.1): Error/Paused CON
+  Printing = avance; rechazo solo si se queda quieto 8 s o pide intervencion fisica.
+  Instalado en la laptop y reempaquetado en `panel/static/print-bridge.zip`.
+- **Base purgada.** Borrados 62 escaneos (57 del 05-09 de pruebas, 5 de hoy) y la unica
+  impresion; secuencias reiniciadas en 1. Se conservan zonas (vip, acreditacion) y los
+  registros (632 empresarios, 292 alumnos). Respaldo `pg_dump --data-only` en el droplet
+  `/root/respaldos-accesos/accesos-pruebas-20260909-145308.sql` y copia local en el
+  scratchpad de la sesion.
+- **Boleto sin banda roja.** Adam pidio quitar el "EMPRESARIO"/"ESTUDIANTE" grande. Fuera
+  en DOM, CSS y PNG; el nombre sube y crece (8 mm max, hasta 4 lineas). El tipo sigue
+  legible en el folio.
+- **Escaner QR mejor.** `useCameraCapture` reescrito: decodifica el recorte del marco
+  (mas pixeles utiles, no lee codigos del fondo) y el cuadro completo cada 4 intentos;
+  un intento a la vez sobre requestVideoFrameCallback (antes un setInterval de 90 ms
+  apilaba decodificaciones); el lienzo ya no deforma la imagen (antes forzaba 480x480
+  sobre un cuadro 4:3); enfoque continuo, linterna y cambio de camara; jsQR alterna
+  inversion; si BarcodeDetector falla 5 veces seguidas cae a jsQR; reabre la camara al
+  volver de segundo plano.
+
 ## A medias / siguiente
 
 - Tras el deploy: imprimir un boleto real → ver badge "Impreso ×1" → "Marcar como no impreso" → badge desaparece.

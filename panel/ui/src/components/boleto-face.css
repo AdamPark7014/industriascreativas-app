@@ -9,12 +9,12 @@
    - Margen interno 3 mm. Izquierda: QR 44 mm centrado en vertical, sin texto
      encima ni debajo. Hueco 4 mm.
    - Derecha: columna de texto 40 × 49 mm centrada en vertical, alineada a la
-     izquierda: banda roja con el tipo (8 mm, texto blanco), nombre negro en
-     negritas (auto-ajuste 6.2→3.2 mm, hasta 3 líneas), subtítulo 2.8 mm
-     (hasta 2 líneas) y folio 3.2 mm anclado abajo.
+     izquierda: nombre negro en negritas (auto-ajuste 8→3.2 mm, hasta 4
+     líneas), subtítulo 2.8 mm (hasta 2 líneas) y folio 3.2 mm anclado abajo.
+     Sin banda roja del tipo (retirada el 09-09-2026: el tipo va en el folio).
    - Sin marca, sin línea del evento, sin aviso de puerta, sin marco.
-   - Los tamaños del tipo y del nombre los fija BoletoFace en línea con la
-     misma medición que usa el PNG. */
+   - El tamaño del nombre lo fija BoletoFace en línea con la misma medición
+     que usa el PNG. */
 
 :root {
   --boleto-acento: #e60012;
@@ -76,37 +76,18 @@
   overflow: hidden;
 }
 
-.boletoTipo {
-  display: flex;
-  align-items: center;
-  height: 8mm;
-  margin: 0;
-  padding: 0 2.5mm;
-  box-sizing: border-box;
-  background: var(--boleto-acento);
-  color: #fff;
-  border-radius: 1.2mm;
-  font-size: 4mm; /* BoletoFace lo ajusta en línea (4 → 2.6 mm) */
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  flex: none;
-}
 
 .boletoNombre {
-  margin: 2.5mm 0 0;
-  font-size: 6.2mm; /* BoletoFace lo ajusta en línea (6.2 → 3.2 mm) */
+  margin: 0;
+  font-size: 8mm; /* BoletoFace lo ajusta en línea (8 → 3.2 mm) */
   font-weight: 800;
-  line-height: 1.1;
+  line-height: 1.08;
   letter-spacing: 0.01em;
   text-transform: uppercase;
   color: var(--boleto-negro);
   overflow-wrap: anywhere;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
   flex: none;
