@@ -58,6 +58,8 @@ export default function BuscarPage() {
   const [bridgeReady, setBridgeReady] = useState<boolean | null>(null)
   const [bridgePrinter, setBridgePrinter] = useState<string | null>(null)
   const [bridgeColorMode, setBridgeColorMode] = useState<PrintColorMode | null>(null)
+  /** false = la QL-800 está apagada o sin USB según Windows (el agente sí responde). */
+  const [bridgePrinterOnline, setBridgePrinterOnline] = useState<boolean | null>(null)
   const [bridgeProbing, setBridgeProbing] = useState(false)
   const [mostrarInstalar, setMostrarInstalar] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -113,6 +115,7 @@ export default function BuscarPage() {
     setBridgeReady(Boolean(h.ok && h.reachable))
     setBridgePrinter(h.printerName ?? null)
     setBridgeColorMode(h.colorMode ?? null)
+    setBridgePrinterOnline(h.printerOnline ?? null)
     setBridgeProbing(false)
   }, [])
 
@@ -351,7 +354,11 @@ export default function BuscarPage() {
     <main className={styles.page}>
       {sesion?.puedeImprimir ? (
         <div className={styles.chipFila} aria-live="polite">
-          {bridgeReady === true ? (
+          {bridgeReady === true && bridgePrinterOnline === false ? (
+            <span className={styles.chipWarn} role="status">
+              Impresora apagada o desconectada · enciende la {bridgePrinter || 'Brother QL-800'} y revisa el USB
+            </span>
+          ) : bridgeReady === true ? (
             <span className={styles.chipOk}>
               Impresora lista · {bridgePrinter || 'Brother QL-800'}
               {rollo ? ` · ${rollo}` : ''}
@@ -508,6 +515,7 @@ export default function BuscarPage() {
           bridgeReady={bridgeReady}
           bridgePrinter={bridgePrinter}
           bridgeColorMode={bridgeColorMode}
+          bridgePrinterOnline={bridgePrinterOnline}
           bridgeProbing={bridgeProbing}
           impresiones={boleto.impresiones ?? 0}
           ultimaImpresion={boleto.ultimaImpresion ?? null}

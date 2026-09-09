@@ -1,8 +1,15 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import BoletoFace, { type BoletoData } from './BoletoFace'
 import PrintBridgeInstall from './PrintBridgeInstall'
 import { horaCorta } from '../api'
+import { GEO } from '../lib/boletoLayout'
 import { PRINT_BRIDGE_CHROME_HINT, describeColorMode, type PrintColorMode } from '../lib/printAgent'
+
+/** px CSS por mm (96 dpi): el boleto de 94 mm mide ≈355 px sin escalar. */
+const PX_POR_MM = 96 / 25.4
+/** Escala del preview: entre 0.6× (móvil) y 1.8× (escritorio), según el ancho libre. */
+const ESCALA_MIN = 0.6
+const ESCALA_MAX = 1.8
 import styles from './boleto-print.module.scss'
 import './boleto-face.css'
 
@@ -13,6 +20,8 @@ type Props = {
   bridgePrinter?: string | null
   /** Rollo detectado por el agente (último modo que imprimió bien). */
   bridgeColorMode?: PrintColorMode | null
+  /** false = Windows marca la QL-800 apagada o sin USB (el agente sí responde). */
+  bridgePrinterOnline?: boolean | null
   bridgeProbing?: boolean
   /** Impresiones registradas de este boleto (0 si nunca). */
   impresiones?: number
@@ -38,6 +47,7 @@ export default function BoletoPrintModal({
   bridgeReady,
   bridgePrinter,
   bridgeColorMode,
+  bridgePrinterOnline,
   bridgeProbing,
   impresiones = 0,
   ultimaImpresion,
@@ -74,6 +84,23 @@ export default function BoletoPrintModal({
     }
   }, [onClose, onPrintQl, qlOnline, busy])
 
+  // Escala CSS del preview apaisado: llena el ancho libre del escenario sin
+  // recortar (el escenario reserva el tamaño ya escalado, ver .escenario).
+  useLayoutEffect(() => {
+    const el = printRef.current
+    if (!el) return
+    const ajustar = () => {
+      const estilo = getComputedStyle(el)
+      const libre = el.clientWidth - parseFloat(estilo.paddingLeft) - parseFloat(estilo.paddingRight)
+      const escala = Math.max(ESCALA_MIN, Math.min(ESCALA_MAX, libre / (GEO.w * PX_POR_MM)))
+      el.style.setProperty('--boleto-escala', escala.toFixed(3))
+    }
+    ajustar()
+    const ro = new ResizeObserver(ajustar)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   return (
     <div className={styles.capa} role="presentation" onClick={onClose}>
       <div
@@ -88,7 +115,7 @@ export default function BoletoPrintModal({
             <p className={styles.kicker}>Vista previa del boleto</p>
             <h2 id={tituloId}>¿Se ve bien para imprimir?</h2>
             <p className={styles.ayuda}>
-              Sale tal cual se ve: rollo 62 mm negro/rojo en la Brother QL-800.
+              Sale tal cual se ve, apaisado sobre el rollo de 62 mm negro/rojo de la Brother QL-800.
             </p>
           </div>
           <button type="button" className={styles.cerrar} onClick={onClose} aria-label="Cerrar">
@@ -98,7 +125,9 @@ export default function BoletoPrintModal({
 
         <div className={styles.cuerpo}>
           <div className={styles.preview} data-boleto-print-root ref={printRef}>
-            <BoletoFace data={data} />
+            <div className={styles.escenario}>
+              <BoletoFace data={data} />
+            </div>
           </div>
 
           <aside className={styles.pasos}>
@@ -108,7 +137,12 @@ export default function BoletoPrintModal({
               <p className={styles.estadoProbe}>Comprobando impresora…</p>
             ) : null}
 
-            {qlOnline ? (
+            {qlOnline && bridgePrinterOnline === false ? (
+              <p className={styles.estadoWarn} role="alert">
+                Impresora apagada o desconectada · enciende la {bridgePrinter || 'Brother QL-800'},
+                revisa el USB y vuelve a intentar.
+              </p>
+            ) : qlOnline ? (
               <p className={styles.estadoOk} role="status">
                 Impresora lista · {bridgePrinter || 'Brother QL-800'}
                 {rollo ? ` · ${rollo}` : ''}
@@ -144,7 +178,7 @@ export default function BoletoPrintModal({
                     className={styles.primarioGrande}
                     disabled={busy || (bridgeProbing && bridgeReady == null)}
                     onClick={onPrintQl}
-                    title="Ctrl+Enter · PNG 59×94 → agente local 127.0.0.1:9631"
+                    title="Ctrl+Enter · PNG 94×59 apaisado → agente local 127.0.0.1:9631 (lo gira él)"
                   >
                     {busy ? 'Imprimiendo…' : 'Imprimir boleto'}
                   </button>

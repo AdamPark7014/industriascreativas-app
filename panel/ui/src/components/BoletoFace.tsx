@@ -1,3 +1,6 @@
+import { useEffect, useMemo, useState } from 'react'
+import { COL_W, GEO, ajustarFuenteMm, fuentesListas } from '../lib/boletoLayout'
+
 export type BoletoData = {
   nombre: string
   folio: string
@@ -15,39 +18,80 @@ type Props = {
   className?: string
 }
 
-/** Texto de marca en la banda superior (los logos son claros: no sirven en térmico). */
-export const BOLETO_MARCA = 'FICTI · TECH CAPITAL'
+/** Textos tal como se imprimen (mayúsculas y respaldos): los usan el DOM y el PNG. */
+export function textoTipo(data: BoletoData): string {
+  return (data.tipo || 'Acreditación').trim().toUpperCase()
+}
 
-/** Rojo del rollo DK-2251; se ignora `data.acento` porque el térmico solo tiene negro/rojo. */
-export const BOLETO_ROJO = '#e60012'
+export function textoNombre(data: BoletoData): string {
+  return (data.nombre || '—').trim().toUpperCase()
+}
+
+export function textoSub(data: BoletoData): string {
+  return (data.subtitulo || '').trim().toUpperCase()
+}
+
+/** Tamaños (mm) del tipo y del nombre: la misma cuenta en el DOM y en el PNG. */
+export function tamanosBoleto(data: BoletoData): { tipoMm: number; nombreMm: number } {
+  return {
+    tipoMm: ajustarFuenteMm({
+      texto: textoTipo(data),
+      peso: 800,
+      trackingEm: GEO.tipoTracking,
+      anchoMm: COL_W - 2 * GEO.tipoPadX,
+      maxLineas: 1,
+      maxMm: GEO.tipoMax,
+      minMm: GEO.tipoMin,
+    }),
+    nombreMm: ajustarFuenteMm({
+      texto: textoNombre(data),
+      peso: 800,
+      trackingEm: GEO.nombreTracking,
+      anchoMm: COL_W,
+      maxLineas: GEO.nombreLineas,
+      maxMm: GEO.nombreMax,
+      minMm: GEO.nombreMin,
+    }),
+  }
+}
 
 /**
- * Cara del boleto QL-800 (59×94 mm, papel térmico negro/rojo).
- * Misma geometría que renderBoletoPngBase64: lo que se ve es lo que sale.
+ * Cara del boleto QL-800, apaisada 94 × 59 mm (papel térmico negro/rojo):
+ * QR a la izquierda; a la derecha banda roja con el tipo, nombre, subtítulo y
+ * folio. Misma geometría que renderBoletoPngBase64: lo que se ve es lo que sale.
  */
 export default function BoletoFace({ data, className }: Props) {
+  // Las fuentes web pueden llegar después del primer render: se vuelve a medir.
+  const [fuentesTick, setFuentesTick] = useState(0)
+  useEffect(() => {
+    let vivo = true
+    void fuentesListas().then(() => {
+      if (vivo) setFuentesTick((t) => t + 1)
+    })
+    return () => {
+      vivo = false
+    }
+  }, [])
+
+  const { tipoMm, nombreMm } = useMemo(() => tamanosBoleto(data), [data, fuentesTick])
+  const sub = textoSub(data)
+
   return (
-    <article
-      className={className}
-      style={{ ['--boleto-acento' as string]: BOLETO_ROJO }}
-      data-boleto-face
-    >
-      <header className="boletoBrand">{BOLETO_MARCA}</header>
-
-      <p className="boletoTipo">{data.tipo || 'Acreditación'}</p>
-
-      <h1 className="boletoNombre">{data.nombre || '—'}</h1>
-      {data.subtitulo ? <p className="boletoSub">{data.subtitulo}</p> : null}
-      <p className="boletoEvento">{data.evento || 'FICTI · Tech Capital 2026'}</p>
-
+    <article className={className} data-boleto-face>
       <div className="boletoQrWrap">
         <img className="boletoQr" src={data.qrDataUrl} alt={`QR ${data.folio}`} />
       </div>
 
-      <footer className="boletoPie">
-        <span>Presenta este código en puerta</span>
-        <strong>{data.folio}</strong>
-      </footer>
+      <div className="boletoTexto">
+        <p className="boletoTipo" style={{ fontSize: `${tipoMm}mm` }}>
+          {textoTipo(data)}
+        </p>
+        <h1 className="boletoNombre" style={{ fontSize: `${nombreMm}mm` }}>
+          {textoNombre(data)}
+        </h1>
+        {sub ? <p className="boletoSub">{sub}</p> : null}
+        <p className="boletoFolio">{data.folio}</p>
+      </div>
     </article>
   )
 }

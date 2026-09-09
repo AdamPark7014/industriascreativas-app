@@ -126,6 +126,7 @@
 
 .chipOk,
 .chipOff,
+.chipWarn,
 .chipProbe {
   display: inline-flex;
   align-items: center;
@@ -166,6 +167,16 @@
 
   &:hover {
     background: #ffefe3;
+  }
+}
+
+.chipWarn {
+  border: 1px solid #f3c3c3;
+  background: #fff1f1;
+  color: #8a1c1c;
+
+  &::before {
+    background: #e60012;
   }
 }
 

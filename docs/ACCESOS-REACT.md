@@ -62,6 +62,9 @@ La página Buscar sondea `GET /health` del agente al montar y **cada 20 s** y
 muestra un chip en la cabecera:
 
 - **Impresora lista · Brother QL-800 · rollo negro/rojo** (o *rollo monocromo*).
+- **Impresora apagada o desconectada**: el agente responde pero Windows marca la
+  QL-800 sin conexión (`/health.printerOnline === false`); el agente no encola
+  nada hasta que vuelva. El mismo aviso aparece dentro del preview.
 - **Impresora no instalada en esta PC → Instalar**: abre el panel de
   instalación (el mismo aparece dentro del preview cuando el agente está
   offline) con el botón primario **Instalar impresora en esta PC** (descarga
@@ -105,25 +108,46 @@ Cada impresión real queda en la BD (`accesos_impresiones`, API en
 - Cliente: `registrarImpresion`, `listarImpresiones`, `borrarImpresion`,
   `borrarImpresiones` en `panel/ui/src/api.ts`.
 
-### Diseño del boleto (papel térmico negro/rojo, WYSIWYG)
+### Diseño del boleto (apaisado 94 × 59, papel térmico negro/rojo, WYSIWYG)
 
-`BoletoFace.tsx` + `boleto-face.css` (preview y camino Chrome) y
-`boletoRender.ts` (PNG para el agente) comparten la **misma geometría en mm**:
+Desde 2026-09-09 el boleto es **apaisado: 94 × 59 mm**, QR a un lado y texto
+al otro, sin marca ni adornos. `BoletoFace.tsx` + `boleto-face.css` (preview
+y camino Chrome) y `boletoRender.ts` (PNG para el agente) comparten la
+**misma geometría en mm**, que vive en `panel/ui/src/lib/boletoLayout.ts`
+(`GEO`, `COL_W` y la medición de texto):
 
-- Cara **59 × 94 mm** = área imprimible real de la QL-800 en cinta 62 mm
-  (márgenes duros 1.5 mm lados / 2.8 mm arriba-abajo). El agente encaja el PNG
-  en esa área (contain + centrado), así que sale **1:1 y centrado**. PNG a
-  **300 dpi → 697 × 1110 px**.
-- Solo **blanco, negro y rojo `#e60012`**: sin grises, gradientes ni logos
-  (los logos son claros, pensados para fondo oscuro). Marco negro fino a
-  1.2 mm; margen interno 3 mm.
-- Banda negra de marca **FICTI · TECH CAPITAL** (9 mm), banda roja con el
-  **tipo** en blanco (8 mm), **nombre** negro 5 mm (máx. 2 líneas), empresa
-  2.7 mm (máx. 2 líneas), evento 2.2 mm, **QR 34 mm** negro sobre blanco
-  anclado abajo, pie "Presenta este código en puerta" + **folio** 3.2 mm.
-- Camino Chrome: `@page 62mm 100mm`, `[data-boleto-print-root]` 62×100 con la
-  cara 59×94 centrada (`printBoletoIsolated`). El preview del modal se muestra
-  claro, igual que sale del rollo.
+- Área imprimible real de la QL-800 en cinta 62 mm: **58.9 mm de ancho
+  (cinta) × 94.2 mm de largo (corte)**. El agente local **gira 90° cualquier
+  PNG apaisado** (ancho > alto) y lo encaja centrado ahí, así que el panel
+  genera el PNG **tal cual se ve, sin girarlo: 94 × 59 mm a 300 dpi →
+  1110 × 697 px**.
+- Solo **blanco, negro y rojo `#e60012`**: sin grises, gradientes, logos ni
+  marco. Margen interno 3 mm.
+- **Izquierda**: QR **44 mm** negro sobre blanco, centrado en vertical, sin
+  texto encima ni debajo (el margen y el hueco de 4 mm hacen de zona en blanco).
+- **Derecha**: columna de texto 40 × 49 mm centrada en vertical, alineada a la
+  izquierda: banda roja compacta con el **tipo** en blanco (8 mm; letra 4 →
+  2.6 mm auto), **nombre** negro en negritas (auto-ajuste 6.2 → 3.2 mm, hasta
+  3 líneas), **subtítulo** (empresa o plantel) 2.8 mm hasta 2 líneas y
+  **folio** 3.2 mm anclado abajo (p. ej. `EMPRESARIO-12`).
+- Fuera: "FICTI · TECH CAPITAL", la línea del evento, "Presenta este código en
+  puerta" y el marco exterior.
+- Auto-ajuste: `ajustarFuenteMm` mide con un canvas (Manrope, mismo tracking)
+  y devuelve el mayor tamaño con el que el texto cabe; `BoletoFace` lo aplica
+  en línea y `renderBoletoPngBase64` usa la misma cuenta y el mismo partido de
+  líneas (`partirLineas`), esperando `document.fonts` antes de medir.
+- Preview del modal: `.escenario` reserva `94 × 59 mm × escala` y la cara se
+  escala con `transform` (`--boleto-escala`, 0.6–1.8× según el ancho libre,
+  por `ResizeObserver`) para verse grande sin recortes.
+- Camino Chrome (`printBoletoIsolated` y `@media print`): `@page` sigue siendo
+  **62mm 100mm** porque la cinta sale en vertical; la cara se gira 90° con
+  `transform: translate(-50%, -50%) rotate(90deg)` alrededor del centro de la
+  etiqueta (59 sobre los 62 de ancho, 94 sobre los 100 de largo), igual que
+  hace el agente con el PNG.
+- Para regenerar una muestra con la función real: harness Vite temporal (no
+  versionado) con `root` en una carpeta que tenga `index.html` + `main.tsx`
+  importando `BoletoFace` y `renderBoletoPngBase64` con datos de prueba, y un
+  middleware `configureServer` que reciba el base64 por POST y lo guarde.
 
 Detalle del agente: `EXPERIENCEBT-app/docs/IMPRESORA-QL800.md`.
 

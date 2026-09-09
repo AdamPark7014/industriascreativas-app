@@ -62,6 +62,9 @@ export type PrintAgentHealth = {
   agent?: 'node' | 'powershell'
   version?: string
   installed?: boolean
+  /** false = Windows marca la QL-800 sin conexión (apagada o USB suelto); null = agente viejo o sin datos. */
+  printerOnline?: boolean | null
+  printerOnlineReason?: string | null
 }
 
 export type PrintAgentResult = {
@@ -146,8 +149,12 @@ export async function probePrintAgent(baseUrl?: string): Promise<PrintAgentHealt
       agent?: 'node' | 'powershell'
       version?: string
       installed?: boolean
+      printerOnline?: boolean | null
+      printerOnlineReason?: string | null
     }
     return {
+      printerOnline: typeof data?.printerOnline === 'boolean' ? data.printerOnline : null,
+      printerOnlineReason: data?.printerOnlineReason ?? null,
       ok: Boolean(data?.ok),
       reachable: Boolean(data?.reachable),
       printerName: data?.printerName ?? null,

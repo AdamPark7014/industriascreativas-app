@@ -29,6 +29,11 @@ esta PC**, y cada impresión queda en `accesos_impresiones` con "Marcar como no 
   PNG 300 dpi, preview WYSIWYG). Build OK: `dist/assets/index-DrBTGvVk.js`.
 - `docs/ACCESOS-REACT.md` actualizado.
 - Boleto real impreso desde el panel en la QL de Adam (EMPRESARIO-12) vía agente; muestra rediseñada impresa centrada.
+- 09-09: boleto **apaisado 94×59 mm** (QR izquierda, banda roja con tipo, nombre, empresa, folio; sin
+  FICTI/TECH CAPITAL) en `boletoLayout.ts`, `BoletoFace`, `boletoRender.ts` (PNG 1110×697, el agente lo
+  gira 90°), preview escalado en el modal; chip y aviso "Impresora apagada o desconectada" cuando
+  `/health.printerOnline === false`. Build: `dist/assets/index-Ck-27Hjk.js`. ZIP del agente
+  actualizado en `panel/static/print-bridge.zip` (agent.ps1 con `printerOnline`).
 
 ## A medias / siguiente
 

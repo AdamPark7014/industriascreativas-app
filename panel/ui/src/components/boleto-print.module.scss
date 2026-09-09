@@ -70,6 +70,7 @@
 
 /* Fondo claro y plano: el boleto es blanco y debe verse como saldrá del rollo. */
 .preview {
+  --boleto-escala: 1.5; /* la fija BoletoPrintModal con ResizeObserver */
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -78,10 +79,18 @@
   border-radius: 14px;
   overflow: auto;
   max-height: calc(100vh - 200px);
+}
 
-  /* Escala el boleto en pantallas chicas sin romper @media print */
+/* Escenario: reserva el tamaño ya escalado (94 × 59 mm × escala) para que el
+   boleto, agrandado con transform, no se recorte ni desborde el contenedor. */
+.escenario {
+  flex: none;
+  width: calc(94mm * var(--boleto-escala));
+  height: calc(59mm * var(--boleto-escala));
+
   [data-boleto-face] {
-    transform-origin: top center;
+    transform: scale(var(--boleto-escala));
+    transform-origin: top left;
   }
 }
 
@@ -105,6 +114,17 @@
   border-radius: 10px;
   background: #e6f7f2;
   color: #0a5c4c;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.estadoWarn {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #f3c3c3;
+  background: #fff1f1;
+  color: #8a1c1c;
   font-size: 0.86rem;
   font-weight: 700;
 }
@@ -315,10 +335,6 @@
   .cuerpo {
     grid-template-columns: 1fr;
   }
-
-  .preview [data-boleto-face] {
-    transform: scale(0.92);
-  }
 }
 
 @media print {
@@ -354,8 +370,10 @@
     overflow: visible;
   }
 
-  .preview [data-boleto-face] {
-    transform: none !important;
-    margin: 0 !important;
+  /* Sin escala en papel: el giro de 90° lo pone boleto-face.css (@media print)
+     sobre [data-boleto-face]; aquí no se toca transform para no pisarlo. */
+  .escenario {
+    width: auto !important;
+    height: auto !important;
   }
 }

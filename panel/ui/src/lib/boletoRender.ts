@@ -1,22 +1,31 @@
-import { BOLETO_MARCA, BOLETO_ROJO, type BoletoData } from '../components/BoletoFace'
+import { tamanosBoleto, textoNombre, textoSub, textoTipo, type BoletoData } from '../components/BoletoFace'
 import boletoCss from '../components/boleto-face.css?raw'
+import {
+  BOLETO_BLANCO,
+  BOLETO_NEGRO,
+  BOLETO_ROJO,
+  COL_W,
+  GEO,
+  aplicarFuente,
+  fuentesListas,
+  partirLineas,
+  type Ctx2D,
+} from './boletoLayout'
 
 /**
- * Cara del boleto: 59 × 94 mm = área imprimible real de la Brother QL-800 en
- * cinta continua 62 mm (márgenes duros 1.5 mm lados / 2.8 mm arriba-abajo).
- * El agente local encaja el PNG dentro de esa área (contain + centrado), así
- * que a este tamaño sale 1:1 y centrado en la etiqueta 62 × 100.
+ * Cara del boleto APAISADA: 94 × 59 mm. El área imprimible real de la Brother
+ * QL-800 en cinta continua 62 mm es 58.9 mm de ancho (cinta) × 94.2 mm de
+ * largo (corte). El agente local gira 90° cualquier PNG apaisado (ancho > alto)
+ * y lo encaja centrado en esa área, así que el panel genera el PNG tal cual se
+ * ve en pantalla, sin girarlo: 1110 × 697 px a 300 dpi.
  */
-export const BOLETO_W_MM = 59
-export const BOLETO_H_MM = 94
+export const BOLETO_W_MM = GEO.w
+export const BOLETO_H_MM = GEO.h
 /** Etiqueta física (para @page en el camino Chrome). */
 export const ETIQUETA_W_MM = 62
 export const ETIQUETA_H_MM = 100
 
 const DPI = 300
-const NEGRO = '#000000'
-const BLANCO = '#ffffff'
-const FUENTE = "Manrope, 'Segoe UI', system-ui, sans-serif"
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -28,125 +37,97 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   })
 }
 
-type Ctx2D = CanvasRenderingContext2D & { letterSpacing?: string }
-
-function setFont(ctx: Ctx2D, weight: number, sizePx: number, spacingEm = 0) {
-  ctx.font = `${weight} ${Math.round(sizePx)}px ${FUENTE}`
-  // Chrome 99+: mismo tracking que el CSS de la cara. Si no existe, se omite.
-  if ('letterSpacing' in ctx) ctx.letterSpacing = spacingEm ? `${spacingEm}em` : '0px'
-}
-
 /**
- * PNG del boleto 59×94 mm @ 300 dpi (697×1110 px) para el print-bridge.
+ * PNG del boleto 94 × 59 mm @ 300 dpi (1110 × 697 px) para el print-bridge.
  * Papel térmico negro/rojo: solo blanco, negro y rojo puro; sin grises ni
  * gradientes. Misma geometría (en mm) que boleto-face.css → WYSIWYG.
  */
 export async function renderBoletoPngBase64(data: BoletoData): Promise<string> {
+  await fuentesListas()
   const mm = (n: number) => (n / 25.4) * DPI
-  const w = Math.round(mm(BOLETO_W_MM))
-  const h = Math.round(mm(BOLETO_H_MM))
+  const w = Math.round(mm(GEO.w))
+  const h = Math.round(mm(GEO.h))
   const canvas = document.createElement('canvas')
   canvas.width = w
   canvas.height = h
   const ctx = canvas.getContext('2d') as Ctx2D | null
   if (!ctx) throw new Error('Canvas no disponible')
 
-  const pad = mm(3)
-  const cw = w - 2 * pad // ancho útil (53 mm)
-  const cx = w / 2
-
   // Fondo blanco
-  ctx.fillStyle = BLANCO
+  ctx.fillStyle = BOLETO_BLANCO
   ctx.fillRect(0, 0, w, h)
 
-  // Marco fino negro a 1.2 mm del borde
-  ctx.strokeStyle = NEGRO
-  ctx.lineWidth = mm(0.5)
-  roundRect(ctx, mm(1.2) + mm(0.25), mm(1.2) + mm(0.25), w - 2 * mm(1.45), h - 2 * mm(1.45), mm(1.5))
-  ctx.stroke()
-
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-
-  // Banda negra de marca (9 mm)
-  let y = pad
-  const brandH = mm(9)
-  ctx.fillStyle = NEGRO
-  roundRect(ctx, pad, y, cw, brandH, mm(1.2))
-  ctx.fill()
-  ctx.fillStyle = BLANCO
-  setFont(ctx, 800, mm(3.1), 0.18)
-  ctx.fillText(BOLETO_MARCA, cx, y + brandH / 2)
-  y += brandH
-
-  // Banda roja con el tipo (8 mm)
-  y += mm(2)
-  const tipoH = mm(8)
-  ctx.fillStyle = BOLETO_ROJO
-  roundRect(ctx, pad, y, cw, tipoH, mm(1.2))
-  ctx.fill()
-  ctx.fillStyle = BLANCO
-  const tipo = (data.tipo || 'Acreditación').toUpperCase()
-  let tipoSize = mm(4)
-  setFont(ctx, 800, tipoSize, 0.14)
-  while (tipoSize > mm(2.6) && ctx.measureText(tipo).width > cw - mm(2)) {
-    tipoSize -= mm(0.2)
-    setFont(ctx, 800, tipoSize, 0.14)
-  }
-  ctx.fillText(tipo, cx, y + tipoH / 2)
-  y += tipoH
-
-  // Nombre: 5 mm, hasta 2 líneas; solo se encoge si una palabra no cabe.
-  y += mm(3)
-  const nombre = (data.nombre || '—').toUpperCase()
-  let size = mm(5)
-  setFont(ctx, 800, size, 0.01)
-  const palabraMasLarga = nombre.split(/\s+/).reduce((a, b) => (b.length > a.length ? b : a), '')
-  while (size > mm(3.2) && ctx.measureText(palabraMasLarga).width > cw) {
-    size -= mm(0.2)
-    setFont(ctx, 800, size, 0.01)
-  }
-  ctx.fillStyle = NEGRO
-  const lineaNombre = size * 1.12
-  const nLineas = wrapCentered(ctx, nombre, cx, y + lineaNombre / 2, cw, lineaNombre, 2)
-  y += lineaNombre * nLineas
-
-  // Empresa / subtítulo: 2.7 mm, hasta 2 líneas
-  if (data.subtitulo) {
-    y += mm(1.4)
-    setFont(ctx, 700, mm(2.7), 0.04)
-    const lineaSub = mm(2.7) * 1.2
-    const nSub = wrapCentered(ctx, data.subtitulo.toUpperCase(), cx, y + lineaSub / 2, cw, lineaSub, 2)
-    y += lineaSub * nSub
-  }
-
-  // Evento: 2.2 mm
-  y += mm(1.2)
-  setFont(ctx, 600, mm(2.2), 0.1)
-  const lineaEv = mm(2.2) * 1.2
-  ctx.fillText((data.evento || 'FICTI · Tech Capital 2026').toUpperCase(), cx, y + lineaEv / 2)
-
-  // Pie (anclado abajo): aviso 2 mm + folio 3.2 mm
-  const avisoH = mm(2) * 1.2
-  const folioH = mm(3.2) * 1.2
-  const pieH = avisoH + mm(0.6) + folioH
-  const pieTop = h - pad - pieH
-  setFont(ctx, 600, mm(2), 0.08)
-  ctx.fillText('PRESENTA ESTE CÓDIGO EN PUERTA', cx, pieTop + avisoH / 2)
-  setFont(ctx, 800, mm(3.2), 0.04)
-  ctx.fillText(data.folio, cx, pieTop + avisoH + mm(0.6) + folioH / 2)
-
-  // QR 34 mm negro sobre blanco, justo encima del pie (margin-top:auto en CSS)
-  const qrSide = mm(34)
-  const qrY = pieTop - mm(1.5) - qrSide
+  // QR a la izquierda, centrado en vertical. El margen de 3 mm y el hueco de
+  // 4 mm hacen de zona en blanco; no lleva texto encima ni debajo.
+  const qrLado = mm(GEO.qr)
+  const qrX = mm(GEO.pad)
+  const qrY = (h - qrLado) / 2
   const qr = await loadImage(data.qrDataUrl)
   ctx.imageSmoothingEnabled = false
-  ctx.drawImage(qr, cx - qrSide / 2, qrY, qrSide, qrSide)
+  ctx.drawImage(qr, qrX, qrY, qrLado, qrLado)
+
+  // Columna de texto (40 × 49 mm), centrada en vertical, alineada a la izquierda.
+  const colX = qrX + qrLado + mm(GEO.hueco)
+  const colW = mm(COL_W)
+  const colH = mm(GEO.colH)
+  const colTop = (h - colH) / 2
+  const { tipoMm, nombreMm } = tamanosBoleto(data)
+
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(colX, colTop, colW, colH)
+  ctx.clip()
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+
+  // Banda roja compacta con el tipo en blanco
+  let y = colTop
+  const tipoH = mm(GEO.tipoH)
+  ctx.fillStyle = BOLETO_ROJO
+  roundRect(ctx, colX, y, colW, tipoH, mm(GEO.tipoRadio))
+  ctx.fill()
+  ctx.fillStyle = BOLETO_BLANCO
+  aplicarFuente(ctx, 800, mm(tipoMm), GEO.tipoTracking)
+  ctx.fillText(textoTipo(data), colX + mm(GEO.tipoPadX), y + tipoH / 2)
+  y += tipoH + mm(GEO.nombreGap)
+
+  // Nombre: negritas, tamaño auto-ajustado (misma cuenta que el DOM), hasta 3 líneas
+  ctx.fillStyle = BOLETO_NEGRO
+  aplicarFuente(ctx, 800, mm(nombreMm), GEO.nombreTracking)
+  const lineaNombre = mm(nombreMm) * GEO.nombreLh
+  const lineasNombre = partirLineas(textoNombre(data), 800, nombreMm, GEO.nombreTracking, COL_W).slice(
+    0,
+    GEO.nombreLineas,
+  )
+  lineasNombre.forEach((ln, i) => ctx.fillText(ln, colX, y + lineaNombre * (i + 0.5)))
+  y += lineaNombre * lineasNombre.length
+
+  // Subtítulo (empresa o plantel), hasta 2 líneas
+  const sub = textoSub(data)
+  if (sub) {
+    y += mm(GEO.subGap)
+    aplicarFuente(ctx, 700, mm(GEO.sub), GEO.subTracking)
+    const lineaSub = mm(GEO.sub) * GEO.subLh
+    partirLineas(sub, 700, GEO.sub, GEO.subTracking, COL_W)
+      .slice(0, GEO.subLineas)
+      .forEach((ln, i) => ctx.fillText(ln, colX, y + lineaSub * (i + 0.5)))
+  }
+
+  // Folio anclado al pie de la columna
+  aplicarFuente(ctx, 800, mm(GEO.folio), GEO.folioTracking)
+  ctx.fillText(data.folio, colX, colTop + colH - (mm(GEO.folio) * GEO.folioLh) / 2)
+  ctx.restore()
 
   return canvas.toDataURL('image/png').replace(/^data:image\/png;base64,/, '')
 }
 
-/** Ventana aislada solo con el boleto — @page 62×100, cara 59×94 centrada. */
+/**
+ * Ventana aislada solo con el boleto (camino Chrome, "Más opciones").
+ * `@page` sigue siendo 62 × 100 porque la cinta sale en vertical; la cara es
+ * apaisada 94 × 59, así que se gira 90° con CSS alrededor del centro de la
+ * etiqueta: 59 mm quedan sobre los 62 de ancho y 94 sobre los 100 de largo,
+ * centrados, igual que hace el agente local con el PNG apaisado.
+ */
 export function printBoletoIsolated(faceHtml: string): void {
   const w = window.open('', '_blank', 'noopener,noreferrer,width=420,height=680')
   if (!w) throw new Error('Permite ventanas emergentes para imprimir')
@@ -170,18 +151,23 @@ html, body {
   print-color-adjust: exact !important;
 }
 [data-boleto-print-root] {
+  position: relative;
   width: ${ETIQUETA_W_MM}mm;
   height: ${ETIQUETA_H_MM}mm;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow: hidden;
   background: #fff;
 }
+/* Giro de 90°: la cinta es vertical (62 × 100) y la cara apaisada (94 × 59).
+   Se rota alrededor del centro para que quede centrada como con el agente. */
 [data-boleto-face] {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
   width: ${BOLETO_W_MM}mm !important;
   height: ${BOLETO_H_MM}mm !important;
   margin: 0 !important;
-  transform: none !important;
+  transform-origin: center center !important;
+  transform: translate(-50%, -50%) rotate(90deg) !important;
   border-radius: 0 !important;
   box-shadow: none !important;
 }
@@ -215,36 +201,4 @@ function roundRect(
   ctx.arcTo(x, y + height, x, y, r)
   ctx.arcTo(x, y, x + width, y, r)
   ctx.closePath()
-}
-
-/**
- * Dibuja `text` centrado en `cx`, partiendo en líneas de ancho ≤ maxW
- * (máximo `maxLines`; el resto se descarta como -webkit-line-clamp).
- * `y` es el centro vertical de la primera línea. Devuelve líneas dibujadas.
- */
-function wrapCentered(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  cx: number,
-  y: number,
-  maxW: number,
-  lineH: number,
-  maxLines: number,
-): number {
-  const words = text.split(/\s+/).filter(Boolean)
-  const lines: string[] = []
-  let cur = ''
-  for (const word of words) {
-    const trial = cur ? `${cur} ${word}` : word
-    if (ctx.measureText(trial).width > maxW && cur) {
-      lines.push(cur)
-      cur = word
-      if (lines.length >= maxLines) break
-    } else {
-      cur = trial
-    }
-  }
-  if (cur && lines.length < maxLines) lines.push(cur)
-  lines.forEach((ln, i) => ctx.fillText(ln, cx, y + i * lineH))
-  return Math.max(1, lines.length)
 }
