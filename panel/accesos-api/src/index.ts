@@ -75,6 +75,111 @@ function escaneoJson(r: Record<string, unknown>): Record<string, unknown> {
   }
 }
 
+// ---------- Impresiones de boletos: helpers (rutas más abajo, sección "Impresiones") ----------
+const IMPRESION_VIAS = new Set(['ql', 'chrome', 'pdf', 'test'])
+const IMPRESION_MODOS_COLOR = new Set(['mono', 'redblack'])
+const IMPRESIONES_POR_PERSONA = 50
+
+type ImpresionRow = {
+  id: number
+  creado: Date | string
+  tipo: string
+  registro_id: number
+  folio: string
+  via: string
+  impresora: string | null
+  modo_color: string | null
+  job_id: number | null
+  operador: string | null
+  dispositivo: string | null
+}
+
+type ConteoImpresion = { impresiones: number; ultimaImpresion: string | null }
+const SIN_IMPRESIONES: ConteoImpresion = { impresiones: 0, ultimaImpresion: null }
+
+const IMPRESION_COLS =
+  'id, creado, tipo, registro_id, folio, via, impresora, modo_color, job_id, operador, dispositivo'
+
+function isoDe(v: unknown): string | null {
+  if (v instanceof Date) return v.toISOString()
+  return v ? String(v) : null
+}
+
+function impresionJson(r: ImpresionRow) {
+  return {
+    id: Number(r.id),
+    creado: isoDe(r.creado),
+    tipo: r.tipo,
+    registroId: Number(r.registro_id),
+    folio: r.folio,
+    via: r.via,
+    impresora: r.impresora ?? null,
+    modoColor: r.modo_color ?? null,
+    jobId: r.job_id == null ? null : Number(r.job_id),
+    operador: r.operador ?? null,
+    dispositivo: r.dispositivo ?? null,
+  }
+}
+
+/** Entero positivo estricto (sin ".pdf", decimales ni signos). null si no es válido. */
+function parseEnteroId(s: string | undefined): number | null {
+  if (!s || !/^\d{1,9}$/.test(s)) return null
+  const n = Number(s)
+  return n >= 1 ? n : null
+}
+
+/** Texto libre opcional: recorta y quita caracteres de control. null si vacío; undefined si excede max. */
+function textoOpcional(v: unknown, max: number): string | null | undefined {
+  if (v == null) return null
+  const s = String(v)
+    .replace(/[\x00-\x1f\x7f]+/g, ' ')
+    .trim()
+  if (!s) return null
+  if (s.length > max) return undefined
+  return s
+}
+
+function claveImpresion(tipo: string, id: number): string {
+  return `${tipo}:${id}`
+}
+
+/** Conteo + última impresión por (tipo, registro_id) para un lote, en UNA consulta agregada. */
+async function conteoImpresiones(
+  claves: { tipo: string; id: number }[],
+): Promise<Map<string, ConteoImpresion>> {
+  const out = new Map<string, ConteoImpresion>()
+  if (!claves.length) return out
+  const params: unknown[] = []
+  const pares = claves.map((k) => {
+    params.push(k.tipo, k.id)
+    return `($${params.length - 1}::text,$${params.length}::int)`
+  })
+  const rows = await query<{
+    tipo: string
+    registro_id: number
+    n: number
+    ultima: Date | string | null
+  }>(
+    `SELECT tipo, registro_id, COUNT(*)::int AS n, MAX(creado) AS ultima
+     FROM accesos_impresiones
+     WHERE (tipo, registro_id) IN (${pares.join(',')})
+     GROUP BY tipo, registro_id`,
+    params,
+  )
+  for (const r of rows) {
+    out.set(claveImpresion(r.tipo, Number(r.registro_id)), {
+      impresiones: r.n,
+      ultimaImpresion: isoDe(r.ultima),
+    })
+  }
+  return out
+}
+
+async function conteoImpresion(tipo: string, id: number): Promise<ConteoImpresion> {
+  const m = await conteoImpresiones([{ tipo, id }])
+  return m.get(claveImpresion(tipo, id)) ?? SIN_IMPRESIONES
+}
+
 // ===================== PANEL /api/accesos/* =====================
 const panel = new Hono<{ Variables: Vars }>()
 
@@ -188,7 +293,16 @@ panel.get('/buscar', async (c) => {
       : okTipos
   const exact = await buscarExacto(q, tipos)
   const hits = exact.length ? exact : await buscarTexto(q, tipos)
-  return c.json({ q, results: hits.slice(0, 20) })
+  const results = hits.slice(0, 20)
+  // impresiones / ultimaImpresion por resultado: una sola consulta agregada por lote (sin N+1).
+  const conteos = await conteoImpresiones(results.map((h) => ({ tipo: h.tipo, id: h.id })))
+  return c.json({
+    q,
+    results: results.map((h) => ({
+      ...h,
+      ...(conteos.get(claveImpresion(h.tipo, h.id)) ?? SIN_IMPRESIONES),
+    })),
+  })
 })
 
 panel.get('/zonas', async (c) => {
@@ -433,16 +547,23 @@ panel.patch('/escaneos/:id/latencia', async (c) => {
 type GafeteOk = { nombre: string; folio: string; tipo: string; subtitulo: string }
 type GafeteErr = { error: string; status: 403 | 404 }
 
-async function gafeteFila(
-  c: { get: (k: keyof Vars) => string },
-  tipo: string,
-  id: number,
-): Promise<GafeteOk | GafeteErr> {
+/** Alcance interno + tipo permitido para la sesión (sin tocar la BD). null si todo bien. */
+function accesoGafete(c: { get: (k: keyof Vars) => string }, tipo: string): GafeteErr | null {
   if (c.get('alcance') !== 'interno') return { error: 'solo_interno', status: 403 }
   const okTipos = tiposDe(c.get('alcance'))
   if (!okTipos.includes(tipo as TipoClave)) {
     return { error: 'sin_acceso', status: 403 }
   }
+  return null
+}
+
+async function gafeteFila(
+  c: { get: (k: keyof Vars) => string },
+  tipo: string,
+  id: number,
+): Promise<GafeteOk | GafeteErr> {
+  const acceso = accesoGafete(c, tipo)
+  if (acceso) return acceso
   const t = TIPOS[tipo as TipoClave]
   const fila = await queryOne(`SELECT * FROM "${t.tabla}" WHERE "${t.id}" = $1`, [id])
   if (!fila) return { error: 'no_encontrado', status: 404 }
@@ -476,7 +597,235 @@ panel.get('/gafete/:tipo/:id', async (c) => {
       },
     })
   }
-  return c.json(await boletoPayload(datos.nombre, datos.folio, datos.tipo, datos.subtitulo))
+  const [payload, conteo] = await Promise.all([
+    boletoPayload(datos.nombre, datos.folio, datos.tipo, datos.subtitulo),
+    conteoImpresion(tipo, id),
+  ])
+  // Campos nuevos, sin tocar los existentes: impresiones (número) y ultimaImpresion (ISO|null).
+  return c.json({ ...payload, ...conteo })
+})
+
+// ===================== Impresiones (registro de boletos impresos) =====================
+// Hoy imprimir un boleto no dejaba rastro. Estas rutas registran cada impresión real,
+// permiten verlas y "deshacerlas" (como si aún no se hubiera impreso). Nada toca el escaneo.
+// Mismo middleware/sesión que /gafete; requieren alcance interno y tipo permitido.
+//
+//   POST   /gafete/:tipo/:id/impresion
+//            body JSON opcional { via, impresora, modoColor, jobId, dispositivo }
+//            via: ql|chrome|pdf|test (defecto ql) · modoColor: mono|redblack|null
+//            impresora/dispositivo <= 120 chars · jobId entero >= 0 · operador = usuario de sesión
+//            -> { ok:true, impresion:{ id, creado, tipo, registroId, folio, via, impresora,
+//                 modoColor, jobId, operador, dispositivo }, total, ultima }
+//   GET    /gafete/:tipo/:id/impresiones
+//            -> { ok:true, total, ultima, impresiones:[...] }  (máx 50, más recientes primero)
+//   DELETE /gafete/:tipo/:id/impresion/:impresionId
+//            -> { ok:true, borradas:1, total, ultima }  · 404 no_encontrado si no existe
+//   DELETE /gafete/:tipo/:id/impresiones
+//            -> { ok:true, borradas:n, total:0, ultima:null } · 404 sin_impresiones si no había
+//   GET    /gafete/:tipo/:id (JSON) añade impresiones y ultimaImpresion; GET /buscar los añade por resultado.
+//   GET    /impresiones?limite=200&q=&tipo=&via=&operador=&antes=<id>   (auditoría global, interno)
+//            q busca en folio, nombre, operador, impresora y dispositivo · antes = id del último
+//            registro recibido (cursor) · -> { ok:true, total, registros:[ impresion + nombre,
+//            tipoEtiqueta ], siguiente:id|null }
+//   400 { ok:false, error }: id | impresionId | via | modoColor | jobId | impresora_larga |
+//        dispositivo_largo | tipo | operador | antes | limite | q_larga
+//   403 solo_interno | sin_acceso · 404 no_encontrado (la persona no existe)
+
+panel.post('/gafete/:tipo/:id/impresion', async (c) => {
+  const tipo = c.req.param('tipo')
+  const id = parseEnteroId(c.req.param('id'))
+  if (id == null) return c.json({ ok: false, error: 'id' }, 400)
+  const datos = await gafeteFila(c, tipo, id)
+  if ('status' in datos) return c.json({ ok: false, error: datos.error }, datos.status)
+
+  const raw = await c.req.json().catch(() => ({}))
+  const body = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}
+  const via =
+    body.via == null || body.via === '' ? 'ql' : String(body.via).trim().toLowerCase()
+  if (!IMPRESION_VIAS.has(via)) return c.json({ ok: false, error: 'via' }, 400)
+  const modoRaw = body.modoColor ?? body.modo_color
+  const modoColor =
+    modoRaw == null || modoRaw === '' ? null : String(modoRaw).trim().toLowerCase()
+  if (modoColor != null && !IMPRESION_MODOS_COLOR.has(modoColor)) {
+    return c.json({ ok: false, error: 'modoColor' }, 400)
+  }
+  const jobRaw = body.jobId ?? body.job_id
+  let jobId: number | null = null
+  if (jobRaw != null && jobRaw !== '') {
+    const n = Number(jobRaw)
+    if (!Number.isInteger(n) || n < 0 || n > 2_147_483_647) {
+      return c.json({ ok: false, error: 'jobId' }, 400)
+    }
+    jobId = n
+  }
+  const impresora = textoOpcional(body.impresora, 120)
+  if (impresora === undefined) return c.json({ ok: false, error: 'impresora_larga' }, 400)
+  const dispositivo = textoOpcional(body.dispositivo, 120)
+  if (dispositivo === undefined) return c.json({ ok: false, error: 'dispositivo_largo' }, 400)
+
+  const fila = await queryOne<ImpresionRow>(
+    `INSERT INTO accesos_impresiones
+       (tipo, registro_id, folio, via, impresora, modo_color, job_id, operador, dispositivo)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     RETURNING ${IMPRESION_COLS}`,
+    [
+      tipo,
+      id,
+      datos.folio,
+      via,
+      impresora,
+      modoColor,
+      jobId,
+      c.get('usuario').slice(0, 120),
+      dispositivo,
+    ],
+  )
+  if (!fila) return c.json({ ok: false, error: 'insert' }, 500)
+  const conteo = await conteoImpresion(tipo, id)
+  return c.json({
+    ok: true,
+    impresion: impresionJson(fila),
+    total: conteo.impresiones,
+    ultima: conteo.ultimaImpresion,
+  })
+})
+
+panel.get('/gafete/:tipo/:id/impresiones', async (c) => {
+  const tipo = c.req.param('tipo')
+  const id = parseEnteroId(c.req.param('id'))
+  if (id == null) return c.json({ ok: false, error: 'id' }, 400)
+  const datos = await gafeteFila(c, tipo, id)
+  if ('status' in datos) return c.json({ ok: false, error: datos.error }, datos.status)
+  const [rows, conteo] = await Promise.all([
+    query<ImpresionRow>(
+      `SELECT ${IMPRESION_COLS} FROM accesos_impresiones
+       WHERE tipo = $1 AND registro_id = $2
+       ORDER BY creado DESC, id DESC LIMIT ${IMPRESIONES_POR_PERSONA}`,
+      [tipo, id],
+    ),
+    conteoImpresion(tipo, id),
+  ])
+  return c.json({
+    ok: true,
+    total: conteo.impresiones,
+    ultima: conteo.ultimaImpresion,
+    impresiones: rows.map(impresionJson),
+  })
+})
+
+// Los DELETE no exigen que la persona siga existiendo (solo alcance/tipo): así se puede limpiar siempre.
+panel.delete('/gafete/:tipo/:id/impresion/:impresionId', async (c) => {
+  const tipo = c.req.param('tipo')
+  const id = parseEnteroId(c.req.param('id'))
+  if (id == null) return c.json({ ok: false, error: 'id' }, 400)
+  const impresionId = parseEnteroId(c.req.param('impresionId'))
+  if (impresionId == null) return c.json({ ok: false, error: 'impresionId' }, 400)
+  const acceso = accesoGafete(c, tipo)
+  if (acceso) return c.json({ ok: false, error: acceso.error }, acceso.status)
+  const borradas = await query(
+    `DELETE FROM accesos_impresiones WHERE id = $1 AND tipo = $2 AND registro_id = $3 RETURNING id`,
+    [impresionId, tipo, id],
+  )
+  if (!borradas.length) return c.json({ ok: false, error: 'no_encontrado' }, 404)
+  const conteo = await conteoImpresion(tipo, id)
+  return c.json({
+    ok: true,
+    borradas: borradas.length,
+    total: conteo.impresiones,
+    ultima: conteo.ultimaImpresion,
+  })
+})
+
+panel.delete('/gafete/:tipo/:id/impresiones', async (c) => {
+  const tipo = c.req.param('tipo')
+  const id = parseEnteroId(c.req.param('id'))
+  if (id == null) return c.json({ ok: false, error: 'id' }, 400)
+  const acceso = accesoGafete(c, tipo)
+  if (acceso) return c.json({ ok: false, error: acceso.error }, acceso.status)
+  const borradas = await query(
+    `DELETE FROM accesos_impresiones WHERE tipo = $1 AND registro_id = $2 RETURNING id`,
+    [tipo, id],
+  )
+  if (!borradas.length) return c.json({ ok: false, error: 'sin_impresiones' }, 404)
+  return c.json({ ok: true, borradas: borradas.length, total: 0, ultima: null })
+})
+
+panel.get('/impresiones', async (c) => {
+  if (c.get('alcance') !== 'interno') {
+    return c.json({ ok: false, error: 'solo_interno', codigo: CODIGOS.SOLO_INTERNO }, 403)
+  }
+  let q = (c.req.query('q') || '').trim()
+  if (q.length > 120) return c.json({ ok: false, error: 'q_larga' }, 400)
+  q = q.replace(/%/g, '').replace(/_/g, '')
+  const tipoFiltro = c.req.query('tipo') || ''
+  const viaFiltro = (c.req.query('via') || '').trim().toLowerCase()
+  const operador = (c.req.query('operador') || '').trim()
+  const antesArg = c.req.query('antes') || ''
+  let limite = Number(c.req.query('limite') || 200)
+  if (!Number.isFinite(limite)) return c.json({ ok: false, error: 'limite' }, 400)
+  limite = Math.min(Math.max(1, Math.floor(limite)), 2000)
+
+  const tipos = tiposDe(c.get('alcance'))
+  const cond: string[] = ['TRUE']
+  const params: unknown[] = []
+  const add = (sql: string, v: unknown) => {
+    params.push(v)
+    cond.push(sql.replace('?', `$${params.length}`))
+  }
+  if (tipoFiltro) {
+    if (!tipos.includes(tipoFiltro as TipoClave)) return c.json({ ok: false, error: 'tipo' }, 400)
+    add('i.tipo = ?', tipoFiltro)
+  }
+  if (viaFiltro) {
+    if (!IMPRESION_VIAS.has(viaFiltro)) return c.json({ ok: false, error: 'via' }, 400)
+    add('i.via = ?', viaFiltro)
+  }
+  if (operador) {
+    if (operador.length > 120) return c.json({ ok: false, error: 'operador' }, 400)
+    add('i.operador = ?', operador)
+  }
+  if (antesArg) {
+    const antes = parseEnteroId(antesArg)
+    if (antes == null) return c.json({ ok: false, error: 'antes' }, 400)
+    add('i.id < ?', antes)
+  }
+  if (q) {
+    params.push(`%${q}%`)
+    const p = `$${params.length}`
+    cond.push(
+      `(i.folio ILIKE ${p} OR COALESCE(n.nombre,'') ILIKE ${p} OR COALESCE(i.operador,'') ILIKE ${p}
+        OR COALESCE(i.impresora,'') ILIKE ${p} OR COALESCE(i.dispositivo,'') ILIKE ${p})`,
+    )
+  }
+  // Nombre por tipo desde las tablas de registro (misma expresión que la búsqueda, usa los índices trgm).
+  const nombres = tipos
+    .map(
+      (k) =>
+        `SELECT '${k}'::text AS tipo, "${TIPOS[k].id}"::int AS registro_id, ${TIPOS[k].nombreSql} AS nombre
+         FROM "${TIPOS[k].tabla}"`,
+    )
+    .join(' UNION ALL ')
+  const desde = `FROM accesos_impresiones i
+    LEFT JOIN (${nombres}) n ON n.tipo = i.tipo AND n.registro_id = i.registro_id
+    WHERE ${cond.join(' AND ')}`
+  const cols = IMPRESION_COLS.split(', ')
+    .map((col) => `i.${col}`)
+    .join(', ')
+  const [total, rows] = await Promise.all([
+    queryOne<{ n: number }>(`SELECT COUNT(*)::int AS n ${desde}`, params),
+    query<ImpresionRow & { nombre: string | null }>(
+      `SELECT ${cols}, COALESCE(n.nombre,'') AS nombre ${desde}
+       ORDER BY i.creado DESC, i.id DESC LIMIT $${params.length + 1}`,
+      [...params, limite],
+    ),
+  ])
+  const registros = rows.map((r) => ({
+    ...impresionJson(r),
+    nombre: String(r.nombre || '').trim(),
+    tipoEtiqueta: TIPOS[r.tipo as TipoClave]?.etiqueta ?? r.tipo,
+  }))
+  const siguiente = rows.length === limite ? registros[registros.length - 1].id : null
+  return c.json({ ok: true, total: total?.n || 0, registros, siguiente, puedeOperar: true })
 })
 
 panel.get('/reportes', async (c) => {

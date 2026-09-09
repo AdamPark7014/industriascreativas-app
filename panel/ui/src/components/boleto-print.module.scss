@@ -63,19 +63,18 @@
 
 .cuerpo {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 240px;
+  grid-template-columns: minmax(0, 1fr) 260px;
   gap: 18px;
   padding: 18px 20px 22px;
 }
 
+/* Fondo claro y plano: el boleto es blanco y debe verse como saldrá del rollo. */
 .preview {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 12px;
-  background:
-    radial-gradient(600px 280px at 50% 0%, rgba(18, 181, 176, 0.12), transparent 60%),
-    #e8eef6;
+  padding: 16px 12px;
+  background: #dfe6f0;
   border-radius: 14px;
   overflow: auto;
   max-height: calc(100vh - 200px);
@@ -97,7 +96,7 @@
 .acciones {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .estadoOk {
@@ -116,31 +115,81 @@
   color: #5b6b82;
 }
 
-.offline {
-  margin: 0 0 14px;
-  padding: 12px 14px;
+/* "Ya impreso N veces · última hh:mm" + enlace para deshacer. */
+.impreso {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #f0d9a0;
+  background: #fff8e6;
+  color: #6b4d00;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.enlaceSutil {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #7a4b12;
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: wait;
+  }
+}
+
+/* Una línea de ayuda bajo el botón. */
+.ayudaLinea {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: #5b6b82;
+}
+
+/* Panel de instalación (modal compacto y página Buscar con marco). */
+.instalar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.instalarPanel {
+  padding: 14px 16px;
   border-radius: 12px;
   border: 1px solid #f0c2a0;
   background: #fff7f0;
   color: #5a2e12;
+}
 
-  strong {
-    display: block;
-    margin-bottom: 6px;
-    font-size: 0.9rem;
-  }
+.instalarTitulo {
+  font-size: 0.92rem;
+}
 
-  p {
-    margin: 0 0 8px;
-    font-size: 0.82rem;
-    line-height: 1.4;
-  }
+.instalarIntro {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: #5a2e12;
+}
 
-  ol {
-    margin: 0 0 10px;
-    padding-left: 1.15rem;
-    font-size: 0.82rem;
-    line-height: 1.45;
+.instalarPasos {
+  margin: 0;
+  padding-left: 1.15rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #3d2a1a;
+
+  li + li {
+    margin-top: 4px;
   }
 
   code {
@@ -151,43 +200,43 @@
   }
 }
 
-.offlineHint {
-  margin: 8px 0 0 !important;
-  font-size: 0.75rem !important;
-  opacity: 0.85;
-}
+/* Desplegable discreto con Chrome / PDF. */
+.mas {
+  border-top: 1px solid #d5deea;
+  padding-top: 8px;
 
-.descarga {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: #071a3a;
-  color: #fff !important;
-  font-weight: 700;
-  font-size: 0.84rem;
-  text-decoration: none;
-}
+  summary {
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #5b6b82;
+    list-style: none;
+    user-select: none;
 
-.descarga:hover {
-  background: #0f2d5c;
-}
+    &::-webkit-details-marker {
+      display: none;
+    }
 
-.pasosLista {
-  margin: 0 0 18px;
-  padding-left: 1.15rem;
-  color: #5b6b82;
-  font-size: 0.84rem;
-  line-height: 1.45;
+    &::before {
+      content: '▸ ';
+      display: inline-block;
+      transition: transform 0.15s;
+    }
+  }
 
-  li + li {
-    margin-top: 8px;
+  &[open] summary::before {
+    transform: rotate(90deg);
   }
 }
 
+.masCuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .avisoChrome {
-  margin-top: 4px;
   padding: 10px 12px;
   border-radius: 11px;
   border: 1px dashed #c9a227;
@@ -201,43 +250,35 @@
   }
 }
 
-.primario,
-.qlPrimary,
+.primarioGrande,
 .secundario,
 .secundarioPeligro,
 .fantasma {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 12px 14px;
   border-radius: 11px;
   font-weight: 700;
   font-size: 0.88rem;
   cursor: pointer;
+  text-decoration: none;
 }
 
-.primario {
-  border: none;
-  background: #071a3a;
-  color: #fff;
-
-  &:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-  }
-
-  &:hover:not(:disabled) {
-    background: #0f2d5c;
-  }
-}
-
-.qlPrimary {
+/* Único botón grande: Imprimir boleto / Instalar impresora en esta PC. */
+.primarioGrande {
+  width: 100%;
+  padding: 16px 18px;
   border: none;
   background: #0d8f4c;
-  color: #fff;
-  box-shadow: 0 6px 18px rgba(13, 143, 76, 0.28);
-  font-size: 0.92rem;
+  color: #fff !important;
+  font-size: 1.05rem;
+  box-shadow: 0 8px 22px rgba(13, 143, 76, 0.28);
 
   &:disabled {
-    opacity: 0.65;
+    opacity: 0.6;
     cursor: wait;
+    box-shadow: none;
   }
 
   &:hover:not(:disabled) {
@@ -246,9 +287,15 @@
 }
 
 .secundario {
+  width: 100%;
   border: 1px solid #b7c4d8;
   background: #fff;
   color: #071a3a;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: wait;
+  }
 }
 
 .secundarioPeligro {

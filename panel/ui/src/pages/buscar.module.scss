@@ -110,6 +110,78 @@
   font-weight: 700;
 }
 
+.aviso {
+  color: #8a5a00;
+  font-weight: 700;
+}
+
+/* Chip de estado de impresora en la cabecera de Buscar. */
+.chipFila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.chipOk,
+.chipOff,
+.chipProbe {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.2;
+
+  &::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: none;
+  }
+}
+
+.chipOk {
+  background: #e6f7f2;
+  color: #0a5c4c;
+
+  &::before {
+    background: #0d8f4c;
+  }
+}
+
+.chipOff {
+  border: 1px solid #f0c2a0;
+  background: #fff7f0;
+  color: #7a3a12;
+  cursor: pointer;
+
+  &::before {
+    background: #d9531e;
+  }
+
+  &:hover {
+    background: #ffefe3;
+  }
+}
+
+.chipProbe {
+  background: #e8eef6;
+  color: #5b6b82;
+
+  &::before {
+    background: #b7c4d8;
+  }
+}
+
+.instalarBloque {
+  margin: 0 0 14px;
+}
+
 .alerta {
   margin-bottom: 12px;
   padding: 12px 14px;
@@ -198,7 +270,8 @@
 
 .badge,
 .dentro,
-.pend {
+.pend,
+.impresoBadge {
   font-size: 0.66rem;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -220,6 +293,12 @@
 .pend {
   background: #fff4e5;
   color: #7a4b12;
+}
+
+/* "Impreso ×N · hh:mm" en cada resultado. */
+.impresoBadge {
+  background: #fdebec;
+  color: #a8000d;
 }
 
 .btnPrint {

@@ -1,6 +1,8 @@
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import BoletoFace, { type BoletoData } from './BoletoFace'
-import { PRINT_BRIDGE_HELP, PRINT_BRIDGE_ZIP_URL } from '../lib/printAgent'
+import PrintBridgeInstall from './PrintBridgeInstall'
+import { horaCorta } from '../api'
+import { PRINT_BRIDGE_CHROME_HINT, describeColorMode, type PrintColorMode } from '../lib/printAgent'
 import styles from './boleto-print.module.scss'
 import './boleto-face.css'
 
@@ -9,44 +11,68 @@ type Props = {
   busy?: boolean
   bridgeReady?: boolean | null
   bridgePrinter?: string | null
+  /** Rollo detectado por el agente (último modo que imprimió bien). */
+  bridgeColorMode?: PrintColorMode | null
   bridgeProbing?: boolean
+  /** Impresiones registradas de este boleto (0 si nunca). */
+  impresiones?: number
+  ultimaImpresion?: string | null
+  unmarking?: boolean
   onClose: () => void
-  /** Secundario: diálogo Chrome (puede remapear a 29×90). */
+  /** Primario: PNG → agente local (Brother QL-800). */
+  onPrintQl: () => void
+  /** "Más opciones": diálogo Chrome (puede remapear a 29×90). */
   onPrintChrome: () => void
+  /** "Más opciones": PDF 62×100. */
   onPdf: () => void
-  onPrintQl?: () => void
+  /** Vuelve a sondear /health del agente local. */
+  onReprobe?: () => void
+  /** "Marcar como no impreso": borra el registro de impresiones. */
+  onUnmark?: () => void
 }
 
-/** Modal de preview + acciones QL (primario) / Chrome con aviso / PDF. */
+/** Modal de preview con un solo botón: Imprimir boleto. */
 export default function BoletoPrintModal({
   data,
   busy,
   bridgeReady,
   bridgePrinter,
+  bridgeColorMode,
   bridgeProbing,
+  impresiones = 0,
+  ultimaImpresion,
+  unmarking,
   onClose,
+  onPrintQl,
   onPrintChrome,
   onPdf,
-  onPrintQl,
+  onReprobe,
+  onUnmark,
 }: Props) {
   const tituloId = useId()
   const printRef = useRef<HTMLDivElement>(null)
+  const [masAbierto, setMasAbierto] = useState(false)
   const qlOnline = bridgeReady === true
   const qlOffline = bridgeReady === false
+  const rollo = describeColorMode(bridgeColorMode)
+  const hora = horaCorta(ultimaImpresion)
 
   useEffect(() => {
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
-      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && onPrintQl && qlOnline) onPrintQl()
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && qlOnline && !busy) {
+        e.preventDefault()
+        onPrintQl()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => {
       document.body.style.overflow = prev
       window.removeEventListener('keydown', onKey)
     }
-  }, [onClose, onPrintQl, qlOnline])
+  }, [onClose, onPrintQl, qlOnline, busy])
 
   return (
     <div className={styles.capa} role="presentation" onClick={onClose}>
@@ -62,9 +88,7 @@ export default function BoletoPrintModal({
             <p className={styles.kicker}>Vista previa del boleto</p>
             <h2 id={tituloId}>¿Se ve bien para imprimir?</h2>
             <p className={styles.ayuda}>
-              Formato {data.formato}. Impresión correcta:{' '}
-              <b>Imprimir en QL (agente local)</b> → fuerza 62×100. Chrome print es
-              solo respaldo y puede salir 29×90.
+              Sale tal cual se ve: rollo 62 mm negro/rojo en la Brother QL-800.
             </p>
           </div>
           <button type="button" className={styles.cerrar} onClick={onClose} aria-label="Cerrar">
@@ -80,84 +104,84 @@ export default function BoletoPrintModal({
           <aside className={styles.pasos}>
             <h3>Impresora en esta PC</h3>
 
-            {bridgeProbing ? (
-              <p className={styles.estadoProbe}>Comprobando agente local (127.0.0.1:9631)…</p>
+            {bridgeProbing && bridgeReady == null ? (
+              <p className={styles.estadoProbe}>Comprobando impresora…</p>
             ) : null}
 
             {qlOnline ? (
               <p className={styles.estadoOk} role="status">
-                QL lista · {bridgePrinter || 'Brother QL-800'}
+                Impresora lista · {bridgePrinter || 'Brother QL-800'}
+                {rollo ? ` · ${rollo}` : ''}
               </p>
             ) : null}
 
-            {qlOffline ? (
-              <div className={styles.offline} role="alert">
-                <strong>Agente QL offline en esta PC</strong>
-                <p>{PRINT_BRIDGE_HELP}</p>
-                <ol>
-                  <li>Conecta Brother QL-800 (USB) y enciéndela.</li>
-                  <li>Instala el driver Brother (aparece en Impresoras).</li>
-                  <li>
-                    Descarga el agente, descomprime y ejecuta <code>start.cmd</code>.
-                  </li>
-                </ol>
-                <a className={styles.descarga} href={PRINT_BRIDGE_ZIP_URL} download>
-                  Descargar print-bridge (ZIP)
-                </a>
-                <p className={styles.offlineHint}>
-                  Node.js 20+ en PATH. Luego vuelve a abrir este modal.
-                </p>
+            {impresiones > 0 ? (
+              <div className={styles.impreso} role="status">
+                <span>
+                  Ya impreso {impresiones === 1 ? '1 vez' : `${impresiones} veces`}
+                  {hora ? ` · última ${hora}` : ''}
+                </span>
+                {onUnmark ? (
+                  <button
+                    type="button"
+                    className={styles.enlaceSutil}
+                    disabled={unmarking || busy}
+                    onClick={onUnmark}
+                  >
+                    {unmarking ? 'Quitando…' : 'Marcar como no impreso'}
+                  </button>
+                ) : null}
               </div>
             ) : null}
 
-            <ol className={styles.pasosLista}>
-              <li>Revisa nombre, tipo y folio.</li>
-              <li>
-                Primario: <b>Imprimir en QL</b> (agente local, media 62 mm continua).
-              </li>
-              <li>PDF si necesitas archivo.</li>
-            </ol>
-
             <div className={styles.acciones}>
-              {onPrintQl ? (
-                <button
-                  type="button"
-                  className={styles.qlPrimary}
-                  disabled={busy}
-                  onClick={onPrintQl}
-                  title={
-                    qlOffline
-                      ? 'Agente offline — clic muestra el error (sin Chrome)'
-                      : 'POST PNG → http://127.0.0.1:9631/print-label'
-                  }
-                >
-                  {busy
-                    ? 'Enviando a QL…'
-                    : qlOffline
-                      ? 'Imprimir en QL (agente offline — reintentar)'
-                      : 'Imprimir en QL (agente local)'}
-                </button>
-              ) : null}
+              {qlOffline ? (
+                <PrintBridgeInstall compact onReprobe={onReprobe} probing={bridgeProbing} />
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className={styles.primarioGrande}
+                    disabled={busy || (bridgeProbing && bridgeReady == null)}
+                    onClick={onPrintQl}
+                    title="Ctrl+Enter · PNG 59×94 → agente local 127.0.0.1:9631"
+                  >
+                    {busy ? 'Imprimiendo…' : 'Imprimir boleto'}
+                  </button>
+                  <p className={styles.ayudaLinea}>
+                    Ctrl+Enter también imprime. {PRINT_BRIDGE_CHROME_HINT}
+                  </p>
+                </>
+              )}
 
-              <div className={styles.avisoChrome}>
-                <p>
-                  <b>Atención:</b> Chrome no fija el form Brother. Si usas este
-                  botón, elige a mano papel <b>62mm Cinta continua</b>, márgenes
-                  ninguno, encabezados/pies OFF. Puede salir 29×90.
-                </p>
-                <button
-                  type="button"
-                  className={styles.secundarioPeligro}
-                  disabled={busy}
-                  onClick={onPrintChrome}
-                >
-                  {busy ? 'Preparando…' : 'Imprimir con Chrome (no recomendado)'}
-                </button>
-              </div>
+              <details
+                className={styles.mas}
+                open={masAbierto}
+                onToggle={(e) => setMasAbierto((e.currentTarget as HTMLDetailsElement).open)}
+              >
+                <summary>Más opciones</summary>
+                <div className={styles.masCuerpo}>
+                  <div className={styles.avisoChrome}>
+                    <p>
+                      <b>Chrome no fija el papel Brother.</b> Si usas este botón, elige a mano{' '}
+                      <b>62mm Cinta continua</b>, márgenes ninguno, encabezados/pies OFF. Puede
+                      salir 29×90.
+                    </p>
+                    <button
+                      type="button"
+                      className={styles.secundarioPeligro}
+                      disabled={busy}
+                      onClick={onPrintChrome}
+                    >
+                      {busy ? 'Preparando…' : 'Imprimir con Chrome (no recomendado)'}
+                    </button>
+                  </div>
+                  <button type="button" className={styles.secundario} disabled={busy} onClick={onPdf}>
+                    Abrir PDF
+                  </button>
+                </div>
+              </details>
 
-              <button type="button" className={styles.secundario} disabled={busy} onClick={onPdf}>
-                Abrir PDF
-              </button>
               <button type="button" className={styles.fantasma} onClick={onClose}>
                 Seguir buscando
               </button>

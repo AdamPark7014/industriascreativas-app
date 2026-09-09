@@ -15,32 +15,30 @@ type Props = {
   className?: string
 }
 
-/** Cara del gafete QL-800 62×100 mm — pantalla y @media print. */
+/** Texto de marca en la banda superior (los logos son claros: no sirven en térmico). */
+export const BOLETO_MARCA = 'FICTI · TECH CAPITAL'
+
+/** Rojo del rollo DK-2251; se ignora `data.acento` porque el térmico solo tiene negro/rojo. */
+export const BOLETO_ROJO = '#e60012'
+
+/**
+ * Cara del boleto QL-800 (59×94 mm, papel térmico negro/rojo).
+ * Misma geometría que renderBoletoPngBase64: lo que se ve es lo que sale.
+ */
 export default function BoletoFace({ data, className }: Props) {
   return (
     <article
       className={className}
-      style={{ ['--boleto-acento' as string]: data.acento }}
+      style={{ ['--boleto-acento' as string]: BOLETO_ROJO }}
       data-boleto-face
     >
-      <div className="boletoCut" aria-hidden>
-        <i data-c="tl" />
-        <i data-c="tr" />
-        <i data-c="bl" />
-        <i data-c="br" />
-      </div>
+      <header className="boletoBrand">{BOLETO_MARCA}</header>
 
-      <header className="boletoBrand">
-        <img src="/static/img/ficti-logo.png" alt="FICTI" />
-        <img src="/static/img/tech-capital-logo.png" alt="Tech Capital" />
-      </header>
+      <p className="boletoTipo">{data.tipo || 'Acreditación'}</p>
 
-      <p className="boletoTipo">{data.tipo}</p>
-      <hr className="boletoRule" />
-
-      <h1 className="boletoNombre">{data.nombre}</h1>
+      <h1 className="boletoNombre">{data.nombre || '—'}</h1>
       {data.subtitulo ? <p className="boletoSub">{data.subtitulo}</p> : null}
-      <p className="boletoEvento">{data.evento}</p>
+      <p className="boletoEvento">{data.evento || 'FICTI · Tech Capital 2026'}</p>
 
       <div className="boletoQrWrap">
         <img className="boletoQr" src={data.qrDataUrl} alt={`QR ${data.folio}`} />

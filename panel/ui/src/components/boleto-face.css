@@ -1,10 +1,19 @@
-/* Cara del gafete QL-800 — cinta continua 62 mm (DK continuous).
-   Una sola etiqueta por corte (~100 mm de largo). */
+/* Cara del boleto QL-800 — rollo continuo 62 mm negro/rojo (DK-2251).
+   Papel térmico: solo blanco, negro y rojo puro. Sin grises ni gradientes.
+
+   Geometría (misma que renderBoletoPngBase64, WYSIWYG):
+   - Cara 59 × 94 mm = área imprimible real de la QL-800 en cinta 62 mm
+     (márgenes duros 1.5 mm lados / 2.8 mm arriba-abajo). El agente local la
+     centra 1:1 dentro de la etiqueta de 62 × 100 mm.
+   - Margen interno 3 mm; marco negro fino a 1.2 mm del borde.
+   - Banda negra de marca, banda roja con el tipo, nombre, empresa, evento,
+     QR 34 mm negro sobre blanco y folio al pie. Todo centrado. */
 
 :root {
-  --boleto-acento: #12b5b0;
-  --boleto-w: 62mm;
-  --boleto-h: 100mm;
+  --boleto-acento: #e60012;
+  --boleto-negro: #000;
+  --boleto-w: 59mm;
+  --boleto-h: 94mm;
 }
 
 [data-boleto-face] {
@@ -12,150 +21,132 @@
   width: var(--boleto-w);
   height: var(--boleto-h);
   margin: 0 auto;
-  padding: 2.8mm 3.2mm 2.4mm;
+  padding: 3mm;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: #050b1c;
-  color: #fff;
-  border-radius: 4mm;
-  border: 1.4mm solid var(--boleto-acento);
+  background: #fff;
+  color: var(--boleto-negro);
+  border: none;
+  border-radius: 0;
   font-family: 'Manrope', 'Segoe UI', system-ui, sans-serif;
   overflow: hidden;
-  box-shadow: 0 16px 40px rgba(5, 11, 28, 0.35);
+  box-shadow: 0 12px 32px rgba(7, 26, 58, 0.18);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 
-.boletoCut {
+/* Marco fino negro (dentro del área imprimible). */
+[data-boleto-face]::before {
+  content: '';
   pointer-events: none;
   position: absolute;
-  inset: 0;
-
-  i {
-    position: absolute;
-    width: 2.2mm;
-    height: 2.2mm;
-    border-color: rgba(255, 255, 255, 0.35);
-    border-style: solid;
-    border-width: 0;
-  }
-
-  i[data-c='tl'] {
-    top: 1.2mm;
-    left: 1.2mm;
-    border-top-width: 0.35mm;
-    border-left-width: 0.35mm;
-  }
-  i[data-c='tr'] {
-    top: 1.2mm;
-    right: 1.2mm;
-    border-top-width: 0.35mm;
-    border-right-width: 0.35mm;
-  }
-  i[data-c='bl'] {
-    bottom: 1.2mm;
-    left: 1.2mm;
-    border-bottom-width: 0.35mm;
-    border-left-width: 0.35mm;
-  }
-  i[data-c='br'] {
-    bottom: 1.2mm;
-    right: 1.2mm;
-    border-bottom-width: 0.35mm;
-    border-right-width: 0.35mm;
-  }
+  inset: 1.2mm;
+  border: 0.5mm solid var(--boleto-negro);
+  border-radius: 1.5mm;
 }
 
 .boletoBrand {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2.4mm;
   width: 100%;
-  padding: 1.6mm 1.8mm 1.8mm;
-  background: #0a1428;
-  border-radius: 2mm;
-  margin-bottom: 2mm;
+  height: 9mm;
+  margin: 0;
+  background: var(--boleto-negro);
+  color: #fff;
+  border-radius: 1.2mm;
+  font-size: 3.1mm;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  white-space: nowrap;
   flex: none;
-
-  img {
-    height: 5.5mm;
-    width: auto;
-    max-width: 44%;
-    object-fit: contain;
-  }
 }
 
 .boletoTipo {
-  margin: 0;
-  font-size: 2.4mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 8mm;
+  margin: 2mm 0 0;
+  background: var(--boleto-acento);
+  color: #fff;
+  border-radius: 1.2mm;
+  font-size: 4mm;
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--boleto-acento);
-  flex: none;
-}
-
-.boletoRule {
-  width: 70%;
-  margin: 1.4mm 0 1.8mm;
-  border: none;
-  border-top: 0.3mm solid #1b2b4d;
+  white-space: nowrap;
+  overflow: hidden;
   flex: none;
 }
 
 .boletoNombre {
-  margin: 0;
-  max-width: 100%;
-  padding: 0 0.5mm;
+  margin: 3mm 0 0;
+  width: 100%;
   text-align: center;
-  font-size: 4.2mm;
+  font-size: 5mm;
   font-weight: 800;
   line-height: 1.12;
   letter-spacing: 0.01em;
   text-transform: uppercase;
-  color: #fff;
+  color: var(--boleto-negro);
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   flex: none;
 }
 
 .boletoSub {
   margin: 1.4mm 0 0;
-  max-width: 100%;
+  width: 100%;
   text-align: center;
-  font-size: 2.3mm;
-  font-weight: 600;
+  font-size: 2.7mm;
+  font-weight: 700;
+  line-height: 1.2;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #93a6c4;
+  color: var(--boleto-negro);
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   flex: none;
 }
 
 .boletoEvento {
   margin: 1.2mm 0 0;
-  font-size: 2mm;
+  font-size: 2.2mm;
+  font-weight: 600;
+  line-height: 1.2;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #6b80a3;
+  color: var(--boleto-negro);
+  white-space: nowrap;
   flex: none;
 }
 
 .boletoQrWrap {
   margin-top: auto;
-  margin-bottom: 1.6mm;
-  padding: 2mm;
+  margin-bottom: 1.5mm;
+  padding: 0;
   background: #fff;
-  border-radius: 2mm;
-  border: 0.3mm solid #1b2b4d;
+  border: none;
+  border-radius: 0;
   box-shadow: none;
   flex: none;
 }
 
 .boletoQr {
   display: block;
-  width: 36mm;
-  height: 36mm;
+  width: 34mm;
+  height: 34mm;
   image-rendering: pixelated;
 }
 
@@ -165,30 +156,33 @@
   align-items: center;
   gap: 0.6mm;
   width: 100%;
-  padding-top: 0.4mm;
+  margin: 0;
+  padding: 0;
   flex: none;
 
   span {
-    font-size: 1.9mm;
+    font-size: 2mm;
+    font-weight: 600;
+    line-height: 1.2;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: #93a6c4;
+    color: var(--boleto-negro);
   }
 
   strong {
-    font-size: 2.8mm;
+    font-size: 3.2mm;
     font-weight: 800;
-    letter-spacing: 0.03em;
-    color: #fff;
+    line-height: 1.2;
+    letter-spacing: 0.04em;
+    color: var(--boleto-negro);
   }
 }
 
-/* ——— Impresión QL-800: una etiqueta 62×100 mm, sin chrome ——— */
+/* ——— Impresión Chrome (secundaria): etiqueta 62×100 mm, cara 59×94 centrada ——— */
 @media print {
   @page {
     /* mm explícito; Brother/Windows a veces ignora esto y usa preferencias
-       del driver (p. ej. 29×90). Preferir «Imprimir en QL» o fijar papel
-       por defecto en Impresoras → QL-800 → Preferencias. */
+       del driver (p. ej. 29×90). Preferir «Imprimir boleto» (agente local). */
     size: 62mm 100mm;
     margin: 0;
   }
@@ -222,24 +216,24 @@
     height: 100mm !important;
     margin: 0 !important;
     padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     background: #fff !important;
     overflow: hidden !important;
     z-index: 99999 !important;
   }
 
   [data-boleto-face] {
-    width: 62mm !important;
-    height: 100mm !important;
+    width: 59mm !important;
+    height: 94mm !important;
     margin: 0 !important;
+    transform: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
-  }
-
-  .boletoCut i {
-    border-color: #888 !important;
   }
 }

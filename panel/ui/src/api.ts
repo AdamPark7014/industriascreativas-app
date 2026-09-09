@@ -57,6 +57,60 @@ export type GafeteHit = {
   asistencias: number
   dentro: boolean
   match: string
+  /** Boletos impresos registrados (0 si nunca). Opcional mientras el API lo despliega. */
+  impresiones?: number
+  /** ISO de la última impresión registrada o null. */
+  ultimaImpresion?: string | null
+}
+
+export type ImpresionVia = 'ql' | 'chrome' | 'pdf'
+export type ImpresionModoColor = 'mono' | 'redblack'
+
+export type Impresion = {
+  id: number
+  creado: string | null
+  tipo?: string
+  registroId?: number
+  folio?: string
+  via: ImpresionVia | 'test'
+  impresora?: string | null
+  modoColor?: ImpresionModoColor | null
+  /** El API solo guarda enteros >= 0. */
+  jobId?: number | null
+  operador?: string | null
+  dispositivo?: string | null
+}
+
+export type RegistrarImpresionBody = {
+  via: ImpresionVia
+  /** <= 120 chars (el API responde 400 impresora_larga si excede). */
+  impresora?: string | null
+  modoColor?: ImpresionModoColor | null
+  /** Entero >= 0 o null; cualquier otra cosa es 400 jobId. */
+  jobId?: number | null
+  /** <= 120 chars. */
+  dispositivo?: string | null
+}
+
+export type RegistrarImpresionResp = {
+  ok: boolean
+  impresion: Impresion
+  total: number
+  ultima: string | null
+}
+
+export type ListarImpresionesResp = {
+  ok: boolean
+  total: number
+  ultima: string | null
+  impresiones: Impresion[]
+}
+
+export type BorrarImpresionesResp = {
+  ok: boolean
+  borradas: number
+  total: number
+  ultima?: string | null
 }
 
 export type ScanResult = {
@@ -187,10 +241,77 @@ export type BoletoPayload = {
   formato: string
   qrDataUrl: string
   acento: string
+  /** Boletos impresos registrados para este registro (0 si nunca). */
+  impresiones?: number
+  /** ISO de la última impresión registrada o null. */
+  ultimaImpresion?: string | null
 }
 
 export async function cargarBoleto(tipo: string, id: number): Promise<BoletoPayload> {
   return req<BoletoPayload>(`/api/accesos/gafete/${tipo}/${id}`)
+}
+
+/**
+ * Registro de impresiones (auditoría + "marcar como no impreso").
+ * Contrato: POST …/impresion, GET …/impresiones, DELETE …/impresion/:id, DELETE …/impresiones.
+ */
+export function registrarImpresion(
+  tipo: string,
+  id: number,
+  body: RegistrarImpresionBody,
+): Promise<RegistrarImpresionResp> {
+  return req<RegistrarImpresionResp>(`/api/accesos/gafete/${tipo}/${id}/impresion`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export function listarImpresiones(tipo: string, id: number): Promise<ListarImpresionesResp> {
+  return req<ListarImpresionesResp>(`/api/accesos/gafete/${tipo}/${id}/impresiones`)
+}
+
+export function borrarImpresion(
+  tipo: string,
+  id: number,
+  impresionId: number,
+): Promise<BorrarImpresionesResp> {
+  return req<BorrarImpresionesResp>(
+    `/api/accesos/gafete/${tipo}/${id}/impresion/${impresionId}`,
+    { method: 'DELETE' },
+  )
+}
+
+/**
+ * Deja el contador en 0: el boleto vuelve a quedar "como si no se hubiera impreso".
+ * Si el API responde 404 `sin_impresiones` (contador en pantalla desfasado) se
+ * devuelve `{ ok:true, borradas:0, total:0 }`: el resultado final es el mismo.
+ */
+export async function borrarImpresiones(tipo: string, id: number): Promise<BorrarImpresionesResp> {
+  try {
+    return await req<BorrarImpresionesResp>(`/api/accesos/gafete/${tipo}/${id}/impresiones`, {
+      method: 'DELETE',
+    })
+  } catch (e) {
+    if (e instanceof Error && e.message === 'sin_impresiones') {
+      return { ok: true, borradas: 0, total: 0, ultima: null }
+    }
+    throw e
+  }
+}
+
+/** jobId del agente → entero >= 0 que acepta el API, o null. */
+export function jobIdParaApi(v: string | number | null | undefined): number | null {
+  if (v == null || v === '') return null
+  const n = Number(v)
+  return Number.isInteger(n) && n >= 0 && n <= 2_147_483_647 ? n : null
+}
+
+/** "hh:mm" local de un ISO, o null si no hay fecha válida. */
+export function horaCorta(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
 /** Abre el PDF del gafete (descarga / diálogo de impresión del navegador). */

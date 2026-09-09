@@ -96,6 +96,33 @@ export async function ensureIndexes(): Promise<void> {
     )`,
     'bloqueos',
   )
+  // Registro de boletos impresos (auditoría + "deshacer impresión"). Espejo: migraciones/005_accesos_impresiones.sql
+  await trySql(
+    `CREATE TABLE IF NOT EXISTS accesos_impresiones (
+      id SERIAL PRIMARY KEY,
+      tipo VARCHAR(20) NOT NULL,
+      registro_id INTEGER NOT NULL,
+      folio VARCHAR(40) NOT NULL,
+      via VARCHAR(12) NOT NULL DEFAULT 'ql',
+      impresora VARCHAR(120),
+      modo_color VARCHAR(12),
+      job_id INTEGER,
+      operador VARCHAR(120),
+      dispositivo VARCHAR(120),
+      creado TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    'impresiones',
+  )
+  await trySql(
+    `CREATE INDEX IF NOT EXISTS accesos_impresiones_reg_creado_idx
+      ON accesos_impresiones (tipo, registro_id, creado DESC)`,
+    'impresiones_reg',
+  )
+  await trySql(
+    `CREATE INDEX IF NOT EXISTS accesos_impresiones_creado_idx
+      ON accesos_impresiones (creado DESC)`,
+    'impresiones_creado',
+  )
 
   await trySql(
     `CREATE INDEX IF NOT EXISTS accesos_escaneos_zona_creado_idx

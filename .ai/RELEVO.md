@@ -1,31 +1,42 @@
 # RELEVO
 
-- **Último turno:** cursor
+- **Último turno:** claude-code
 - **Fecha:** 2026-09-08
 - **Rama:** main
-- **HEAD:** 37bed75 — Accesos QL zero-friction + zip estático
+- **HEAD:** (ver git log) — Accesos: botón único Imprimir boleto, instalador sin Node, registro de impresiones en BD, boleto rediseñado para rollo negro/rojo
 
 ## 3 líneas
-Modal: probe `/health` → «QL lista · {printer}» o offline ES + ZIP
-`/static/print-bridge.zip`. Primario QL; Chrome secundario con aviso.
-Deploy DO: `index-DUx04nJC.js`, zip HTTP 200. Bridge local job 62mm OK.
+La QL-800 rechazaba todo porque el rollo es **negro/rojo (DK-2251)** y el driver
+mandaba monocromo; el agente local (EXPERIENCEBT-app `tools/print-bridge`) ya lo
+detecta solo. Panel: un botón **Imprimir boleto**, panel **Instalar impresora en
+esta PC**, y cada impresión queda en `accesos_impresiones` con "Marcar como no impreso".
 
 ## Qué dejó el turno anterior y sigue en pie
 
 - Pop-up área de interés, Edad, áreas por marca, institución.
-- Accesos API TS/Hono en DO.
+- Accesos API TS/Hono en DO (`eventos_accesos_api`).
 - 275 alumnos / 557 empresarios (conteo 08-09).
 
-## Hecho en este turno
+## Hecho en este turno (sin desplegar)
 
-- UI probe + offline panel + download ZIP; sin `window.print` silencioso.
-- `panel/static/print-bridge.zip` embebido; live en panel DO.
-- EXPERIENCEBT print-bridge: `762f615` (ZIP pack, CORS, job name, set-ql-media).
+- `panel/accesos-api`: tabla `accesos_impresiones` (en `ensureIndexes` + `005_accesos_impresiones.sql`),
+  rutas `POST/GET/DELETE /gafete/:tipo/:id/impresion[es]`, `GET /impresiones`,
+  `buscar` y `gafete` devuelven `impresiones` / `ultimaImpresion`. Probado con Postgres 16 en Docker (33 checks).
+- `panel/ui`: `printAgent.ts` (fetch loopback, `colorMode`, errores en español), `BoletoPrintModal`
+  (botón único + "Más opciones" con Chrome/PDF + "Marcar como no impreso"), `PrintBridgeInstall.tsx`
+  (ZIP + 3 pasos + "Ya la instalé, comprobar"), `BuscarPage` (chip de impresora, badge "Impreso ×N",
+  registro tras imprimir), `boletoRender.ts` + `BoletoFace` + CSS (boleto 59×94 mm blanco/negro/rojo,
+  PNG 300 dpi, preview WYSIWYG). Build OK: `dist/assets/index-DrBTGvVk.js`.
+- `docs/ACCESOS-REACT.md` actualizado.
+- Boleto real impreso desde el panel en la QL de Adam (EMPRESARIO-12) vía agente; muestra rediseñada impresa centrada.
 
 ## A medias / siguiente
 
-- Cada PC recepción: ZIP → `start.cmd` (+ opcional `set-ql-media.ps1`).
-- **Rotar password root DO**.
+- **Desplegar**: `python .ai/_deploy_print_fix.py` con `DO_ROOT_PASSWORD` en el entorno (copia panel/ui,
+  accesos-api, panel/static). Antes, refrescar `panel/static/print-bridge.zip` con el ZIP nuevo de
+  EXPERIENCEBT-app `tools/print-bridge/pack.ps1` (instalador sin Node).
+- Tras el deploy: imprimir un boleto real → ver badge "Impreso ×1" → "Marcar como no impreso" → badge desaparece.
+- Adam: rotar password root DO.
 - Nombre de plantel en gafete estudiante (decisión cliente).
 
 ## No tocar
@@ -33,3 +44,4 @@ Deploy DO: `index-DUx04nJC.js`, zip HTTP 200. Bridge local job 62mm OK.
 - Terror / Hetzner app code (salvo print-bridge en EXPERIENCEBT-app).
 - Recrear `accesos_api` sin `SCAN_API_KEY`.
 - Secretos en git / no guardar password DO en repo.
+- No `git reset --hard` / `git checkout --` / `git clean` / `git stash drop`.
