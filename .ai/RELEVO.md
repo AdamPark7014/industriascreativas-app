@@ -1,7 +1,7 @@
 # RELEVO
 
 - **Último turno:** claude-code
-- **Fecha:** 2026-09-08
+- **Fecha:** 2026-09-09
 - **Rama:** main
 - **HEAD:** (ver git log) — Accesos: botón único Imprimir boleto, instalador sin Node, registro de impresiones en BD, boleto rediseñado para rollo negro/rojo
 
@@ -35,13 +35,26 @@ esta PC**, y cada impresión queda en `accesos_impresiones` con "Marcar como no 
   `/health.printerOnline === false`. Build: `dist/assets/index-Ck-27Hjk.js`. ZIP del agente
   actualizado en `panel/static/print-bridge.zip` (agent.ps1 con `printerOnline`).
 
+## Desplegado 2026-09-09 13:17 UTC
+
+- `python .ai/_deploy_print_fix.py` con llave SSH. Vivo en DO: `index-Ck-27Hjk.js` +
+  `index-CFboaEyi.css`, `print-bridge.zip` 43602 bytes (antes 13700, del 08-09 16:58).
+  Cero ocurrencias de `29mm` en el bundle. `panel_web` y `accesos_api` healthy.
+  Bundle contiene "Imprimir boleto", "Instalar impresora", "Impresora apagada", `printerOnline`.
+- **Llave de despliegue nueva:** `~/.ssh/id_ed25519_do_experiencebt_auto` (sin passphrase),
+  instalada en `authorized_keys` del droplet. La vieja `id_ed25519_do_experiencebt` **tiene
+  passphrase** y por eso nunca sirvió desatendida; además PowerShell la subió con BOM UTF-8,
+  que sshd rechaza. `_deploy_print_fix.py` ahora prueba las dos y avisa cuál falla.
+  Respaldo de `authorized_keys` en el droplet: `/root/.ssh/authorized_keys.bak.*`.
+
 ## A medias / siguiente
 
-- **Desplegar**: `python .ai/_deploy_print_fix.py` con `DO_ROOT_PASSWORD` en el entorno (copia panel/ui,
-  accesos-api, panel/static). Antes, refrescar `panel/static/print-bridge.zip` con el ZIP nuevo de
-  EXPERIENCEBT-app `tools/print-bridge/pack.ps1` (instalador sin Node).
 - Tras el deploy: imprimir un boleto real → ver badge "Impreso ×1" → "Marcar como no impreso" → badge desaparece.
-- Adam: rotar password root DO.
+- **Adam: rotar password root DO.** Lo pegó en el chat el 09-09 y además está en claro dentro de
+  `.ai/_smoke_accesos.py`, que **sí está trackeado** y commiteado en `6a469dc`.
+  `.ai/_ssh_do.py` sí está en `.gitignore`. El commit **no está en GitHub todavía**
+  (`origin/main` = 413a31d, no desciende de 6a469dc): un `git push` lo publicaría.
+  No lo toqué por la regla de credenciales; decide tú entre rotar, purgar historial o ambas.
 - Nombre de plantel en gafete estudiante (decisión cliente).
 
 ## No tocar
