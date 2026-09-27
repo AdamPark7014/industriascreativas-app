@@ -24,3 +24,4 @@ panel/accesos-api/dist/
 .ai/_smoke*.py
 .ai/_debug*.py
 .ai/_cookie*
+.ai/index/
