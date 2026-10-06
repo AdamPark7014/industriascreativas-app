@@ -1,14 +1,18 @@
 /**
- * Geometría y medición compartidas del boleto apaisado (94 × 59 mm).
+ * Geometría y medición compartidas del boleto apaisado (80 × 59 mm).
  *
  * La cara DOM (BoletoFace + boleto-face.css) y el PNG para el agente local
  * (renderBoletoPngBase64) toman de aquí los mismos números y eligen el tamaño
- * del tipo y del nombre con la misma función: lo que se ve es lo que sale.
+ * del nombre con la misma función: lo que se ve es lo que sale.
  *
  * Área imprimible real de la Brother QL-800 en cinta continua 62 mm:
  * 58.9 mm de ancho (cinta) × 94.2 mm de largo (corte). El agente gira 90°
  * cualquier PNG apaisado (ancho > alto) y lo encaja centrado ahí, así que el
  * panel dibuja el boleto tal cual se ve en pantalla, sin girarlo.
+ *
+ * 80 mm de largo: es lo que cabe en el porta-gafete del evento (pedido de Evy,
+ * 05-10-2026). Como el alto (59) ya llena la cinta, el agente lo deja a escala
+ * ≈1 y sale de 80 mm reales.
  */
 
 /** Rojo del rollo DK-2251. El térmico solo tiene negro/rojo: se ignora `data.acento`. */
@@ -21,38 +25,31 @@ export const BOLETO_FUENTE = "Manrope, 'Segoe UI', system-ui, sans-serif"
 /** Geometría en mm. Si cambias algo aquí, cambia boleto-face.css a juego. */
 export const GEO = {
   /** Cara apaisada. */
-  w: 94,
+  w: 80,
   h: 59,
   /** Margen interno mínimo. */
   pad: 3,
-  /** Lado del QR (izquierda, centrado en vertical). */
-  qr: 44,
+  /** Lado del QR (izquierda, centrado en vertical). 38 mm se lee sin problema en puerta. */
+  qr: 38,
   /** Hueco entre el QR y la columna de texto. */
-  hueco: 4,
+  hueco: 3,
   /** Alto de la columna de texto (centrada en vertical). Ancho: COL_W. */
   colH: 49,
-  /** Nombre: auto-ajuste max→min, hasta 4 líneas. Arranca arriba de la columna:
-      la banda roja del tipo se retiró el 09-09-2026 a petición de Adam, y el
-      nombre se quedó con ese espacio. El tipo sigue legible en el folio
-      (EMPRESARIO-465), así que no se pierde información. */
-  nombreMax: 8,
+  /** Nombre: auto-ajuste max→min, hasta 4 líneas. Solo QR + nombre + folio
+      (sin banda del tipo desde 09-09-2026, sin empresa/plantel desde
+      05-10-2026): el tipo sigue legible en el folio (EMPRESARIO-465). */
+  nombreMax: 9,
   nombreMin: 3.2,
   nombreLh: 1.08,
   nombreLineas: 4,
   nombreTracking: 0.01,
-  /** Subtítulo (empresa o plantel), hasta 2 líneas. */
-  subGap: 1.5,
-  sub: 2.8,
-  subLh: 1.2,
-  subLineas: 2,
-  subTracking: 0.04,
-  /** Folio anclado al pie de la columna. */
-  folio: 3.2,
+  /** Folio pequeño anclado al pie de la columna. */
+  folio: 2.8,
   folioLh: 1.2,
   folioTracking: 0.06,
 } as const
 
-/** Ancho de la columna de texto: 94 − 2·3 − 44 − 4 = 40 mm. */
+/** Ancho de la columna de texto: 80 − 2·3 − 38 − 3 = 33 mm. */
 export const COL_W = GEO.w - 2 * GEO.pad - GEO.qr - GEO.hueco
 
 export type Ctx2D = CanvasRenderingContext2D & { letterSpacing?: string }

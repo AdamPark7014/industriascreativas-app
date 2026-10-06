@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
-import { api, type Resumen, type Sesion } from '../api'
+import { api, tiene, type Resumen, type Sesion } from '../api'
 import styles from './hub.module.scss'
 
 export default function HubPage() {
@@ -97,33 +97,55 @@ export default function HubPage() {
       <section className={styles.ahora} aria-label="Qué hacer ahora">
         <h2>¿Qué necesitas hacer?</h2>
         <div className={styles.ahoraGrid}>
+          {tiene(sesion, 'registrar') ? (
+            <Link className={styles.ahoraCard} to="/registro">
+              <span className={styles.ahoraNum}>+</span>
+              <div>
+                <strong>Registrar a alguien en sitio</strong>
+                <p>Quien llega sin registro: sus datos y su etiqueta de 8 cm al momento.</p>
+              </div>
+            </Link>
+          ) : null}
+          {tiene(sesion, 'buscar') ? (
+            <Link className={styles.ahoraCard} to="/buscar">
+              <span className={styles.ahoraNum}>⌕</span>
+              <div>
+                <strong>Buscar a un registrado</strong>
+                <p>
+                  {sesion?.puedeImprimir
+                    ? 'Ficha completa, reenvío del boleto por correo y etiqueta impresa.'
+                    : 'Ficha completa y reenvío del boleto por correo.'}
+                </p>
+              </div>
+            </Link>
+          ) : null}
+          {tiene(sesion, 'mesa') ? (
+            <Link className={styles.ahoraCard} to="/mesa">
+              <span className={styles.ahoraNum}>≡</span>
+              <div>
+                <strong>Actividad de la mesa</strong>
+                <p>Altas, impresiones y reenvíos de hoy por usuario.</p>
+              </div>
+            </Link>
+          ) : null}
           {sesion?.puedeOperar ? (
             <Link className={styles.ahoraCard} to="/escanear">
-              <span className={styles.ahoraNum}>A</span>
+              <span className={styles.ahoraNum}>▣</span>
               <div>
                 <strong>Validar en puerta</strong>
                 <p>Escanea QR: entrada, salida o reingreso.</p>
               </div>
             </Link>
           ) : null}
-          <Link className={styles.ahoraCard} to="/buscar">
-            <span className={styles.ahoraNum}>B</span>
-            <div>
-              <strong>{sesion?.puedeImprimir ? 'Imprimir un boleto' : 'Buscar una persona'}</strong>
-              <p>
-                {sesion?.puedeImprimir
-                  ? 'Busca por nombre o folio y saca el gafete 62 mm.'
-                  : 'Consulta acreditaciones (sin imprimir).'}
-              </p>
-            </div>
-          </Link>
-          <Link className={styles.ahoraCard} to="/reportes">
-            <span className={styles.ahoraNum}>C</span>
-            <div>
-              <strong>Ver informes</strong>
-              <p>Historial del día, filtros y exportar Excel.</p>
-            </div>
-          </Link>
+          {tiene(sesion, 'informes') ? (
+            <Link className={styles.ahoraCard} to="/reportes">
+              <span className={styles.ahoraNum}>↗</span>
+              <div>
+                <strong>Ver informes</strong>
+                <p>Historial del día, filtros y exportar Excel.</p>
+              </div>
+            </Link>
+          ) : null}
         </div>
       </section>
 

@@ -103,6 +103,25 @@ def _puede(tipo: str) -> bool:
     return tipo in _tipos_sesion()
 
 
+_RUTAS_DATOS = ("/api/resumen", "/api/registros/", "/api/registro/", "/api/exportar")
+
+
+@app.before_request
+def _solo_panel_datos():
+    """Las mesas de registro/impresión y Control ADM trabajan en /accesos:
+    no ven las tablas completas ni exportan la base."""
+    if not session.get("usuario"):
+        return None
+    rol = consultas.rol_de(session.get("alcance"))
+    if rol["panel_datos"]:
+        return None
+    if request.path == "/":
+        return redirect(rol["inicio"])
+    if request.path.startswith(_RUTAS_DATOS):
+        return jsonify(ok=False, error="sin_permiso"), 403
+    return None
+
+
 @app.errorhandler(ErrorBaseDatos)
 def _error_bd(exc):
     log.error("Base de datos no disponible: %s", exc)
@@ -176,8 +195,7 @@ def panel():
     return render_template(
         "panel.html",
         alcance=alcance,
-        alcance_nombre={"interno": "Interno", "promotor": "Promotor"}.get(
-            alcance, alcance.capitalize()),
+        alcance_nombre=consultas.rol_de(alcance)["nombre"],
         catalogo={
             clave: {"nombre": consultas.CATALOGO[clave]["nombre"],
                     "corto": consultas.CATALOGO[clave]["corto"],

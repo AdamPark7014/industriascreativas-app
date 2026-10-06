@@ -25,3 +25,4 @@ panel/accesos-api/dist/
 .ai/_debug*.py
 .ai/_cookie*
 .ai/index/
+.ai/drafts/

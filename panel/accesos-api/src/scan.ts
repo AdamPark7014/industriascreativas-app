@@ -718,6 +718,14 @@ export async function buscarTexto(q: string, tipos: TipoClave[]): Promise<Hit[]>
   const out: Hit[] = []
   const prefix = `${q}%`
   const like = `%${q}%`
+  // El teléfono se guarda con lada y a veces con espacios ("+52 2221234567"):
+  // si la búsqueda trae 4+ dígitos también se compara solo con los dígitos.
+  const digitos = q.replace(/\D/g, '')
+  const porDigitos = digitos.length >= 4
+  const telDigitos = porDigitos
+    ? ` OR regexp_replace(COALESCE("Telefono",''), '\\D', '', 'g') LIKE $2`
+    : ''
+  const conDigitos = (p: string) => (porDigitos ? [p, `%${digitos}%`] : [p])
 
   const batches = await Promise.all(
     tipos.map(async (clave) => {
@@ -729,10 +737,11 @@ export async function buscarTexto(q: string, tipos: TipoClave[]): Promise<Hit[]>
             OR ${t.nombreSql} ILIKE $1
             OR COALESCE("Correo"::text,'') ILIKE $1
             OR COALESCE("Telefono",'') ILIKE $1
+            ${telDigitos}
             ${extra}
          ORDER BY "${t.id}" DESC
          LIMIT 12`,
-        [prefix],
+        conDigitos(prefix),
       )
       if (!rows.length) {
         rows = await query(
@@ -741,10 +750,11 @@ export async function buscarTexto(q: string, tipos: TipoClave[]): Promise<Hit[]>
               OR ${t.nombreSql} ILIKE $1
               OR COALESCE("Correo"::text,'') ILIKE $1
               OR COALESCE("Telefono",'') ILIKE $1
+              ${telDigitos}
               ${extra}
            ORDER BY "${t.id}" DESC
            LIMIT 12`,
-          [like],
+          conDigitos(like),
         )
       }
       return rows.map((f) => hitDe(clave, f, 'texto'))

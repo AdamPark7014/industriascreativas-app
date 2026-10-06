@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { api, type Sesion } from '../api'
+import { api, tiene, type Permiso, type Sesion } from '../api'
 import styles from './ops.module.scss'
 
 type NavItem = {
@@ -8,36 +8,47 @@ type NavItem = {
   label: string
   hint: string
   end?: boolean
-  ops?: boolean
+  /** Se muestra si la sesión tiene alguno de estos permisos. */
+  permisos: Permiso[]
 }
+
+/** Quién puede abrir el resumen (GET /resumen en accesos-api). */
+export const PERMISOS_RESUMEN: Permiso[] = ['informes', 'mesa', 'escanear']
 
 const GROUPS: { titulo: string; items: NavItem[] }[] = [
   {
     titulo: 'Inicio',
     items: [
-      { to: '/', label: 'Resumen', hint: 'Números de hoy y accesos rápidos', end: true },
+      { to: '/', label: 'Resumen', hint: 'Números de hoy y accesos rápidos', end: true, permisos: PERMISOS_RESUMEN },
+    ],
+  },
+  {
+    titulo: 'Mesa de atención',
+    items: [
+      { to: '/registro', label: 'Registro en sitio', hint: 'Alta sin registro previo + etiqueta', permisos: ['registrar'] },
+      { to: '/buscar', label: 'Buscar e imprimir', hint: 'Ficha, reenvío por correo y etiqueta', permisos: ['buscar'] },
+      { to: '/mesa', label: 'Actividad de la mesa', hint: 'Quién registró, imprimió o reenvió', permisos: ['mesa'] },
     ],
   },
   {
     titulo: 'En puerta',
     items: [
-      { to: '/escanear', label: 'Escáner', hint: 'Entrada · salida · reingreso', ops: true },
-      { to: '/zonas', label: 'Zonas y aforo', hint: 'Cupo por área' },
+      { to: '/escanear', label: 'Escáner', hint: 'Entrada · salida · reingreso', permisos: ['escanear'] },
+      { to: '/zonas', label: 'Zonas y aforo', hint: 'Cupo por área', permisos: ['escanear', 'informes'] },
     ],
   },
   {
-    titulo: 'Personas',
-    items: [
-      { to: '/buscar', label: 'Buscar e imprimir', hint: 'Boleto 62 mm QL-800' },
-      { to: '/reportes', label: 'Informes', hint: 'Historial y Excel' },
-    ],
+    titulo: 'Informes',
+    items: [{ to: '/reportes', label: 'Historial de accesos', hint: 'Filtros y Excel', permisos: ['informes'] }],
   },
 ]
 
 const TITULOS: Record<string, { kicker: string; titulo: string }> = {
   '/': { kicker: 'Accesos FICTI', titulo: 'Resumen de hoy' },
+  '/registro': { kicker: 'Mesa de registro', titulo: 'Registro en sitio' },
+  '/buscar': { kicker: 'Mesa de atención', titulo: 'Buscar, reenviar e imprimir' },
+  '/mesa': { kicker: 'Mesa de atención', titulo: 'Actividad de la mesa' },
   '/escanear': { kicker: 'Puerta', titulo: 'Validar boletos' },
-  '/buscar': { kicker: 'Boletos', titulo: 'Buscar e imprimir' },
   '/reportes': { kicker: 'Informes', titulo: 'Historial de accesos' },
   '/zonas': { kicker: 'Aforo', titulo: 'Zonas y capacidad' },
 }
@@ -64,12 +75,10 @@ export default function OpsShell() {
     setMenuAbierto(false)
   }, [location.pathname])
 
-  const alcanceLabel =
-    sesion?.alcance === 'interno'
-      ? 'Operación interna'
-      : sesion?.alcance === 'promotor'
-        ? 'Promotor (consulta)'
-        : '…'
+  const grupos = GROUPS.map((g) => ({
+    ...g,
+    items: g.items.filter((n) => n.permisos.some((p) => tiene(sesion, p))),
+  })).filter((g) => g.items.length)
 
   return (
     <div className={styles.app}>
@@ -84,24 +93,22 @@ export default function OpsShell() {
         </div>
 
         <nav className={styles.nav} aria-label="Accesos">
-          {GROUPS.map((g) => (
+          {grupos.map((g) => (
             <div key={g.titulo} className={styles.grupo}>
               <p className={styles.navTitulo}>{g.titulo}</p>
-              {g.items
-                .filter((n) => !n.ops || sesion?.puedeOperar)
-                .map((n) => (
-                  <NavLink
-                    key={n.to}
-                    to={n.to}
-                    end={n.end}
-                    className={({ isActive }) =>
-                      `${styles.navItem} ${isActive ? styles.activo : ''}`
-                    }
-                  >
-                    <span className={styles.navLabel}>{n.label}</span>
-                    <span className={styles.navHint}>{n.hint}</span>
-                  </NavLink>
-                ))}
+              {g.items.map((n) => (
+                <NavLink
+                  key={n.to}
+                  to={n.to}
+                  end={n.end}
+                  className={({ isActive }) =>
+                    `${styles.navItem} ${isActive ? styles.activo : ''}`
+                  }
+                >
+                  <span className={styles.navLabel}>{n.label}</span>
+                  <span className={styles.navHint}>{n.hint}</span>
+                </NavLink>
+              ))}
             </div>
           ))}
         </nav>
@@ -113,9 +120,11 @@ export default function OpsShell() {
             </span>
             <a href="/logout">Salir</a>
           </div>
-          <a className={styles.volver} href="/">
-            ← Volver al panel de registros
-          </a>
+          {tiene(sesion, 'panel_datos') ? (
+            <a className={styles.volver} href="/">
+              ← Volver al panel de registros
+            </a>
+          ) : null}
           <img
             className={styles.gabor}
             src="/static/img/gabor-logo-footer.png"
@@ -154,7 +163,7 @@ export default function OpsShell() {
               }`}
             >
               <span className={styles.insigniaPunto} />
-              {alcanceLabel}
+              {sesion?.rolNombre ?? '…'}
             </span>
             <span className={styles.sello}>
               <span className={styles.selloPunto} />

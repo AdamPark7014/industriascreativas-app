@@ -122,7 +122,28 @@ CATALOGO = {
 ALCANCES = {
     "interno": ("empresas", "estudiantes", "elisa"),
     "promotor": ("empresas", "estudiantes"),
+    "control": ("empresas", "estudiantes"),
+    "impresion": ("empresas", "estudiantes"),
+    "registro": ("empresas", "estudiantes"),
 }
+
+# Nombre visible, si entra al panel de datos (tablas y exportación) y su
+# pantalla de inicio. Los permisos finos de la mesa de atención están en
+# accesos-api/src/catalog.ts (ROLES): mantener los dos al día.
+ROLES = {
+    "interno": {"nombre": "NEXARA · Operación", "panel_datos": True, "inicio": "/"},
+    "promotor": {"nombre": "Promotor FICTI", "panel_datos": True, "inicio": "/"},
+    "control": {"nombre": "Control ADM", "panel_datos": False, "inicio": "/accesos/"},
+    "impresion": {"nombre": "Mesa de impresión", "panel_datos": False, "inicio": "/accesos/buscar"},
+    "registro": {"nombre": "Mesa de registro", "panel_datos": False, "inicio": "/accesos/registro"},
+}
+
+
+def rol_de(alcance: str) -> dict:
+    """Ante un rol desconocido, el más restringido: sin panel de datos."""
+    return ROLES.get(alcance) or {
+        "nombre": (alcance or "Sin rol").capitalize(), "panel_datos": False, "inicio": "/accesos/",
+    }
 
 
 def tipos_de(alcance: str) -> list:

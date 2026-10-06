@@ -2,6 +2,7 @@ import io
 import re
 import base64
 import hmac
+import json
 import time
 from collections import defaultdict
 from threading import Lock
@@ -295,6 +296,10 @@ def base_publica():
     if PUBLIC_BASE_URL:
         return PUBLIC_BASE_URL
     try:
+        # El panel pide reenvíos por la red de Docker (eventos_demo_web:5000):
+        # ese host no existe para quien abre el correo.
+        if '.' not in (request.host or '').split(':')[0]:
+            return 'https://demo.experiencebt.com.mx'
         raiz = request.url_root.rstrip('/')
         proto = request.headers.get('X-Forwarded-Proto', '').split(',')[0].strip()
         if proto == 'https' and raiz.startswith('http://'):
@@ -459,6 +464,38 @@ def ensure_schema():
                 conn.execute(text(stmt))
     except Exception as e:
         print(f'⚠️ No se pudo actualizar esquema: {e}')
+
+    # Bitácoras de la mesa de atención; accesos-api crea las mismas tablas
+    # (panel/migraciones/006_mesa_atencion.sql). Van aparte para que un fallo
+    # aquí no revierta las columnas de arriba.
+    bitacoras = [
+        """CREATE TABLE IF NOT EXISTS correo_envios (
+            id SERIAL PRIMARY KEY,
+            tipo VARCHAR(20) NOT NULL,
+            registro_id INTEGER NOT NULL,
+            correo VARCHAR(200) NOT NULL,
+            motivo VARCHAR(20) NOT NULL,
+            operador VARCHAR(120),
+            ok BOOLEAN NOT NULL,
+            error VARCHAR(300),
+            message_id VARCHAR(200),
+            creado TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )""",
+        """CREATE TABLE IF NOT EXISTS boleto_descargas (
+            id SERIAL PRIMARY KEY,
+            tipo VARCHAR(20) NOT NULL,
+            registro_id INTEGER NOT NULL,
+            ip VARCHAR(64),
+            agente VARCHAR(200),
+            creado TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )""",
+    ]
+    try:
+        with db.engine.begin() as conn:
+            for stmt in bitacoras:
+                conn.execute(text(stmt))
+    except Exception as e:
+        print(f'⚠️ No se pudieron crear bitácoras de correo: {e}')
 
 
 def generar_bytes_qr(contenido):
@@ -906,22 +943,85 @@ def detalles_gafete(tipo_usuario, objeto_usuario):
     return [institucion, competencia]
 
 
-def enviar_correo_gafete(email_destino, nombre_usuario, id_usuario, tipo_usuario="ALUMNO", objeto_usuario=None):
+CLAVE_POR_TAG = {'EMPRESARIO': 'empresas', 'ALUMNO': 'estudiantes', 'ELISA_CARRILLO': 'elisa'}
+
+
+def clave_de_tag(tipo_usuario):
+    """Etiqueta del QR (EMPRESARIO) → clave que usan el panel y sus bitácoras (empresas)."""
+    return CLAVE_POR_TAG.get(str(tipo_usuario or '').upper(), 'estudiantes')
+
+
+def pdf_gafete_de(objeto_usuario, nombre_usuario, id_usuario, tipo_usuario):
+    if tipo_usuario.upper() == "ELISA_CARRILLO" and objeto_usuario is not None:
+        return crear_pdf_gafete_elisa(objeto_usuario)
+    return crear_pdf_gafete(
+        id_usuario,
+        nombre_usuario,
+        tipo_usuario,
+        detalles=detalles_gafete(tipo_usuario, objeto_usuario),
+    )
+
+
+def registrar_envio(tipo_clave, registro_id, correo, motivo, ok, operador=None, error=None, message_id=None):
+    """Bitácora de correos de gafete: la mesa de atención muestra qué se mandó y a dónde."""
+    try:
+        with db.engine.begin() as conn:
+            conn.execute(
+                text(
+                    'INSERT INTO correo_envios '
+                    '(tipo, registro_id, correo, motivo, operador, ok, error, message_id) '
+                    'VALUES (:tipo, :rid, :correo, :motivo, :operador, :ok, :error, :mid)'
+                ),
+                {
+                    'tipo': tipo_clave,
+                    'rid': int(registro_id or 0),
+                    'correo': str(email_o_vacio(correo))[:200],
+                    'motivo': str(motivo or '')[:20],
+                    'operador': str(operador)[:120] if operador else None,
+                    'ok': bool(ok),
+                    'error': str(error)[:300] if error else None,
+                    'mid': str(message_id)[:200] if message_id else None,
+                },
+            )
+    except Exception as e:
+        print(f'⚠️ No se pudo registrar envío de gafete: {e}')
+
+
+def email_o_vacio(correo):
+    return (correo or '').strip().lower()
+
+
+def enlace_descarga_gafete(tipo_clave, registro_id):
+    """Link al PDF que pasa por /boleto/<token>: así se sabe si lo descargó."""
+    token = serializer.dumps({'t': tipo_clave, 'i': int(registro_id)}, salt='boleto-descarga')
+    return f'{base_publica()}/boleto/{token}'
+
+
+def enviar_correo_gafete(
+    email_destino, nombre_usuario, id_usuario, tipo_usuario="ALUMNO", objeto_usuario=None,
+    motivo='confirmacion', operador=None,
+):
+    """True si Brevo aceptó el correo; el detalle (messageId, error) lo da enviar_gafete_detalle."""
+    return enviar_gafete_detalle(
+        email_destino, nombre_usuario, id_usuario, tipo_usuario, objeto_usuario, motivo, operador,
+    )['ok']
+
+
+def enviar_gafete_detalle(
+    email_destino, nombre_usuario, id_usuario, tipo_usuario="ALUMNO", objeto_usuario=None,
+    motivo='confirmacion', operador=None,
+):
+    tipo_clave = clave_de_tag(tipo_usuario)
+
+    def resultado(ok, error=None, message_id=None):
+        registrar_envio(tipo_clave, id_usuario, email_destino, motivo, ok, operador, error, message_id)
+        return {'ok': ok, 'error': error, 'messageId': message_id}
+
     try:
         if not BREVO_API_KEY:
             print('❌ Error enviando gafete: BREVO API key ausente (backend/.env → API_KEYY)')
-            return False
-        detalles = detalles_gafete(tipo_usuario, objeto_usuario)
-
-        if tipo_usuario.upper() == "ELISA_CARRILLO" and objeto_usuario is not None:
-            bytes_pdf = crear_pdf_gafete_elisa(objeto_usuario)
-        else:
-            bytes_pdf = crear_pdf_gafete(
-                id_usuario,
-                nombre_usuario,
-                tipo_usuario,
-                detalles=detalles,
-            )
+            return resultado(False, 'Falta la API key de Brevo en el servidor')
+        bytes_pdf = pdf_gafete_de(objeto_usuario, nombre_usuario, id_usuario, tipo_usuario)
 
         nombre_mayus = nombre_usuario.upper()
         acento = acento_hex(tipo_usuario)
@@ -951,6 +1051,7 @@ def enviar_correo_gafete(email_destino, nombre_usuario, id_usuario, tipo_usuario
               </td>
             </tr>
           </table>
+          <p style="margin:0 0 18px;"><a href="{enlace_descarga_gafete(tipo_clave, id_usuario)}" style="display:inline-block;padding:12px 22px;border-radius:10px;background:{acento};color:{texto_sobre_acento(tipo_usuario)};font-weight:700;text-decoration:none;">Descargar mi gafete (PDF)</a></p>
           {bloque_leyenda_html()}
           <p style="margin:22px 0 0;color:{HEX_TEXTO_TENUE};">Atentamente,<br />Comité Organizador</p>
         """
@@ -977,15 +1078,15 @@ def enviar_correo_gafete(email_destino, nombre_usuario, id_usuario, tipo_usuario
             ]
         )
 
-        brevo_mail_api.send_transac_email(send_smtp_email)
-        return True
+        respuesta = brevo_mail_api.send_transac_email(send_smtp_email)
+        return resultado(True, message_id=getattr(respuesta, 'message_id', None))
 
     except ApiException as e:
         print(f"❌ Error API Brevo enviando PDF: {e}")
-        return False
+        return resultado(False, f'Brevo {e.status}: {e.reason}')
     except Exception as e:
         print(f"❌ Error enviando correo con PDF: {e}")
-        return False
+        return resultado(False, str(e))
 
 
 # ==========================================
@@ -1377,6 +1478,160 @@ def confirmar_email_generico(token):
             tipo_usuario=tipo_tag,
         )
     return api_message(False, 'Usuario no encontrado.', 404)
+
+
+# ==========================================
+# MESA DE ATENCIÓN (llamadas internas del panel)
+# ==========================================
+
+PANEL_INTERNO_KEY = (os.getenv('PANEL_INTERNO_KEY') or '').strip()
+
+
+def _interno_autorizado() -> bool:
+    """Solo accesos-api (red de Docker) con X-Interno-Key; sin clave configurada no entra nadie."""
+    presentada = (request.headers.get('X-Interno-Key') or '').strip()
+    return bool(PANEL_INTERNO_KEY) and hmac.compare_digest(presentada, PANEL_INTERNO_KEY)
+
+
+def persona_por_clave(tipo_clave, registro_id):
+    """(objeto, etiqueta del QR, nombre del gafete, correo registrado) o None."""
+    if tipo_clave == 'empresas':
+        u = Empresario.query.filter(Empresario.idEmpresario == registro_id).first()
+        if u:
+            nombre = f"{u.Nombre} {u.ApellidoPaterno or ''}".strip()
+            return u, 'EMPRESARIO', nombre, email_o_vacio(u.Correo)
+    elif tipo_clave == 'estudiantes':
+        u = Alumno.query.filter(Alumno.idAlumno == registro_id).first()
+        if u:
+            correos = [c for c in (u.Correo or []) if c]
+            nombre = f"{u.Nombre} {u.ApellidoPaterno or ''}".strip()
+            return u, 'ALUMNO', nombre, email_o_vacio(correos[0] if correos else '')
+    elif tipo_clave == 'elisa':
+        u = eventlisa.query.filter(eventlisa.idEmpresario == registro_id).first()
+        if u:
+            return u, 'ELISA_CARRILLO', (u.Nombre or '').strip(), email_o_vacio(u.Correo)
+    return None
+
+
+@app.route('/api/interno/gafete', methods=['POST'])
+def api_interno_gafete():
+    if not _interno_autorizado():
+        return jsonify(ok=False, error='no_autorizado'), 403
+    datos = request.get_json(silent=True) or {}
+    tipo_clave = str(datos.get('tipo') or '')
+    try:
+        registro_id = int(datos.get('id'))
+    except (TypeError, ValueError):
+        return jsonify(ok=False, error='id_invalido'), 400
+    motivo = datos.get('motivo') if datos.get('motivo') in ('reenvio', 'alta_sitio') else 'reenvio'
+    operador = str(datos.get('operador') or '').strip()[:120] or None
+
+    persona = persona_por_clave(tipo_clave, registro_id)
+    if not persona:
+        return jsonify(ok=False, error='no_encontrado', mensaje='No existe ese registro.'), 404
+    usuario, tag, nombre, correo_registro = persona
+    destino = email_o_vacio(datos.get('correo')) or correo_registro
+    if not destino or not es_correo_valido(destino):
+        return jsonify(ok=False, error='correo_invalido', mensaje='El correo destino no es válido.'), 400
+
+    # Quien no confirmó por correo lo valida el staff en persona; sin esto la
+    # puerta rechaza el QR que le acaba de llegar.
+    if not usuario.confirmado:
+        usuario.confirmado = True
+        usuario.qr_code = generar_bytes_qr(f'{tag}-{registro_id}')
+        db.session.commit()
+
+    r = enviar_gafete_detalle(destino, nombre, registro_id, tag, usuario, motivo=motivo, operador=operador)
+    if not r['ok']:
+        return jsonify(
+            ok=False, error='envio_fallido', mensaje=f"No se pudo enviar: {r['error']}", correo=destino,
+        ), 502
+    return jsonify(ok=True, mensaje=f'Boleto enviado a {destino}.', correo=destino, messageId=r['messageId'])
+
+
+def _fecha_iso(valor):
+    if valor is None:
+        return None
+    return valor.isoformat() if hasattr(valor, 'isoformat') else str(valor)
+
+
+@app.route('/api/interno/correo-eventos')
+def api_interno_correo_eventos():
+    """Entregado / abierto / clic / rebote de todo lo que Brevo mandó a ese correo (90 días)."""
+    if not _interno_autorizado():
+        return jsonify(ok=False, error='no_autorizado'), 403
+    correo = email_o_vacio(request.args.get('correo'))
+    if not correo or not es_correo_valido(correo):
+        return jsonify(ok=False, error='correo_invalido'), 400
+    if not BREVO_API_KEY:
+        return jsonify(ok=False, error='sin_brevo', mensaje='Falta la API key de Brevo en el servidor.'), 503
+    # JSON crudo: el modelo del SDK renombra campos (no expone `date`).
+    try:
+        crudo = brevo_mail_api.get_email_event_report(
+            email=correo, days=90, limit=100, _preload_content=False
+        )
+        reporte = json.loads(crudo.data or b'{}')
+    except ApiException as e:
+        return jsonify(ok=False, error='brevo', mensaje=f'Brevo {e.status}: {e.reason}'), 502
+    except ValueError:
+        return jsonify(ok=False, error='brevo', mensaje='Brevo respondió algo ilegible.'), 502
+    eventos = [
+        {
+            'evento': ev.get('event'),
+            'fecha': _fecha_iso(ev.get('date')),
+            'asunto': ev.get('subject'),
+            'messageId': ev.get('messageId'),
+            'motivo': ev.get('reason'),
+        }
+        for ev in (reporte.get('events') or [])
+    ]
+    return jsonify(ok=True, correo=correo, eventos=eventos)
+
+
+@app.route('/boleto/<token>')
+def descargar_boleto(token):
+    """PDF del gafete desde el botón del correo; cada descarga queda en boleto_descargas.
+
+    Los filtros antispam (Outlook Safe Links, etc.) a veces abren los enlaces
+    solos: por eso se guarda también el User-Agent.
+    """
+    ip = _ip_cliente()
+    if not _scan_rate_ok(f'boleto:{ip}', maximo=20):
+        return api_message(False, 'Demasiadas descargas seguidas; intenta en un minuto.', 429)
+    try:
+        datos = serializer.loads(token, salt='boleto-descarga')
+        tipo_clave, registro_id = str(datos['t']), int(datos['i'])
+    except Exception:
+        return pagina_confirmacion('Este enlace no es válido.', '', tipo_usuario='ALUMNO'), 404
+
+    persona = persona_por_clave(tipo_clave, registro_id)
+    if not persona or not persona[0].confirmado:
+        return pagina_confirmacion(
+            'Este gafete ya no está disponible.',
+            f'<p style="margin:0;color:{HEX_TEXTO_TENUE};">Acércate a la mesa de registro del evento.</p>',
+            tipo_usuario='ALUMNO',
+        ), 404
+    usuario, tag, nombre, _correo = persona
+    bytes_pdf = pdf_gafete_de(usuario, nombre, registro_id, tag)
+    try:
+        with db.engine.begin() as conn:
+            conn.execute(
+                text('INSERT INTO boleto_descargas (tipo, registro_id, ip, agente) VALUES (:t, :i, :ip, :ag)'),
+                {
+                    't': tipo_clave,
+                    'i': registro_id,
+                    'ip': ip[:64],
+                    'ag': (request.headers.get('User-Agent') or '')[:200],
+                },
+            )
+    except Exception as e:
+        print(f'⚠️ No se pudo registrar descarga de gafete: {e}')
+    archivo = re.sub(r'[^A-Za-z0-9_.-]', '', f'Gafete_{tag}_{registro_id}_{nombre.replace(" ", "_")}') + '.pdf'
+    return app.response_class(
+        bytes_pdf,
+        mimetype='application/pdf',
+        headers={'Content-Disposition': f'inline; filename="{archivo}"', 'Cache-Control': 'private, no-store'},
+    )
 
 
 # ==========================================

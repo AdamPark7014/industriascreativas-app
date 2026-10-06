@@ -18,13 +18,9 @@ type Props = {
   className?: string
 }
 
-/** Textos tal como se imprimen (mayúsculas y respaldos): los usan el DOM y el PNG. */
+/** Nombre tal como se imprime (mayúsculas y respaldo): lo usan el DOM y el PNG. */
 export function textoNombre(data: BoletoData): string {
   return (data.nombre || '—').trim().toUpperCase()
-}
-
-export function textoSub(data: BoletoData): string {
-  return (data.subtitulo || '').trim().toUpperCase()
 }
 
 /** Tamaño (mm) del nombre: la misma cuenta en el DOM y en el PNG. */
@@ -43,9 +39,9 @@ export function tamanosBoleto(data: BoletoData): { nombreMm: number } {
 }
 
 /**
- * Cara del boleto QL-800, apaisada 94 × 59 mm (papel térmico negro/rojo):
- * QR a la izquierda; a la derecha nombre, subtítulo y folio. Sin la banda roja
- * del tipo (retirada el 09-09-2026: el tipo ya viaja en el folio).
+ * Cara del boleto QL-800, apaisada 80 × 59 mm (papel térmico negro/rojo):
+ * QR a la izquierda; a la derecha el nombre grande y el folio pequeño al pie.
+ * `subtitulo` sigue llegando del API pero ya no se imprime (05-10-2026).
  * Misma geometría que renderBoletoPngBase64: lo que se ve es lo que sale.
  */
 export default function BoletoFace({ data, className }: Props) {
@@ -62,7 +58,6 @@ export default function BoletoFace({ data, className }: Props) {
   }, [])
 
   const { nombreMm } = useMemo(() => tamanosBoleto(data), [data, fuentesTick])
-  const sub = textoSub(data)
 
   return (
     <article className={className} data-boleto-face>
@@ -74,7 +69,6 @@ export default function BoletoFace({ data, className }: Props) {
         <h1 className="boletoNombre" style={{ fontSize: `${nombreMm}mm` }}>
           {textoNombre(data)}
         </h1>
-        {sub ? <p className="boletoSub">{sub}</p> : null}
         <p className="boletoFolio">{data.folio}</p>
       </div>
     </article>

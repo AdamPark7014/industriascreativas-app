@@ -19,6 +19,8 @@ services:
       PANEL_PROMOTOR_USER: ${PANEL_PROMOTOR_USER:-promotor}
       PANEL_PROMOTOR_PASSWORD: ${PANEL_PROMOTOR_PASSWORD:?Set PANEL_PROMOTOR_PASSWORD}
       PANEL_PROMOTOR_NOMBRE: ${PANEL_PROMOTOR_NOMBRE:-Promotor}
+      # Mesa de atención: "registro1:clave,...,impresion5:clave,controladm:clave" (ver seed.py).
+      PANEL_EQUIPO_CLAVES: ${PANEL_EQUIPO_CLAVES:-}
       PANEL_COOKIE_SECURE: "1"
     expose:
       - "5000"
@@ -41,6 +43,9 @@ services:
       PANEL_SECRET_KEY: ${PANEL_SECRET_KEY:?Set PANEL_SECRET_KEY}
       SCAN_API_KEY: ${SCAN_API_KEY:?Set SCAN_API_KEY}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://demo.experiencebt.com.mx}
+      # Reenvío de boletos: llama a eventos_demo_web con X-Interno-Key (mismo valor en backend/.env).
+      PANEL_INTERNO_KEY: ${PANEL_INTERNO_KEY:-}
+      REGISTRO_INTERNO_URL: ${REGISTRO_INTERNO_URL:-http://eventos_demo_web:5000}
       PORT: "3080"
       PG_POOL_MAX: "12"
     expose:

@@ -1,15 +1,18 @@
 import { serve } from '@hono/node-server'
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { getCookie } from 'hono/cookie'
 import { compress } from 'hono/compress'
 import ExcelJS from 'exceljs'
 import {
+  ROLES,
   TIPOS,
   ZONA_DEFECTO,
   folioDe,
   nombreDe,
+  puede,
   sesionJson,
   tiposDe,
+  type Permiso,
   type TipoClave,
 } from './catalog.js'
 import { ensureIndexes, pool, query, queryOne, withClient } from './db.js'
@@ -18,6 +21,17 @@ import { boletoPayload, boletoPdf } from './gafete.js'
 import { CODIGOS } from './codes.js'
 import { clientIp, origenConfiable, rateOk, safeEq } from './security.js'
 import { buscarExacto, buscarTexto, procesarEscaneo } from './scan.js'
+import {
+  confirmarPersona,
+  correoValido,
+  crearAltaSitio,
+  enviarBoleto,
+  esAltaDe,
+  eventosCorreo,
+  fichaPersona,
+  filaPersona,
+  correoPrincipal,
+} from './personas.js'
 
 const PORT = Number(process.env.PORT || 3080)
 const PANEL_SECRET = process.env.PANEL_SECRET_KEY || ''
@@ -182,6 +196,46 @@ async function conteoImpresion(tipo: string, id: number): Promise<ConteoImpresio
 
 // ===================== PANEL /api/accesos/* =====================
 const panel = new Hono<{ Variables: Vars }>()
+type Ctx = Context<{ Variables: Vars }>
+
+/**
+ * Quién entra a cada ruta (ROLES en catalog.ts). Lista vacía = cualquier sesión.
+ * Lo que no aparece aquí se niega: una ruta nueva sin regla no queda abierta.
+ */
+const REGLAS: [metodo: string, ruta: RegExp, permisos: Permiso[]][] = [
+  ['GET', /^\/sesion$/, []],
+  ['GET', /^\/zonas$/, []],
+  ['GET', /^\/resumen$/, ['informes', 'mesa', 'escanear']],
+  ['GET', /^\/buscar$/, ['buscar']],
+  ['POST', /^\/zonas$/, ['zonas_editar']],
+  ['*', /^\/bloqueos$/, ['escanear']],
+  ['GET', /^\/metricas$/, ['metricas']],
+  ['POST', /^\/escanear$/, ['escanear']],
+  ['PATCH', /^\/escaneos\/\d+\/latencia$/, ['escanear']],
+  ['GET', /^\/gafete\//, ['imprimir']],
+  ['POST', /^\/gafete\//, ['imprimir']],
+  ['DELETE', /^\/gafete\//, ['desmarcar']],
+  ['GET', /^\/impresiones$/, ['mesa']],
+  ['GET', /^\/reportes$/, ['informes']],
+  ['POST', /^\/registro$/, ['registrar']],
+  ['GET', /^\/mis-altas$/, ['registrar']],
+  // La mesa de registro abre solo las fichas de sus altas (se revisa en la ruta).
+  ['GET', /^\/persona\/\w+\/\d+$/, ['buscar', 'registrar']],
+  ['GET', /^\/persona\/\w+\/\d+\/correo-eventos$/, ['buscar']],
+  ['POST', /^\/persona\/\w+\/\d+\/reenviar$/, ['reenviar']],
+  ['POST', /^\/persona\/\w+\/\d+\/confirmar$/, ['buscar']],
+  ['GET', /^\/mesa$/, ['mesa']],
+  ['GET', /^\/equipo$/, ['equipo']],
+]
+
+function permitido(rol: string, metodo: string, ruta: string): boolean {
+  for (const [m, re, permisos] of REGLAS) {
+    if ((m === '*' || m === metodo) && re.test(ruta)) {
+      return permisos.length === 0 || permisos.some((p) => puede(rol, p))
+    }
+  }
+  return false
+}
 
 panel.use('*', async (c, next) => {
   const cookie = getCookie(c, 'panel_session')
@@ -205,6 +259,11 @@ panel.use('*', async (c, next) => {
   c.set('nombre', String(sess.nombre || sess.usuario))
   c.set('alcance', String(sess.alcance || 'promotor'))
   c.header('Cache-Control', 'no-store')
+  const ruta = c.req.path.replace(/^\/api\/accesos/, '') || '/'
+  const metodo = c.req.method === 'HEAD' ? 'GET' : c.req.method
+  if (!permitido(c.get('alcance'), metodo, ruta)) {
+    return c.json({ ok: false, error: 'sin_permiso', codigo: CODIGOS.SOLO_INTERNO }, 403)
+  }
   await next()
 })
 
@@ -547,9 +606,8 @@ panel.patch('/escaneos/:id/latencia', async (c) => {
 type GafeteOk = { nombre: string; folio: string; tipo: string; subtitulo: string }
 type GafeteErr = { error: string; status: 403 | 404 }
 
-/** Alcance interno + tipo permitido para la sesión (sin tocar la BD). null si todo bien. */
+/** Tipo permitido para la sesión (el permiso lo revisa REGLAS). null si todo bien. */
 function accesoGafete(c: { get: (k: keyof Vars) => string }, tipo: string): GafeteErr | null {
-  if (c.get('alcance') !== 'interno') return { error: 'solo_interno', status: 403 }
   const okTipos = tiposDe(c.get('alcance'))
   if (!okTipos.includes(tipo as TipoClave)) {
     return { error: 'sin_acceso', status: 403 }
@@ -564,6 +622,10 @@ async function gafeteFila(
 ): Promise<GafeteOk | GafeteErr> {
   const acceso = accesoGafete(c, tipo)
   if (acceso) return acceso
+  // Sin permiso de búsqueda (mesa de registro) solo se imprime a quien ella dio de alta.
+  if (!puede(c.get('alcance'), 'buscar') && !(await esAltaDe(tipo as TipoClave, id, c.get('usuario')))) {
+    return { error: 'solo_altas_propias', status: 403 }
+  }
   const t = TIPOS[tipo as TipoClave]
   const fila = await queryOne(`SELECT * FROM "${t.tabla}" WHERE "${t.id}" = $1`, [id])
   if (!fila) return { error: 'no_encontrado', status: 404 }
@@ -751,9 +813,6 @@ panel.delete('/gafete/:tipo/:id/impresiones', async (c) => {
 })
 
 panel.get('/impresiones', async (c) => {
-  if (c.get('alcance') !== 'interno') {
-    return c.json({ ok: false, error: 'solo_interno', codigo: CODIGOS.SOLO_INTERNO }, 403)
-  }
   let q = (c.req.query('q') || '').trim()
   if (q.length > 120) return c.json({ ok: false, error: 'q_larga' }, 400)
   q = q.replace(/%/g, '').replace(/_/g, '')
@@ -1010,6 +1069,255 @@ panel.get('/reportes', async (c) => {
     zonas: zonasOpts,
     dispositivos: devices.map((d) => d.dispositivo).filter(Boolean),
     puedeOperar: c.get('alcance') === 'interno',
+  })
+})
+
+// ===================== Mesa de atención (registro en sitio, ficha, reenvío) =====================
+
+const DESDE_HOY = `date_trunc('day', NOW() AT TIME ZONE 'America/Mexico_City') AT TIME ZONE 'America/Mexico_City'`
+
+type PersonaRef = { tipo: TipoClave; id: number }
+type PersonaErr = { error: string; status: 400 | 403 | 404 }
+
+/** :tipo/:id válidos y dentro del alcance; la mesa de registro solo ve sus altas. */
+async function personaDe(c: Ctx): Promise<PersonaRef | PersonaErr> {
+  const tipo = String(c.req.param('tipo') || '') as TipoClave
+  const id = parseEnteroId(c.req.param('id'))
+  if (id == null) return { error: 'id', status: 400 }
+  if (!tiposDe(c.get('alcance')).includes(tipo)) return { error: 'sin_acceso', status: 403 }
+  if (!puede(c.get('alcance'), 'buscar') && !(await esAltaDe(tipo, id, c.get('usuario')))) {
+    return { error: 'solo_altas_propias', status: 403 }
+  }
+  return { tipo, id }
+}
+
+panel.post('/registro', async (c) => {
+  const raw = await c.req.json().catch(() => null)
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return c.json({ ok: false, error: 'datos', mensaje: 'Formulario vacío.' }, 400)
+  }
+  const datos = raw as Record<string, unknown>
+  const r = await crearAltaSitio(datos, c.get('usuario'), sanitizeDevice(datos.dispositivo) || null)
+  if (!r.ok) return c.json(r, r.error === 'ya_registrado' ? 409 : 400)
+  const envio =
+    datos.enviarCorreo === true
+      ? await enviarBoleto({ tipo: r.tipo, id: r.id, motivo: 'alta_sitio', operador: c.get('usuario') })
+      : null
+  resumenCache.clear()
+  return c.json({ ...r, envio })
+})
+
+/** Últimas altas del operador: la mesa de registro no busca, pero sí reimprime lo suyo. */
+panel.get('/mis-altas', async (c) => {
+  const tipos = tiposDe(c.get('alcance'))
+  const nombres = tipos
+    .map(
+      (k) =>
+        `SELECT '${k}'::text AS tipo, "${TIPOS[k].id}"::int AS registro_id, ${TIPOS[k].nombreSql} AS nombre
+         FROM "${TIPOS[k].tabla}"`,
+    )
+    .join(' UNION ALL ')
+  const rows = await query<{ tipo: string; registro_id: number; creado: Date; nombre: string; impresiones: number }>(
+    `SELECT a.tipo, a.registro_id, a.creado, COALESCE(n.nombre,'') AS nombre,
+            (SELECT COUNT(*)::int FROM accesos_impresiones i
+             WHERE i.tipo = a.tipo AND i.registro_id = a.registro_id) AS impresiones
+     FROM accesos_altas_sitio a
+     LEFT JOIN (${nombres}) n ON n.tipo = a.tipo AND n.registro_id = a.registro_id
+     WHERE a.operador = $1 AND a.tipo = ANY($2::text[])
+     ORDER BY a.creado DESC LIMIT 30`,
+    [c.get('usuario'), tipos],
+  )
+  return c.json({
+    ok: true,
+    altas: rows.map((r) => ({
+      tipo: r.tipo,
+      id: Number(r.registro_id),
+      folio: folioDe(r.tipo as TipoClave, Number(r.registro_id)),
+      nombre: String(r.nombre || '').trim(),
+      creado: isoDe(r.creado),
+      impresiones: Number(r.impresiones || 0),
+    })),
+  })
+})
+
+panel.get('/persona/:tipo/:id', async (c) => {
+  const p = await personaDe(c)
+  if ('error' in p) return c.json({ ok: false, error: p.error }, p.status)
+  const ficha = await fichaPersona(p.tipo, p.id)
+  if (!ficha) return c.json({ ok: false, error: 'no_encontrado' }, 404)
+  const rol = c.get('alcance')
+  return c.json({
+    ...ficha,
+    puede: {
+      reenviar: puede(rol, 'reenviar'),
+      imprimir: puede(rol, 'imprimir'),
+      desmarcar: puede(rol, 'desmarcar'),
+      confirmar: puede(rol, 'buscar'),
+    },
+  })
+})
+
+panel.post('/persona/:tipo/:id/reenviar', async (c) => {
+  const p = await personaDe(c)
+  if ('error' in p) return c.json({ ok: false, error: p.error }, p.status)
+  if (!rateOk(`reenvio:${c.get('usuario')}`, 30, 60_000)) {
+    return c.json({ ok: false, error: 'rate_limit', mensaje: 'Demasiados reenvíos seguidos; espera un minuto.' }, 429)
+  }
+  const raw = await c.req.json().catch(() => ({}))
+  const otro = String((raw as { correo?: unknown })?.correo ?? '')
+    .trim()
+    .toLowerCase()
+  if (otro && !correoValido(otro)) {
+    return c.json({ ok: false, error: 'correo', mensaje: 'El correo alterno no es válido.' }, 400)
+  }
+  const fila = await filaPersona(p.tipo, p.id)
+  if (!fila) return c.json({ ok: false, error: 'no_encontrado' }, 404)
+  const destino = otro || correoPrincipal(fila)
+  if (!correoValido(destino)) {
+    return c.json({ ok: false, error: 'sin_correo', mensaje: 'La persona no tiene un correo válido; usa otro correo.' }, 400)
+  }
+  const r = await enviarBoleto({ tipo: p.tipo, id: p.id, correo: destino, motivo: 'reenvio', operador: c.get('usuario') })
+  return c.json({ ...r, correo: destino }, r.ok ? 200 : 502)
+})
+
+panel.post('/persona/:tipo/:id/confirmar', async (c) => {
+  const p = await personaDe(c)
+  if ('error' in p) return c.json({ ok: false, error: p.error }, p.status)
+  const ok = await confirmarPersona(p.tipo, p.id)
+  if (!ok) return c.json({ ok: false, error: 'no_encontrado' }, 404)
+  resumenCache.clear()
+  return c.json({ ok: true, confirmado: true })
+})
+
+panel.get('/persona/:tipo/:id/correo-eventos', async (c) => {
+  const p = await personaDe(c)
+  if ('error' in p) return c.json({ ok: false, error: p.error }, p.status)
+  const fila = await filaPersona(p.tipo, p.id)
+  if (!fila) return c.json({ ok: false, error: 'no_encontrado' }, 404)
+  // El correo registrado y los alternos a los que se reenvió (máx. 3 consultas a Brevo).
+  const alternos = await query<{ correo: string }>(
+    `SELECT DISTINCT LOWER(correo) AS correo FROM correo_envios
+     WHERE tipo = $1 AND registro_id = $2 AND ok`,
+    [p.tipo, p.id],
+  ).catch(() => [])
+  const correos = [...new Set([correoPrincipal(fila).toLowerCase(), ...alternos.map((a) => a.correo)])]
+    .filter(correoValido)
+    .slice(0, 3)
+  const respuestas = await Promise.all(correos.map((correo) => eventosCorreo(correo)))
+  const fallo = respuestas.find((r) => !r.ok)
+  const eventos = respuestas.flatMap((r, i) =>
+    Array.isArray(r.eventos) ? (r.eventos as Record<string, unknown>[]).map((e) => ({ ...e, correo: correos[i] })) : [],
+  )
+  return c.json({
+    ok: !fallo || eventos.length > 0,
+    error: fallo?.error ?? null,
+    mensaje: fallo?.mensaje ?? null,
+    correos,
+    eventos,
+  })
+})
+
+panel.get('/mesa', async (c) => {
+  const tipos = tiposDe(c.get('alcance'))
+  const nombres = tipos
+    .map(
+      (k) =>
+        `SELECT '${k}'::text AS tipo, "${TIPOS[k].id}"::int AS registro_id, ${TIPOS[k].nombreSql} AS nombre
+         FROM "${TIPOS[k].tabla}"`,
+    )
+    .join(' UNION ALL ')
+  const [altas, impresiones, envios, recientes, totalAltas, usuarios] = await Promise.all([
+    query<{ operador: string; n: number }>(
+      `SELECT operador, COUNT(*)::int AS n FROM accesos_altas_sitio
+       WHERE creado >= ${DESDE_HOY} GROUP BY 1`,
+    ),
+    query<{ operador: string; n: number }>(
+      `SELECT COALESCE(operador,'') AS operador, COUNT(*)::int AS n FROM accesos_impresiones
+       WHERE creado >= ${DESDE_HOY} GROUP BY 1`,
+    ),
+    query<{ operador: string; n: number; fallos: number }>(
+      `SELECT COALESCE(operador,'') AS operador,
+              COUNT(*) FILTER (WHERE ok)::int AS n,
+              COUNT(*) FILTER (WHERE NOT ok)::int AS fallos
+       FROM correo_envios
+       WHERE creado >= ${DESDE_HOY} AND motivo IN ('reenvio','alta_sitio') GROUP BY 1`,
+    ),
+    query<{ accion: string; tipo: string; registro_id: number; operador: string; creado: Date; detalle: string; nombre: string }>(
+      `SELECT a.*, COALESCE(n.nombre,'') AS nombre FROM (
+         (SELECT 'alta' AS accion, tipo, registro_id, operador, creado, '' AS detalle
+          FROM accesos_altas_sitio ORDER BY creado DESC LIMIT 40)
+         UNION ALL
+         (SELECT 'impresion', tipo, registro_id, COALESCE(operador,''), creado, via
+          FROM accesos_impresiones ORDER BY creado DESC LIMIT 40)
+         UNION ALL
+         (SELECT CASE WHEN ok THEN 'reenvio' ELSE 'reenvio_fallido' END, tipo, registro_id,
+                 COALESCE(operador,''), creado, correo
+          FROM correo_envios WHERE motivo IN ('reenvio','alta_sitio') ORDER BY creado DESC LIMIT 40)
+       ) a
+       LEFT JOIN (${nombres}) n ON n.tipo = a.tipo AND n.registro_id = a.registro_id
+       WHERE a.tipo = ANY($1::text[])
+       ORDER BY a.creado DESC LIMIT 60`,
+      [tipos],
+    ),
+    queryOne<{ n: number }>(`SELECT COUNT(*)::int AS n FROM accesos_altas_sitio`),
+    query<{ usuario: string; nombre: string }>(`SELECT usuario, nombre FROM panel_usuarios`),
+  ])
+
+  const nombreOp = new Map(usuarios.map((u) => [u.usuario, u.nombre]))
+  const porOperador = new Map<string, { operador: string; nombre: string; altas: number; impresiones: number; reenvios: number; fallos: number }>()
+  const fila = (op: string) => {
+    let f = porOperador.get(op)
+    if (!f) {
+      f = { operador: op, nombre: nombreOp.get(op) ?? op, altas: 0, impresiones: 0, reenvios: 0, fallos: 0 }
+      porOperador.set(op, f)
+    }
+    return f
+  }
+  for (const r of altas) fila(r.operador).altas = r.n
+  for (const r of impresiones) fila(r.operador).impresiones = r.n
+  for (const r of envios) {
+    fila(r.operador).reenvios = r.n
+    fila(r.operador).fallos = r.fallos
+  }
+  const operadores = [...porOperador.values()].sort(
+    (a, b) => b.altas + b.impresiones + b.reenvios - (a.altas + a.impresiones + a.reenvios),
+  )
+  const suma = (k: 'altas' | 'impresiones' | 'reenvios' | 'fallos') => operadores.reduce((s, o) => s + o[k], 0)
+
+  return c.json({
+    ok: true,
+    hoy: { altas: suma('altas'), impresiones: suma('impresiones'), reenvios: suma('reenvios'), fallos: suma('fallos') },
+    altasTotales: totalAltas?.n ?? 0,
+    operadores,
+    recientes: recientes.map((r) => ({
+      accion: r.accion,
+      tipo: r.tipo,
+      registroId: Number(r.registro_id),
+      folio: TIPOS[r.tipo as TipoClave] ? folioDe(r.tipo as TipoClave, Number(r.registro_id)) : String(r.registro_id),
+      nombre: String(r.nombre || '').trim(),
+      operador: r.operador,
+      operadorNombre: nombreOp.get(r.operador) ?? r.operador,
+      detalle: r.detalle,
+      creado: isoDe(r.creado),
+    })),
+  })
+})
+
+panel.get('/equipo', async (c) => {
+  const rows = await query<{ usuario: string; nombre: string; alcance: string; activo: boolean; ultimo_acceso: Date | null }>(
+    `SELECT usuario, nombre, alcance, activo, ultimo_acceso FROM panel_usuarios
+     ORDER BY activo DESC, alcance, usuario`,
+  )
+  return c.json({
+    ok: true,
+    usuarios: rows.map((r) => ({
+      usuario: r.usuario,
+      nombre: r.nombre,
+      rol: r.alcance,
+      rolNombre: ROLES[r.alcance]?.nombre ?? r.alcance,
+      activo: r.activo,
+      ultimoAcceso: isoDe(r.ultimo_acceso),
+    })),
   })
 })
 

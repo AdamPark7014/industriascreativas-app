@@ -33,6 +33,8 @@ services:
       # por https desde este mismo Flask; en data URI Gmail los descarta).
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://demo.experiencebt.com.mx}
       SCAN_API_KEY: ${SCAN_API_KEY:?Set SCAN_API_KEY}
+      # Reenvío de boletos desde el panel (accesos_api la manda en X-Interno-Key).
+      PANEL_INTERNO_KEY: ${PANEL_INTERNO_KEY:-}
     depends_on:
       db:
         condition: service_healthy

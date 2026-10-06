@@ -110,6 +110,11 @@ Cada impresión real queda en la BD (`accesos_impresiones`, API en
 
 ### Diseño del boleto (apaisado 94 × 59, papel térmico negro/rojo, WYSIWYG)
 
+> **2026-10-05:** la etiqueta pasó a **80 × 59 mm** (cabe en los 8 cm útiles):
+> QR 38 mm + nombre grande (9 → 3.2 mm, hasta 4 líneas) + folio 2.8 mm. Sin
+> banda de tipo ni subtítulo. PNG **945 × 697 px**. Lo de abajo describe la
+> versión anterior; las medidas vigentes están en `GEO` (`boletoLayout.ts`).
+
 Desde 2026-09-09 el boleto es **apaisado: 94 × 59 mm**, QR a un lado y texto
 al otro, sin marca ni adornos. `BoletoFace.tsx` + `boleto-face.css` (preview
 y camino Chrome) y `boletoRender.ts` (PNG para el agente) comparten la
@@ -150,6 +155,37 @@ y camino Chrome) y `boletoRender.ts` (PNG para el agente) comparten la
   middleware `configureServer` que reciba el base64 por POST y lo guarde.
 
 Detalle del agente: `EXPERIENCEBT-app/docs/IMPRESORA-QL800.md`.
+
+## Roles y mesa de atención (2026-10-05)
+
+Permisos por rol en `panel/accesos-api/src/catalog.ts` (`ROLES`); el API niega
+cualquier ruta que no esté en `REGLAS` (`index.ts`). Nombres e inicio de cada
+rol en el panel Flask: `panel/consultas.py` (`ROLES`).
+
+| Usuario(s) | Rol | Puede |
+|---|---|---|
+| `admin` | interno (NEXARA · Operación) | todo, incluido escáner, zonas, métricas y equipo |
+| `promotor` | promotor | panel de datos + registrar, buscar, reenviar, imprimir, informes, actividad |
+| `controladm` | control | registrar, buscar, reenviar, imprimir, desmarcar, informes, actividad |
+| `impresion1`–`5` | impresion | buscar (nombre/correo/teléfono/folio), ficha, reenviar, imprimir |
+| `registro1`–`5` | registro | alta en sitio + imprimir; reimprime solo sus altas (`/mis-altas`) |
+
+- **Registro en sitio** (`/accesos/registro`, `POST /api/accesos/registro`):
+  mismos datos que el formulario público, queda `confirmado` al momento y abre
+  la impresión; el correo es opcional (casilla apagada). Cada alta queda en
+  `accesos_altas_sitio`.
+- **Ficha** (`GET /api/accesos/persona/:tipo/:id`): datos, accesos, impresiones,
+  correos enviados (`correo_envios`), descargas del PDF (`boleto_descargas`) y
+  eventos de Brevo (`/correo-eventos`, últimos 90 días).
+- **Reenvío**: accesos_api llama a `eventos_demo_web` →
+  `POST /api/interno/gafete` con `X-Interno-Key`. El correo trae el PDF adjunto
+  y un botón a `/boleto/<token>` que registra cada descarga.
+- Tablas nuevas: `panel/migraciones/006_mesa_atencion.sql` (las crean también
+  `ensureIndexes` y `ensure_schema()` al arrancar).
+- Variables (solo en el servidor): `PANEL_EQUIPO_CLAVES`
+  (`usuario:clave,...`, en `panel/.env`; quien no tenga clave queda
+  desactivado) y `PANEL_INTERNO_KEY` (mismo valor en `.env` raíz y
+  `panel/.env`).
 
 ## Seguridad
 - Panel: sesión + Origin/Referer + rate limit

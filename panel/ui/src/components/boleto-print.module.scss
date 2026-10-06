@@ -81,11 +81,11 @@
   max-height: calc(100vh - 200px);
 }
 
-/* Escenario: reserva el tamaño ya escalado (94 × 59 mm × escala) para que el
+/* Escenario: reserva el tamaño ya escalado (80 × 59 mm × escala) para que el
    boleto, agrandado con transform, no se recorte ni desborde el contenedor. */
 .escenario {
   flex: none;
-  width: calc(94mm * var(--boleto-escala));
+  width: calc(80mm * var(--boleto-escala));
   height: calc(59mm * var(--boleto-escala));
 
   [data-boleto-face] {

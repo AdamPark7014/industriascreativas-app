@@ -65,7 +65,31 @@ def _configurados() -> list:
             "alcance": "promotor",
         },
     ]
+    definidos += _equipo_mesa()
     return [u for u in definidos if u["usuario"] and u["clave"]]
+
+
+# Equipo de la mesa de atención del evento. Nombres y roles van en código; las
+# claves solo en el .env del servidor:
+#   PANEL_EQUIPO_CLAVES="registro1:xxxx,registro2:xxxx,...,controladm:xxxx"
+# Quien no tenga clave en esa lista no se crea (y si existía, queda desactivado).
+EQUIPO_MESA = (
+    [(f"registro{n}", f"Registro {n}", "registro") for n in range(1, 6)]
+    + [(f"impresion{n}", f"Impresión {n}", "impresion") for n in range(1, 6)]
+    + [("controladm", "Control ADM", "control")]
+)
+
+
+def _equipo_mesa() -> list:
+    claves = {}
+    for par in os.getenv("PANEL_EQUIPO_CLAVES", "").split(","):
+        usuario, _, clave = par.strip().partition(":")
+        if usuario and clave:
+            claves[usuario.strip().lower()] = clave.strip()
+    return [
+        {"usuario": usuario, "clave": claves.get(usuario, ""), "nombre": nombre, "alcance": alcance}
+        for usuario, nombre, alcance in EQUIPO_MESA
+    ]
 
 
 def _sql_statements(sql: str) -> list[str]:

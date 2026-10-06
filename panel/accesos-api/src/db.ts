@@ -124,6 +124,66 @@ export async function ensureIndexes(): Promise<void> {
     'impresiones_creado',
   )
 
+  // Mesa de atención. Espejo: migraciones/006_mesa_atencion.sql (y backend/app.py
+  // crea correo_envios / boleto_descargas por su cuenta: escribe en ellas).
+  await trySql(
+    `CREATE TABLE IF NOT EXISTS accesos_altas_sitio (
+      id SERIAL PRIMARY KEY,
+      tipo VARCHAR(20) NOT NULL,
+      registro_id INTEGER NOT NULL,
+      operador VARCHAR(120) NOT NULL,
+      dispositivo VARCHAR(120),
+      creado TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (tipo, registro_id)
+    )`,
+    'altas_sitio',
+  )
+  await trySql(
+    `CREATE INDEX IF NOT EXISTS accesos_altas_sitio_operador_idx
+      ON accesos_altas_sitio (operador, creado DESC)`,
+    'altas_sitio_operador',
+  )
+  await trySql(
+    `CREATE TABLE IF NOT EXISTS correo_envios (
+      id SERIAL PRIMARY KEY,
+      tipo VARCHAR(20) NOT NULL,
+      registro_id INTEGER NOT NULL,
+      correo VARCHAR(200) NOT NULL,
+      motivo VARCHAR(20) NOT NULL,
+      operador VARCHAR(120),
+      ok BOOLEAN NOT NULL,
+      error VARCHAR(300),
+      message_id VARCHAR(200),
+      creado TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    'correo_envios',
+  )
+  await trySql(
+    `CREATE INDEX IF NOT EXISTS correo_envios_reg_idx
+      ON correo_envios (tipo, registro_id, creado DESC)`,
+    'correo_envios_reg',
+  )
+  await trySql(
+    `CREATE INDEX IF NOT EXISTS correo_envios_creado_idx ON correo_envios (creado DESC)`,
+    'correo_envios_creado',
+  )
+  await trySql(
+    `CREATE TABLE IF NOT EXISTS boleto_descargas (
+      id SERIAL PRIMARY KEY,
+      tipo VARCHAR(20) NOT NULL,
+      registro_id INTEGER NOT NULL,
+      ip VARCHAR(64),
+      agente VARCHAR(200),
+      creado TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    'boleto_descargas',
+  )
+  await trySql(
+    `CREATE INDEX IF NOT EXISTS boleto_descargas_reg_idx
+      ON boleto_descargas (tipo, registro_id, creado DESC)`,
+    'boleto_descargas_reg',
+  )
+
   await trySql(
     `CREATE INDEX IF NOT EXISTS accesos_escaneos_zona_creado_idx
       ON accesos_escaneos (zona_clave, creado DESC)`,

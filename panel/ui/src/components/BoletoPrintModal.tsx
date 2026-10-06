@@ -5,7 +5,7 @@ import { horaCorta } from '../api'
 import { GEO } from '../lib/boletoLayout'
 import { PRINT_BRIDGE_CHROME_HINT, describeColorMode, type PrintColorMode } from '../lib/printAgent'
 
-/** px CSS por mm (96 dpi): el boleto de 94 mm mide ≈355 px sin escalar. */
+/** px CSS por mm (96 dpi): el boleto de 80 mm mide ≈302 px sin escalar. */
 const PX_POR_MM = 96 / 25.4
 /** Escala del preview: entre 0.6× (móvil) y 1.8× (escritorio), según el ancho libre. */
 const ESCALA_MIN = 0.6
@@ -27,6 +27,8 @@ type Props = {
   impresiones?: number
   ultimaImpresion?: string | null
   unmarking?: boolean
+  /** Texto del botón que cierra el modal (depende de la pantalla que lo abre). */
+  textoCerrar?: string
   onClose: () => void
   /** Primario: PNG → agente local (Brother QL-800). */
   onPrintQl: () => void
@@ -52,6 +54,7 @@ export default function BoletoPrintModal({
   impresiones = 0,
   ultimaImpresion,
   unmarking,
+  textoCerrar = 'Seguir buscando',
   onClose,
   onPrintQl,
   onPrintChrome,
@@ -115,7 +118,8 @@ export default function BoletoPrintModal({
             <p className={styles.kicker}>Vista previa del boleto</p>
             <h2 id={tituloId}>¿Se ve bien para imprimir?</h2>
             <p className={styles.ayuda}>
-              Sale tal cual se ve, apaisado sobre el rollo de 62 mm negro/rojo de la Brother QL-800.
+              Sale tal cual se ve: {GEO.w / 10} cm de largo, apaisado sobre el rollo de 62 mm
+              negro/rojo de la Brother QL-800.
             </p>
           </div>
           <button type="button" className={styles.cerrar} onClick={onClose} aria-label="Cerrar">
@@ -178,7 +182,7 @@ export default function BoletoPrintModal({
                     className={styles.primarioGrande}
                     disabled={busy || (bridgeProbing && bridgeReady == null)}
                     onClick={onPrintQl}
-                    title="Ctrl+Enter · PNG 94×59 apaisado → agente local 127.0.0.1:9631 (lo gira él)"
+                    title={`Ctrl+Enter · PNG ${GEO.w}×${GEO.h} apaisado → agente local 127.0.0.1:9631 (lo gira él)`}
                   >
                     {busy ? 'Imprimiendo…' : 'Imprimir boleto'}
                   </button>
@@ -217,7 +221,7 @@ export default function BoletoPrintModal({
               </details>
 
               <button type="button" className={styles.fantasma} onClick={onClose}>
-                Seguir buscando
+                {textoCerrar}
               </button>
             </div>
           </aside>

@@ -1,9 +1,32 @@
+/** Mismos nombres que accesos-api/src/catalog.ts → Permiso. */
+export type Permiso =
+  | 'panel_datos'
+  | 'elisa'
+  | 'escanear'
+  | 'zonas_editar'
+  | 'metricas'
+  | 'registrar'
+  | 'buscar'
+  | 'reenviar'
+  | 'imprimir'
+  | 'desmarcar'
+  | 'informes'
+  | 'mesa'
+  | 'equipo'
+
 export type Sesion = {
   usuario: string
   nombre: string
-  alcance: 'interno' | 'promotor' | string
+  alcance: 'interno' | 'promotor' | 'control' | 'impresion' | 'registro' | string
+  /** Nombre visible del rol ("Mesa de impresión"). */
+  rolNombre: string
+  permisos: Permiso[]
   puedeOperar: boolean
   puedeImprimir: boolean
+}
+
+export function tiene(sesion: Sesion | null | undefined, permiso: Permiso): boolean {
+  return Boolean(sesion?.permisos?.includes(permiso))
 }
 
 export type Zona = {
@@ -361,3 +384,219 @@ export async function abrirPdfGafete(tipo: string, id: number): Promise<void> {
 
 /** @deprecated Usar cargarBoleto + preview React; se mantiene alias. */
 export const imprimirGafete = abrirPdfGafete
+
+// ===================== Mesa de atención =====================
+
+/** Como req, pero los 4xx/5xx con `{ ok:false, mensaje }` se devuelven en vez de lanzar. */
+async function reqCuerpo<T extends { ok: boolean }>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, {
+    credentials: 'same-origin',
+    ...init,
+    headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
+  })
+  if (res.status === 401) {
+    window.location.href = `/login?next=${encodeURIComponent('/accesos')}`
+    throw new Error('sesion')
+  }
+  const body = (await res.json().catch(() => null)) as T | null
+  if (body && typeof body === 'object' && 'ok' in body) return body
+  throw new Error(`HTTP ${res.status}`)
+}
+
+export type TipoAlta = 'empresas' | 'estudiantes'
+
+export type AltaDatos = {
+  tipo: TipoAlta
+  correo: string
+  nombre: string
+  apellidoPaterno: string
+  edad: string
+  lada: string
+  telefono: string
+  areaInteresGeneral: string
+  empresa?: string
+  ciudad?: string
+  estado?: string
+  posicionEmpresa?: string
+  areaResponsabilidad?: string
+  productosInteres?: string[]
+  pais?: string
+  tipoInstitucion?: string
+  carrera?: string
+  competencias?: string[]
+  /** Casilla "enviar también por correo" (apagada por defecto). */
+  enviarCorreo: boolean
+  dispositivo?: string
+}
+
+/** Resultado de mandar el boleto digital por Brevo. */
+export type EnvioCorreo = {
+  ok: boolean
+  error?: string | null
+  mensaje?: string | null
+  correo?: string
+  messageId?: string | null
+}
+
+export type PersonaExistente = { tipo: string; id: number; folio: string; nombre: string; confirmado: boolean }
+
+export type AltaResp =
+  | { ok: true; tipo: TipoAlta; id: number; folio: string; nombre: string; correo: string; envio: EnvioCorreo | null }
+  | { ok: false; error: string; mensaje: string; existente?: PersonaExistente }
+
+export type Ficha = {
+  ok: true
+  tipo: string
+  tipoEtiqueta: string
+  id: number
+  folio: string
+  nombre: string
+  correo: string
+  telefono: string
+  confirmado: boolean
+  asistencias: number
+  dentro: boolean
+  campos: { clave: string; etiqueta: string; valor: string }[]
+  alta: { operador: string; creado: string | null } | null
+  escaneos: {
+    entradas: number
+    salidas: number
+    rechazos: number
+    primeraEntrada: string | null
+    ultimo: string | null
+    lista: {
+      id: number
+      creado: string | null
+      modo: string
+      ok: boolean
+      mensaje: string | null
+      zona_clave: string | null
+      operador: string | null
+      dispositivo: string | null
+    }[]
+  }
+  impresiones: {
+    total: number
+    ultima: string | null
+    lista: {
+      id: number
+      creado: string | null
+      via: string
+      impresora: string | null
+      operador: string | null
+      dispositivo: string | null
+    }[]
+  }
+  correos: {
+    total: number
+    lista: {
+      id: number
+      creado: string | null
+      correo: string
+      motivo: string
+      operador: string | null
+      ok: boolean
+      error: string | null
+    }[]
+  }
+  descargas: { total: number; ultima: string | null }
+  puede: { reenviar: boolean; imprimir: boolean; desmarcar: boolean; confirmar: boolean }
+}
+
+export type EventoCorreo = {
+  evento: string
+  fecha: string | null
+  asunto: string | null
+  messageId: string | null
+  motivo: string | null
+  correo: string
+}
+
+export type EventosCorreoResp = {
+  ok: boolean
+  error?: string | null
+  mensaje?: string | null
+  correos: string[]
+  eventos: EventoCorreo[]
+}
+
+export type AccionMesa = {
+  accion: 'alta' | 'impresion' | 'reenvio' | 'reenvio_fallido' | string
+  tipo: string
+  registroId: number
+  folio: string
+  nombre: string
+  operador: string
+  operadorNombre: string
+  detalle: string
+  creado: string | null
+}
+
+export type OperadorMesa = {
+  operador: string
+  nombre: string
+  altas: number
+  impresiones: number
+  reenvios: number
+  fallos: number
+}
+
+export type MesaResp = {
+  ok: boolean
+  hoy: { altas: number; impresiones: number; reenvios: number; fallos: number }
+  altasTotales: number
+  operadores: OperadorMesa[]
+  recientes: AccionMesa[]
+}
+
+export type UsuarioEquipo = {
+  usuario: string
+  nombre: string
+  rol: string
+  rolNombre: string
+  activo: boolean
+  ultimoAcceso: string | null
+}
+
+export type MiAlta = {
+  tipo: TipoAlta
+  id: number
+  folio: string
+  nombre: string
+  creado: string | null
+  impresiones: number
+}
+
+const persona = (tipo: string, id: number) => `/api/accesos/persona/${tipo}/${id}`
+
+export const mesa = {
+  registrar: (datos: AltaDatos) =>
+    reqCuerpo<AltaResp>('/api/accesos/registro', { method: 'POST', body: JSON.stringify(datos) }),
+  misAltas: () => req<{ ok: boolean; altas: MiAlta[] }>('/api/accesos/mis-altas'),
+  ficha: (tipo: string, id: number) => req<Ficha>(persona(tipo, id)),
+  /** Sin `correo` va al registrado; con `correo`, a ese otro. */
+  reenviar: (tipo: string, id: number, correo?: string) =>
+    reqCuerpo<EnvioCorreo>(`${persona(tipo, id)}/reenviar`, {
+      method: 'POST',
+      body: JSON.stringify(correo ? { correo } : {}),
+    }),
+  confirmar: (tipo: string, id: number) =>
+    reqCuerpo<{ ok: boolean; error?: string }>(`${persona(tipo, id)}/confirmar`, { method: 'POST' }),
+  correoEventos: (tipo: string, id: number) => reqCuerpo<EventosCorreoResp>(`${persona(tipo, id)}/correo-eventos`),
+  actividad: () => req<MesaResp>('/api/accesos/mesa'),
+  equipo: () => req<{ ok: boolean; usuarios: UsuarioEquipo[] }>('/api/accesos/equipo'),
+}
+
+/** "05/10 14:32" en hora local, o null si no hay fecha válida. */
+export function fechaHora(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleString('es-MX', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+}
