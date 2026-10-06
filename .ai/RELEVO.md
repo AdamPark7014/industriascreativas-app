@@ -1,9 +1,26 @@
 # RELEVO
 
-- **Último turno:** claude-code
-- **Fecha:** 2026-09-09
+- **Último turno:** cursor
+- **Fecha:** 2026-10-06
 - **Rama:** main
-- **HEAD:** (ver git log) — Accesos: botón único Imprimir boleto, instalador sin Node, registro de impresiones en BD, boleto rediseñado para rollo negro/rojo
+- **HEAD:** `7d0f0a8` — Mesa de atención (registro en sitio, búsqueda con ficha, reenvío, etiqueta 80 mm). **Desplegado en DO.**
+
+## 2026-10-05 · Mesa de atención (cursor) — DESPLEGADO
+
+- 11 usuarios nuevos (Evy): `registro1`–`5` (alta en sitio + imprimir), `impresion1`–`5`
+  (buscar por nombre/correo/teléfono, ficha, reenviar al correo registrado u otro, imprimir),
+  `controladm` (todo lo anterior + actividad de la mesa). `promotor` ahora también registra,
+  busca, reenvía e imprime. `admin` = "NEXARA · Operación". Tabla de roles en `docs/ACCESOS-REACT.md`.
+- Claves: `C:\dev\secrets\ficti-usuarios-2026-10-05.txt` (fuera del repo). En el servidor:
+  `PANEL_EQUIPO_CLAVES` en `panel/.env`, `PANEL_INTERNO_KEY` en `.env` raíz y `panel/.env`.
+- Etiqueta 80 × 59 mm: QR + nombre grande + folio pequeño.
+- Tablas nuevas: `accesos_altas_sitio`, `correo_envios`, `boleto_descargas` (006_mesa_atencion.sql).
+- Deploy: `python .ai/_deploy_mesa.py prep|subir|canario|promover|rollback` (gitignored).
+  Respaldo previo: `/root/backups/bd_demo-20261005-pre-mesa.dump` + `.env` copiados.
+  Rollback: imágenes `:prev-20261005` → `python .ai/_deploy_mesa.py rollback`.
+- Verificado: canario 36/36 (`.ai/_smoke_mesa.py`), login real por URL pública con 3 roles.
+- Ojo: `panel/.env` tiene `PANEL_NOMBRE` con espacios sin comillas → NO hacer `source` de ese
+  archivo (compose lo lee bien). Pendiente: probar impresión física en la QL con la etiqueta 80 mm.
 
 ## 3 líneas
 La QL-800 rechazaba todo porque el rollo es **negro/rojo (DK-2251)** y el driver
