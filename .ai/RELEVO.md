@@ -1,9 +1,31 @@
 # RELEVO
 
 - **Último turno:** cursor
-- **Fecha:** 2026-10-06
+- **Fecha:** 2026-10-07
 - **Rama:** main
-- **HEAD:** `7d0f0a8` — Mesa de atención (registro en sitio, búsqueda con ficha, reenvío, etiqueta 80 mm). **Desplegado en DO.**
+- **HEAD:** `eaea767` — Pulido de la mesa de atención. **Desplegado en DO** (bundle `index-Bo94QYCe.js`).
+
+## 2026-10-07 · Pulido de la mesa (cursor) — DESPLEGADO
+
+- Commits `73c7e5b` + `eaea767`. Login neutral (sin usuario real en el placeholder, autocomplete),
+  esqueleto de carga y título de pestaña por página, Resumen por rol (KPIs de la mesa con
+  `mesa.actividad`, sin tarjetas duplicadas, métricas solo con permiso), registro en dos columnas
+  (≥1280 px) con lada en el placeholder, ficha sin correo repetido en eventos Brevo.
+- Correos mal escritos: `panel/ui/src/lib/correoSugerido.ts` (dominios conocidos + distancia OSA +
+  `.con`→`.com`). Registro sugiere y pide confirmar; la ficha ofrece "Reenviar boleto a {corregido}".
+  En la base hay 10 dominios rotos (gmail.con, gamil.com, gmal.com…) → **17 personas sin confirmar**
+  que se podrían reenviar en bloque si Adam lo pide. Ojo: Brevo marca gmal.com como entregado.
+- Backend: `/api/interno/correo-eventos` lee el JSON crudo de Brevo (el modelo del SDK no trae `date`);
+  `/boleto/<token>` inválido devuelve 404.
+- Deploy: `python .ai/_deploy_mesa.py subir|canario|promover` (usar `subir`, NO `prep`, para no pisar
+  las etiquetas). **Rollback ahora a `:prev-20261007`** (mesa v1) — respaldo
+  `/root/backups/bd_demo-prev-20261007.dump`. Canario 36/36; 13/13 logins reales
+  (`.ai/_do_mesa_logins.py`), cada rol cae en su pantalla.
+- **PDF de usuarios** (fuera del repo): `C:\Users\adpoz\Documents\experiencebt-usuarios-2026-10-07.pdf`
+  = 13 del panel FICTI + plataforma, Casa del Terror y demo de `experiencebt-credenciales.md`.
+  Regenerar: `python C:\dev\secrets\generar-pdf-usuarios.py`.
+- Pendiente: impresión física de la etiqueta 80 mm en la QL; rotar `Terror.2026`, `Demo.2026`,
+  PIN 4826, `PanelInterno2026`, `PanelPromotor2026`.
 
 ## 2026-10-05 · Mesa de atención (cursor) — DESPLEGADO
 
