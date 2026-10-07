@@ -1,11 +1,25 @@
 import { useEffect, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
-import { api, tiene, type Resumen, type Sesion } from '../api'
+import { api, mesa, tiene, type MesaResp, type Resumen, type Sesion } from '../api'
 import styles from './hub.module.scss'
+
+function textoBienvenida(sesion: Sesion | null): string {
+  if (sesion?.puedeOperar) {
+    return 'Desde aquí operas todo el evento: puerta, mesa de atención, impresión de gafetes e informes.'
+  }
+  if (tiene(sesion, 'registrar') && tiene(sesion, 'buscar')) {
+    return 'Registra a quien llega sin registro, atiende a los ya registrados (ficha, reenvío del boleto y etiqueta) y sigue lo que pasa hoy.'
+  }
+  return 'Consulta los números del día, la actividad de la mesa y el historial de accesos.'
+}
 
 export default function HubPage() {
   const sesion = useOutletContext<Sesion | null>()
+  const verMesa = tiene(sesion, 'mesa')
+  const verPuerta = tiene(sesion, 'escanear') || tiene(sesion, 'informes')
+  const verMetricas = tiene(sesion, 'metricas')
   const [data, setData] = useState<Resumen | null>(null)
+  const [mesaHoy, setMesaHoy] = useState<MesaResp['hoy'] | null>(null)
   const [latency, setLatency] = useState<{
     p50: number | null
     p95: number | null
@@ -32,6 +46,15 @@ export default function HubPage() {
         .finally(() => {
           if (vivo) setLoading(false)
         })
+      if (verMesa) {
+        void mesa
+          .actividad()
+          .then((m) => {
+            if (vivo) setMesaHoy(m.hoy)
+          })
+          .catch(() => undefined)
+      }
+      if (!verMetricas) return
       void api
         .metricas()
         .then((m) => {
@@ -56,13 +79,12 @@ export default function HubPage() {
       vivo = false
       window.clearInterval(id)
     }
-  }, [])
+  }, [verMesa, verMetricas])
 
   return (
     <main className={styles.page}>
       <p className={styles.lead}>
-        Bienvenido a Accesos FICTI. Aquí controlas quién entra y sale, imprimes boletos
-        de puerta y revisas lo que pasó hoy.
+        Hola{sesion?.nombre ? `, ${sesion.nombre}` : ''}. {textoBienvenida(sesion)}
       </p>
 
       {error ? <div className={styles.alerta}>{error}</div> : null}
@@ -146,48 +168,38 @@ export default function HubPage() {
               </div>
             </Link>
           ) : null}
+          {verPuerta ? (
+            <Link className={styles.ahoraCard} to="/zonas">
+              <span className={styles.ahoraNum}>◫</span>
+              <div>
+                <strong>Zonas y aforo</strong>
+                <p>Cuántas personas hay y caben en cada área.</p>
+              </div>
+            </Link>
+          ) : null}
         </div>
       </section>
 
-      <section className={styles.kpis} aria-label="Números de hoy">
-        <Kpi label="Personas dentro" value={data?.dentro} loading={loading} accent="navy" />
-        <Kpi label="Entradas hoy" value={data?.entradasHoy} loading={loading} />
-        <Kpi label="Salidas hoy" value={data?.salidasHoy} loading={loading} />
-        <Kpi label="Rechazos hoy" value={data?.rechazosHoy} loading={loading} accent="warn" />
-        <Kpi label="Confirmados" value={data?.confirmados} loading={loading} />
-      </section>
+      {verMesa ? (
+        <section className={styles.kpis} aria-label="Mesa de atención hoy">
+          <Kpi label="Altas en sitio hoy" value={mesaHoy?.altas} loading={!mesaHoy} accent="navy" />
+          <Kpi label="Etiquetas impresas hoy" value={mesaHoy?.impresiones} loading={!mesaHoy} />
+          <Kpi label="Boletos reenviados hoy" value={mesaHoy?.reenvios} loading={!mesaHoy} />
+          <Kpi label="Reenvíos fallidos hoy" value={mesaHoy?.fallos} loading={!mesaHoy} accent="warn" />
+        </section>
+      ) : null}
 
-      <section className={styles.modulos} aria-label="Todas las herramientas">
-        {sesion?.puedeOperar ? (
-          <Link className={styles.modulo} to="/escanear">
-            <span className={styles.moduloTag}>Puerta</span>
-            <strong>Escáner</strong>
-            <span>Estación con lector USB o PDA. Verde = entrada, rosa = salida.</span>
-          </Link>
-        ) : (
-          <div className={`${styles.modulo} ${styles.moduloOff}`}>
-            <span className={styles.moduloTag}>Puerta</span>
-            <strong>Escáner</strong>
-            <span>Solo operación interna. Tu rol ve informes y búsquedas.</span>
-          </div>
-        )}
-        <Link className={styles.modulo} to="/buscar">
-          <span className={styles.moduloTag}>Boletos</span>
-          <strong>Buscar e imprimir</strong>
-          <span>Localiza a alguien e imprime su boleto con QR (62 mm).</span>
-        </Link>
-        <Link className={styles.modulo} to="/reportes">
-          <span className={styles.moduloTag}>Informes</span>
-          <strong>Historial</strong>
-          <span>Quién entró o salió, con CSV y Excel.</span>
-        </Link>
-        <Link className={styles.modulo} to="/zonas">
-          <span className={styles.moduloTag}>Aforo</span>
-          <strong>Zonas</strong>
-          <span>Cuántas personas caben en cada área (p. ej. VIP).</span>
-        </Link>
-      </section>
+      {verPuerta ? (
+        <section className={styles.kpis} aria-label="Puerta hoy">
+          <Kpi label="Personas dentro" value={data?.dentro} loading={loading} accent="navy" />
+          <Kpi label="Entradas hoy" value={data?.entradasHoy} loading={loading} />
+          <Kpi label="Salidas hoy" value={data?.salidasHoy} loading={loading} />
+          <Kpi label="Rechazos hoy" value={data?.rechazosHoy} loading={loading} accent="warn" />
+          <Kpi label="Confirmados" value={data?.confirmados} loading={loading} />
+        </section>
+      ) : null}
 
+      {verPuerta ? (
       <section className={styles.tarjeta}>
         <div className={styles.tarjetaCab}>
           <h2>Actividad reciente</h2>
@@ -229,6 +241,7 @@ export default function HubPage() {
           </ul>
         )}
       </section>
+      ) : null}
     </main>
   )
 }

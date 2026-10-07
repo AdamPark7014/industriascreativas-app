@@ -75,6 +75,12 @@ export default function OpsShell() {
     setMenuAbierto(false)
   }, [location.pathname])
 
+  useEffect(() => {
+    document.title = `${meta.titulo} · Accesos FICTI`
+  }, [meta.titulo])
+
+  const expirada = error === 'sesion' || error === 'sesion_expirada'
+
   const grupos = GROUPS.map((g) => ({
     ...g,
     items: g.items.filter((n) => n.permisos.some((p) => tiene(sesion, p))),
@@ -92,7 +98,10 @@ export default function OpsShell() {
           />
         </div>
 
-        <nav className={styles.nav} aria-label="Accesos">
+        <nav className={styles.nav} aria-label="Accesos" aria-busy={cargando}>
+          {cargando && !sesion
+            ? [0, 1, 2, 3].map((i) => <span key={i} className={styles.navEsqueleto} />)
+            : null}
           {grupos.map((g) => (
             <div key={g.titulo} className={styles.grupo}>
               <p className={styles.navTitulo}>{g.titulo}</p>
@@ -174,14 +183,22 @@ export default function OpsShell() {
 
         {error ? (
           <div className={styles.aviso} role="alert">
-            {error === 'sesion' || error === 'sesion_expirada'
-              ? 'Tu sesión expiró. Vuelve a iniciar sesión para continuar.'
-              : error}
+            {expirada ? (
+              <>
+                Tu sesión expiró. <a href="/login">Vuelve a iniciar sesión</a> para continuar.
+              </>
+            ) : (
+              error
+            )}
           </div>
         ) : null}
 
         {cargando && !sesion ? (
-          <div className={styles.cargando}>Comprobando sesión…</div>
+          <div className={styles.cargando} aria-label="Cargando">
+            <span className={styles.esqueletoLinea} />
+            <span className={styles.esqueletoBloque} />
+            <span className={styles.esqueletoBloque} />
+          </div>
         ) : (
           <Outlet context={sesion} />
         )}

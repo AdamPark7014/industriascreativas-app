@@ -133,6 +133,24 @@
   gap: 8px;
 }
 
+.correoRaro {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid #f0d58a;
+  border-radius: 12px;
+  background: #fff8e1;
+
+  p {
+    margin: 0;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    color: #6b4a00;
+    overflow-wrap: anywhere;
+  }
+}
+
 .primario,
 .secundario {
   padding: 12px 16px;

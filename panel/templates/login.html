@@ -17,7 +17,7 @@
           <img src="{{ url_for('static', filename='img/tech-capital-logo.png') }}" alt="Tech Capital">
         </div>
         <h1 class="loginTitulo">Panel de control</h1>
-        <p class="loginSub">Estadísticas y conteo de registros del evento</p>
+        <p class="loginSub">Registro, impresión de gafetes y accesos del evento</p>
       </div>
 
       <div class="loginBody">
@@ -27,21 +27,22 @@
           {% endif %}
         {% endwith %}
 
-        <form method="post" autocomplete="off">
+        <form method="post">
           <div class="grupo">
             <label class="label" for="usuario">Usuario</label>
             <input class="input" id="usuario" name="usuario" type="text"
-                   placeholder="admin" required autofocus>
+                   placeholder="Tu usuario (p. ej. registro1)" autocomplete="username"
+                   autocapitalize="none" spellcheck="false" required autofocus>
           </div>
           <div class="grupo">
             <label class="label" for="clave">Contraseña</label>
             <input class="input" id="clave" name="clave" type="password"
-                   placeholder="••••••••" required>
+                   placeholder="••••••••" autocomplete="current-password" required>
           </div>
           <button class="btn btnPrimario btnLogin" type="submit">Entrar al panel</button>
         </form>
 
-        <p class="loginPie">Registro de eventos · 2026</p>
+        <p class="loginPie">¿Sin acceso? Pide tu usuario a la coordinación del evento · FICTI 2026</p>
       </div>
     </div>
   </main>

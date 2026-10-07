@@ -263,10 +263,64 @@
   font-size: 0.88rem;
 }
 
+.aviso a {
+  color: inherit;
+  font-weight: 800;
+}
+
 .cargando {
-  padding: 48px 24px;
-  color: #5b6b82;
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 860px;
+  padding: 22px 24px;
+}
+
+.navEsqueleto,
+.esqueletoLinea,
+.esqueletoBloque {
+  display: block;
+  border-radius: 10px;
+  background-size: 200% 100%;
+  animation: brillo 1.2s ease-in-out infinite;
+}
+
+.navEsqueleto {
+  height: 44px;
+  margin-bottom: 6px;
+  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.06));
+}
+
+.esqueletoLinea,
+.esqueletoBloque {
+  background-image: linear-gradient(90deg, #e8eef6, #f4f7fb, #e8eef6);
+}
+
+.esqueletoLinea {
+  width: 55%;
+  height: 18px;
+}
+
+.esqueletoBloque {
+  height: 120px;
+  border-radius: 14px;
+}
+
+@keyframes brillo {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navEsqueleto,
+  .esqueletoLinea,
+  .esqueletoBloque {
+    animation: none;
+  }
 }
 
 @media (max-width: 960px) {

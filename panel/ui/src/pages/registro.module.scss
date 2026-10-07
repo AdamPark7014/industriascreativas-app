@@ -1,6 +1,53 @@
 .page {
   padding: 22px 24px 48px;
-  max-width: 860px;
+  max-width: 1240px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 860px);
+  gap: 22px;
+  align-items: start;
+}
+
+.columna {
+  min-width: 0;
+}
+
+.indicacion {
+  margin: -4px 0 0;
+  font-size: 0.82rem;
+  color: #5b6b82;
+}
+
+.sugerencia {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 6px 10px;
+  border: 1px solid #f0d58a;
+  border-radius: 8px;
+  background: #fff8e1;
+  color: #6b4a00;
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    border-color: #d9a400;
+  }
+}
+
+@media (min-width: 1280px) {
+  .layout {
+    grid-template-columns: minmax(0, 860px) 340px;
+  }
+
+  .layout > .altas {
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+  }
 }
 
 .form {
@@ -314,7 +361,7 @@
 }
 
 .altas {
-  margin-top: 22px;
+  margin-top: 0;
 
   h2 {
     margin: 0 0 8px;

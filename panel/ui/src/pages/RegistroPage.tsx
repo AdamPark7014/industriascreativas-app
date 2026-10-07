@@ -24,6 +24,7 @@ import {
   buscarLada,
   validarTelefono,
 } from '../lib/registroOpciones'
+import { correoSugerido } from '../lib/correoSugerido'
 import { etiquetaDispositivo, useBoletoImpresion } from '../lib/useBoletoImpresion'
 import styles from './registro.module.scss'
 
@@ -140,6 +141,7 @@ export default function RegistroPage() {
   const [existente, setExistente] = useState<PersonaExistente | null>(null)
   const [hecho, setHecho] = useState<Hecho | null>(null)
   const [altas, setAltas] = useState<MiAlta[]>([])
+  const [correoAceptado, setCorreoAceptado] = useState('')
   const correoRef = useRef<HTMLInputElement>(null)
 
   const cargarAltas = useCallback(() => {
@@ -182,6 +184,15 @@ export default function RegistroPage() {
       setError(msg)
       return
     }
+    const posible = correoSugerido(form.correo)
+    if (posible && correoAceptado !== form.correo.trim()) {
+      setCorreoAceptado(form.correo.trim())
+      setExistente(null)
+      setError(
+        `Revisa el correo: ¿quisiste decir ${posible}? Corrígelo arriba o, si está bien así, toca «Registrar e imprimir» otra vez.`,
+      )
+      return
+    }
     setEnviando(true)
     setError(null)
     setExistente(null)
@@ -205,6 +216,7 @@ export default function RegistroPage() {
   const otraPersona = () => {
     setHecho(null)
     setForm(formVacio())
+    setCorreoAceptado('')
     setEnviarCorreo(false)
     setError(null)
     setExistente(null)
@@ -212,11 +224,17 @@ export default function RegistroPage() {
   }
 
   const toast = impresion.toast
+  const sugerencia = CORREO_RE.test(form.correo.trim()) ? correoSugerido(form.correo) : null
+  const lada = buscarLada(form.pais)
+  const placeholderTel =
+    lada.minLen === lada.maxLen ? `${lada.maxLen} dígitos` : `${lada.minLen} a ${lada.maxLen} dígitos`
 
   return (
     <main className={styles.page}>
       {impresion.estado}
 
+      <div className={styles.layout}>
+      <div className={styles.columna}>
       {hecho ? (
         <section className={styles.hecho} aria-live="polite">
           <p className={styles.kicker}>Registro listo · ya puede entrar</p>
@@ -270,6 +288,8 @@ export default function RegistroPage() {
             ))}
           </div>
 
+          <p className={styles.indicacion}>Todos los campos son obligatorios, igual que en el registro en línea.</p>
+
           <fieldset className={styles.bloque}>
             <legend>Datos de la persona</legend>
             <div className={styles.grid}>
@@ -278,11 +298,19 @@ export default function RegistroPage() {
                 <input
                   ref={correoRef}
                   type="email"
+                  inputMode="email"
                   value={form.correo}
                   onChange={(e) => poner('correo', e.target.value)}
                   placeholder="nombre@empresa.com"
                   autoComplete="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
                 />
+                {sugerencia ? (
+                  <button type="button" className={styles.sugerencia} onClick={() => poner('correo', sugerencia)}>
+                    ¿Quisiste decir <b>{sugerencia}</b>? Toca para corregir
+                  </button>
+                ) : null}
               </label>
               <label>
                 <span>Nombre(s)</span>
@@ -323,7 +351,7 @@ export default function RegistroPage() {
                     inputMode="tel"
                     value={form.telefono}
                     onChange={(e) => poner('telefono', e.target.value)}
-                    placeholder="10 dígitos"
+                    placeholder={placeholderTel}
                     autoComplete="off"
                   />
                 </div>
@@ -499,9 +527,10 @@ export default function RegistroPage() {
           {toast.texto}
         </p>
       ) : null}
+      </div>
 
       {altas.length ? (
-        <section className={styles.altas}>
+        <aside className={styles.altas}>
           <h2>Tus últimos registros</h2>
           <ul>
             {altas.map((a) => (
@@ -527,8 +556,9 @@ export default function RegistroPage() {
               </li>
             ))}
           </ul>
-        </section>
+        </aside>
       ) : null}
+      </div>
 
       {impresion.modal}
     </main>

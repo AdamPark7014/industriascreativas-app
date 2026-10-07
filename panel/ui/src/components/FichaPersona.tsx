@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useState, type ReactNode } from 'react'
 import { fechaHora, mesa, tiene, type EventoCorreo, type Ficha, type Sesion } from '../api'
+import { correoSugerido } from '../lib/correoSugerido'
 import type { PrevioImpresion } from '../lib/useBoletoImpresion'
 import styles from './ficha.module.scss'
 
@@ -182,6 +183,8 @@ export default function FichaPersona({ tipo, id, sesion, version, ocupado, onImp
   const boleto = ficha ? resumenBoleto(ficha, verCorreos ? eventos : []) : null
   const puerta = ficha ? resumenPuerta(ficha) : null
   const eventosOrdenados = [...(eventos ?? [])].sort((a, b) => (b.fecha ?? '').localeCompare(a.fecha ?? ''))
+  const variosCorreos = new Set(eventosOrdenados.map((e) => e.correo)).size > 1
+  const corregido = ficha?.correo ? correoSugerido(ficha.correo) : null
 
   return (
     <div className={styles.capa} role="presentation" onClick={onClose}>
@@ -223,6 +226,24 @@ export default function FichaPersona({ tipo, id, sesion, version, ocupado, onImp
         {ficha ? (
           <div className={styles.cuerpo}>
             <section className={styles.acciones}>
+              {corregido ? (
+                <div className={styles.correoRaro}>
+                  <p>
+                    El correo registrado parece mal escrito: <b>{ficha.correo}</b>. Por eso pudo no llegarle
+                    nada. Confirma con la persona: ¿es <b>{corregido}</b>?
+                  </p>
+                  {ficha.puede.reenviar ? (
+                    <button
+                      type="button"
+                      className={styles.secundario}
+                      disabled={enviando}
+                      onClick={() => void reenviar(corregido)}
+                    >
+                      {enviando ? 'Enviando…' : `Reenviar boleto a ${corregido}`}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
               {ficha.puede.imprimir ? (
                 <button
                   type="button"
@@ -339,7 +360,8 @@ export default function FichaPersona({ tipo, id, sesion, version, ocupado, onImp
                         <li key={`${e.messageId}-${e.evento}-${i}`}>
                           <time>{fechaHora(e.fecha)}</time>
                           <span>
-                            {e.asunto || 'Sin asunto'} · {e.correo}
+                            {e.asunto || 'Sin asunto'}
+                            {variosCorreos ? ` · ${e.correo}` : ''}
                             {e.motivo ? ` · ${e.motivo}` : ''}
                           </span>
                           <b className={claseTono(EVENTOS[e.evento]?.tono ?? 'neutro')}>
