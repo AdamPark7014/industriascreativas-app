@@ -264,7 +264,11 @@ export default function FichaPersona({ tipo, id, sesion, version, ocupado, onImp
                     disabled={enviando || !ficha.correo}
                     onClick={() => void reenviar()}
                   >
-                    {enviando && !mostrarOtro ? 'Enviando…' : `Reenviar boleto a ${ficha.correo || 'su correo'}`}
+                    {enviando && !mostrarOtro
+                      ? 'Enviando…'
+                      : corregido
+                        ? `Reenviar al correo registrado tal cual (${ficha.correo})`
+                        : `Reenviar boleto a ${ficha.correo || 'su correo'}`}
                   </button>
                   <button type="button" className={styles.enlace} onClick={() => setMostrarOtro((v) => !v)}>
                     {mostrarOtro ? 'Cancelar' : 'Enviar a otro correo'}

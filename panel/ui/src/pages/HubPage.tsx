@@ -261,7 +261,7 @@ function Kpi({
 }) {
   return (
     <article
-      className={`${styles.kpi} ${accent === 'navy' ? styles.kpiNavy : ''} ${accent === 'warn' ? styles.kpiWarn : ''}`}
+      className={`${styles.kpi} ${accent === 'navy' ? styles.kpiNavy : ''} ${accent === 'warn' && (value ?? 0) > 0 ? styles.kpiWarn : ''}`}
     >
       <span>{label}</span>
       <strong>
