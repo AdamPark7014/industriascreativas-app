@@ -66,7 +66,11 @@ def _cabeceras_seguridad(resp):
 # Una caché por alcance: los datos de cada rol no se mezclan.
 _cache_resumen: dict[str, CacheCorto] = {}
 
+# En el evento todas las mesas salen por la misma IP: el tope fino va por
+# usuario + IP y el de la IP sola es holgado, para que un usuario que se
+# equivoca no deje fuera al resto del equipo.
 MAX_INTENTOS = 8
+MAX_INTENTOS_RED = 40
 VENTANA_BLOQUEO = 15 * 60
 _intentos: dict[str, list[float]] = {}
 
@@ -76,11 +80,40 @@ def _ip_cliente() -> str:
     return reenviado.split(",")[0].strip() or request.remote_addr or "?"
 
 
-def _bloqueado(ip: str) -> bool:
+def _recientes(llave: str) -> list[float]:
     ahora = time.time()
-    marcas = [t for t in _intentos.get(ip, []) if ahora - t < VENTANA_BLOQUEO]
-    _intentos[ip] = marcas
-    return len(marcas) >= MAX_INTENTOS
+    marcas = [t for t in _intentos.get(llave, []) if ahora - t < VENTANA_BLOQUEO]
+    _intentos[llave] = marcas
+    return marcas
+
+
+def _bloqueado(ip: str, usuario: str) -> bool:
+    return (len(_recientes(f"{ip}|{usuario}")) >= MAX_INTENTOS
+            or len(_recientes(ip)) >= MAX_INTENTOS_RED)
+
+
+def _registrar_fallo(ip: str, usuario: str) -> int:
+    """Anota el fallo y devuelve cuántos intentos le quedan a ese usuario."""
+    ahora = time.time()
+    _intentos.setdefault(ip, []).append(ahora)
+    marcas = _intentos.setdefault(f"{ip}|{usuario}", [])
+    marcas.append(ahora)
+    return max(MAX_INTENTOS - len(marcas), 0)
+
+
+def _variantes_clave(clave: str) -> list[str]:
+    """La clave tal cual, sin espacios en los extremos y, si son 16 letras y
+    números sin guiones, con los guiones del formato XXXX-XXXX-XXXX-XXXX."""
+    variantes = [clave]
+    limpia = clave.strip()
+    if limpia and limpia not in variantes:
+        variantes.append(limpia)
+    compacta = limpia.replace("-", "").replace(" ", "")
+    if len(compacta) == 16 and compacta.isalnum():
+        con_guiones = "-".join(compacta[i:i + 4] for i in range(0, 16, 4))
+        if con_guiones not in variantes:
+            variantes.append(con_guiones)
+    return variantes
 
 
 def login_requerido(vista):
@@ -141,12 +174,13 @@ def login():
 
     if request.method == "POST":
         ip = _ip_cliente()
-        if _bloqueado(ip):
-            flash("Demasiados intentos fallidos. Espera 15 minutos.", "error")
-            return render_template("login.html"), 429
-
         usuario = (request.form.get("usuario") or "").strip().lower()
         clave = request.form.get("clave") or ""
+
+        if _bloqueado(ip, usuario):
+            flash("Demasiados intentos fallidos. Espera 15 minutos o pide ayuda "
+                  "a la coordinación del evento.", "error")
+            return render_template("login.html", usuario=usuario), 429
 
         with conexion() as con:
             fila = con.execute(
@@ -155,12 +189,14 @@ def login():
                 {"u": usuario},
             ).mappings().first()
 
-        if fila and fila["activo"] and check_password_hash(fila["clave_hash"], clave):
+        if fila and fila["activo"] and any(
+            check_password_hash(fila["clave_hash"], v) for v in _variantes_clave(clave)
+        ):
             session.permanent = True
             session["usuario"] = fila["usuario"]
             session["nombre"] = fila["nombre"]
             session["alcance"] = fila["alcance"] or "promotor"
-            _intentos.pop(ip, None)
+            _intentos.pop(f"{ip}|{usuario}", None)
             with conexion() as con:
                 con.execute(text('UPDATE panel_usuarios SET ultimo_acceso = NOW() '
                                  'WHERE usuario = :u'), {"u": usuario})
@@ -170,9 +206,14 @@ def login():
             return redirect(destino if destino and destino.startswith("/")
                             else url_for("panel"))
 
-        _intentos.setdefault(ip, []).append(time.time())
+        restantes = _registrar_fallo(ip, usuario)
         log.warning("Intento fallido de '%s' desde %s", usuario, ip)
-        flash("Usuario o contraseña incorrectos.", "error")
+        mensaje = "Usuario o contraseña incorrectos."
+        if 0 < restantes <= 3:
+            mensaje += (f" Te queda{'n' if restantes > 1 else ''} {restantes} "
+                        f"intento{'s' if restantes > 1 else ''} antes de una pausa de 15 minutos.")
+        flash(mensaje, "error")
+        return render_template("login.html", usuario=usuario)
 
     return render_template("login.html")
 

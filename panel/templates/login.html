@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Acceso · Panel de control</title>
   <link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/panel.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/panel.css', v='20261007b') }}">
 </head>
 <body>
   <main class="loginPage">
@@ -27,24 +27,87 @@
           {% endif %}
         {% endwith %}
 
-        <form method="post">
+        <form method="post" id="formLogin">
           <div class="grupo">
             <label class="label" for="usuario">Usuario</label>
             <input class="input" id="usuario" name="usuario" type="text"
+                   value="{{ usuario or '' }}"
                    placeholder="Tu usuario (p. ej. registro1)" autocomplete="username"
-                   autocapitalize="none" spellcheck="false" required autofocus>
+                   autocapitalize="none" autocorrect="off" spellcheck="false" required
+                   {% if not usuario %}autofocus{% endif %}>
           </div>
           <div class="grupo">
             <label class="label" for="clave">Contraseña</label>
-            <input class="input" id="clave" name="clave" type="password"
-                   placeholder="••••••••" autocomplete="current-password" required>
+            <div class="campoClave">
+              <input class="input" id="clave" name="clave" type="password"
+                     placeholder="••••••••" autocomplete="current-password"
+                     autocapitalize="none" autocorrect="off" spellcheck="false" required
+                     aria-describedby="ayudaClave avisoMayus"
+                     {% if usuario %}autofocus{% endif %}>
+              <button class="verClave" id="verClave" type="button"
+                      aria-label="Mostrar contraseña" aria-pressed="false" aria-controls="clave">
+                <svg class="ojoAbierto" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <svg class="ojoCerrado" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M10.6 5.1A10.4 10.4 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-2.6 3.5M6.6 6.6C3.7 8.4 2 12 2 12s3.6 7 10 7a9.8 9.8 0 0 0 5.4-1.6"/>
+                  <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>
+                  <path d="M3 3l18 18"/>
+                </svg>
+                <span class="verClaveTexto">Ver</span>
+              </button>
+            </div>
+            <p class="avisoMayus" id="avisoMayus" role="status" hidden>Bloq Mayús está activado</p>
+            <p class="ayudaClave" id="ayudaClave">Distingue mayúsculas y minúsculas. Los guiones son opcionales.</p>
           </div>
-          <button class="btn btnPrimario btnLogin" type="submit">Entrar al panel</button>
+          <button class="btn btnPrimario btnLogin" id="btnEntrar" type="submit">Entrar al panel</button>
         </form>
 
-        <p class="loginPie">¿Sin acceso? Pide tu usuario a la coordinación del evento · FICTI 2026</p>
+        <p class="loginPie">¿Sin acceso u olvidaste tu contraseña? Pídela a la coordinación del evento · FICTI 2026</p>
       </div>
     </div>
   </main>
+  <script>
+    (function () {
+      var clave = document.getElementById('clave');
+      var ver = document.getElementById('verClave');
+      var texto = ver.querySelector('.verClaveTexto');
+      var mayus = document.getElementById('avisoMayus');
+      var form = document.getElementById('formLogin');
+      var entrar = document.getElementById('btnEntrar');
+
+      function mostrar(visible) {
+        clave.type = visible ? 'text' : 'password';
+        ver.setAttribute('aria-pressed', visible ? 'true' : 'false');
+        ver.setAttribute('aria-label', visible ? 'Ocultar contraseña' : 'Mostrar contraseña');
+        texto.textContent = visible ? 'Ocultar' : 'Ver';
+      }
+
+      ver.addEventListener('click', function () {
+        var inicio = clave.selectionStart, fin = clave.selectionEnd;
+        mostrar(clave.type === 'password');
+        clave.focus();
+        try { clave.setSelectionRange(inicio, fin); } catch (e) {}
+      });
+
+      function revisarMayus(ev) {
+        if (ev.getModifierState) mayus.hidden = !ev.getModifierState('CapsLock');
+      }
+      clave.addEventListener('keydown', revisarMayus);
+      clave.addEventListener('keyup', revisarMayus);
+      clave.addEventListener('blur', function () { mayus.hidden = true; });
+
+      form.addEventListener('submit', function () {
+        mostrar(false);
+        entrar.disabled = true;
+        entrar.textContent = 'Entrando…';
+      });
+      window.addEventListener('pageshow', function () {
+        entrar.disabled = false;
+        entrar.textContent = 'Entrar al panel';
+      });
+    })();
+  </script>
 </body>
 </html>
