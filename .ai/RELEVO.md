@@ -3,7 +3,22 @@
 - **Último turno:** cursor
 - **Fecha:** 2026-10-07
 - **Rama:** main
-- **HEAD:** `eaea767` — Pulido de la mesa de atención. **Desplegado en DO** (bundle `index-Bo94QYCe.js`).
+- **HEAD:** `c8a6eaa` — Login con botón Ver y clave tolerante. **Desplegado en DO.**
+
+## 2026-10-07 tarde · Login (cursor) — DESPLEGADO
+
+- Adam reportó "usuario o contraseña incorrectos": el log mostró `impresion3` con clave mal
+  tecleada y luego `impresiones3`. El seeder estaba bien (13/13 entran). Ver fallidos:
+  `python .ai/_do_mesa_fallidos.py [horas]`.
+- `panel/templates/login.html`: botón Ver/Ocultar (clave visible en monoespaciada), aviso de
+  Bloq Mayús, ayuda "Distingue mayúsculas… guiones opcionales", conserva el usuario al fallar,
+  botón "Entrando…". CSS en `panel/static/css/panel.css` (link con `?v=20261007b`).
+- `panel/app.py`: la clave se acepta sin espacios en los extremos y, si son 16 alfanuméricos,
+  sin guiones (`_variantes_clave`); mayúsculas siguen contando. Bloqueo por usuario+IP (8) con
+  tope de IP holgado (40), porque en el evento todas las mesas comparten IP; avisa cuando quedan ≤3.
+- `_deploy_mesa.py` ahora sube también `panel/static/css`. Canario sin fallos; 13/13 + variantes
+  (Impresion3, espacios, sin guiones) verificadas por URL pública (`.ai/_do_mesa_logins.py`).
+  Prueba local: `python .ai/_test_login_local.py`.
 
 ## 2026-10-07 · Pulido de la mesa (cursor) — DESPLEGADO
 
