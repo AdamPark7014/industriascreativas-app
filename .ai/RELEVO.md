@@ -3,7 +3,32 @@
 - **Último turno:** claude-code
 - **Fecha:** 2026-10-14
 - **Rama:** main
-- **HEAD:** (ver git log) — Mesa de registro e impresión fusionada (10 cuentas, mismos permisos) + correos por Brevo nuevo con aviso de créditos. **Todo desplegado en DO.**
+- **HEAD:** (ver git log) — Escáner sin rebotes, purga de pruebas, reenvío masivo terminado y correos mal escritos corregidos; mesa fusionada; Brevo nuevo con aviso. **Todo desplegado en DO.**
+
+## 2026-10-14 noche · Escáner sin rebotes, purga de pruebas y correos corregidos (claude-code)
+
+- **Escáner** (commit `feat(escaner)`, desplegado con `python .ai/_deploy_escaner.py`,
+  rollback `:prev-escaner-20261014`): la cámara solo acepta un QR leído igual 2 veces
+  seguidas (<700 ms); tras cada resultado se detiene 2 s (aceptado) / 3.5 s (rechazo)
+  con barra y botón «Siguiente»; el mismo boleto en el mismo modo y zona se ignora
+  10 s (cambiar a SALIDA, de zona o «Siguiente» lo vuelve a permitir). Antes rebotaba
+  ~10 veces (la cámara releía cada 2 s y la página solo ignoraba 0.9 s). Probado con
+  Playwright (USB simulado, API falso): 6/6.
+- **Purga de pruebas (Adam, 16:39)**: borrados los 10 escaneos (puerta1) y las 11
+  impresiones (impresion3) del 14-10, `accesos_zonas.dentro`=0 y `dentro_fecha`=NULL,
+  `asistencias`=0 en las 2 personas que tenían 1. Respaldo en el droplet:
+  `/root/backups/purga-pruebas-20261014/` (`tablas.dump` pg_dump -Fc de escaneos,
+  impresiones y zonas; `asistencias.csv`). Si Adam vuelve a probar antes del evento,
+  repetir la misma purga.
+- **Correos mal escritos**: 25 dominios (gmail.con, gamil.com, gmail.com4, icloud.con,
+  alm.buap.mc, metropli.edu.mx, …) en 36 registros; todos sin MX o dominios trampa
+  (gamil/gmaio/gmaol/outloook se quedan con correo ajeno). 17 ya se habían registrado
+  otra vez bien (no se tocan); a los otros **20** se les corrigió el correo y se les
+  mandó el boleto (operador `correccion-correo-14oct`, 0 fallas). Original → corregido
+  en `/root/backups/correcciones-correo-20261014.csv` (droplet, 600).
+- **Reenvío masivo terminado 16:44**: 3,018 boletos aceptados por Brevo, 1 falla
+  (`gmail.com4`, ya corregido arriba). Quedan 29 sin confirmar, 28 registrados en la
+  última hora (flujo normal).
 
 ## 2026-10-14 tarde · Mesa de registro e impresión fusionada (claude-code) — DESPLEGADO
 
