@@ -35,6 +35,15 @@ créditos: `python .ai/_do_reenvio_boletos.py enviar` (segundo plano dentro de
 Confirma solo a quien Brevo aceptó, se detiene sin créditos y se puede repetir.
 Cada registro nuevo gasta 2 créditos (confirmación + gafete): ~1,000 registros/día.
 
+**15:35 · llave de otra cuenta.** Adam pasó la llave de la cuenta Brevo de
+Zynora/NEXARA (4,940 créditos; IP del droplet ya autorizada). Esa cuenta **no tiene
+validado `myticket@experiencebt.com.mx`**: Brevo acepta por API y luego tira el correo
+(«sender ... is not valid»). Se probó con 1 envío, se deshizo (persona vuelta a sin
+confirmar, bitácora ok=false) y **volvió la llave vieja**. La nueva quedó en
+`backend/.env.brevo-zynora` (servidor, 600). Cambiar: `python .ai/_do_brevo_cuenta.py
+nueva [remitente] | vieja`. `_do_reenvio_boletos.py` ahora se niega a mandar si el
+remitente no está validado. DNS de experiencebt.com.mx: GoDaddy; correo: Microsoft 365.
+
 ## 2026-10-14 tarde · Boleto 62 × 29 mm (claude-code) — DESPLEGADO
 
 Adam: los boletos que les darán miden 6.2 × 2.9 cm (**etiqueta precortada Brother
