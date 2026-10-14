@@ -3,7 +3,31 @@
 - **Último turno:** claude-code
 - **Fecha:** 2026-10-14
 - **Rama:** main
-- **HEAD:** (ver git log) — Correos: Brevo sin créditos + enlace de 1 h. Arreglo **desplegado en DO**; **reenvío masivo pendiente de que recarguen créditos**.
+- **HEAD:** (ver git log) — Correos: cuenta Brevo nueva (20k/mes) con experiencebt.com.mx autenticado, aviso de créditos en el panel y reenvío masivo de boletos. **Todo desplegado en DO.**
+
+## 2026-10-14 tarde · Brevo nuevo, aviso de créditos y reenvío masivo (claude-code) — DESPLEGADO
+
+- **Cuenta Brevo activa = la de Zynora/NEXARA** (llave en `backend/.env` del servidor;
+  copia en `backend/.env.brevo-zynora`; la vieja de ExperienceBT en
+  `backend/.env.bak-brevo-20261014`, 0 créditos hasta el 29-10). Adam subió el plan a
+  **20,000 correos/mes** (19,709 créditos a las 15:50). IP del droplet 147.182.128.128
+  autorizada en Brevo (la cuenta bloquea IPs desconocidas: si cambia la IP, 401).
+- **experiencebt.com.mx autenticado en esa cuenta** (Adam agregó en GoDaddy el TXT
+  `brevo-code:61985bdb…`; los DKIM brevo1/brevo2 y el DMARC ya estaban). Sin eso Brevo
+  aceptaba por API y luego tiraba el correo («sender ... is not valid»).
+- Cambiar de cuenta: `python .ai/_do_brevo_cuenta.py nueva [remitente] | vieja`.
+- **Aviso en el panel** (commit `feat(correo)`): `GET /api/interno/correo-estado` en el
+  backend (créditos, fin de plan, remitente validado, envíos/fallas 24 h; cache 2 min) →
+  `GET /api/accesos/correo-estado` (informes o mesa) → banner rojo en el inicio si Brevo
+  no responde, el remitente no está validado, no hay créditos o quedan < 1,000. El
+  correo de confirmación queda en `correo_envios` con motivo `enlace`.
+  Deploy: `python .ai/_deploy_alerta.py subir|canario|promover|rollback`
+  (`:prev-alerta-20261014`). **Promover recrea demo_web: antes `_do_reenvio_boletos.py detener`.**
+- **Reenvío masivo** (`_do_reenvio_boletos.py enviar 0 3`, 3 procesos por `id % 3`,
+  operador `reenvio-masivo-14oct`, logs `/tmp/reenvio-boletos-{0,1,2}.log` dentro de
+  `eventos_demo_web`, `... estado`). Se cortó una vez para el deploy (≈220 enviados) y se
+  relanzó; se puede repetir sin duplicar (solo toma no confirmados).
+- El boleto 62 × 29 (DK-11209) sigue en producción (bundle y PDF verificados 15:45).
 
 ## 2026-10-14 tarde · «No llega el segundo correo» = Brevo sin créditos (claude-code) — DESPLEGADO
 
