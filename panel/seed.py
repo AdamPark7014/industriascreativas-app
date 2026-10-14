@@ -73,18 +73,20 @@ def _configurados() -> list:
 
 # Equipo de la mesa de atención del evento. Nombres y roles van en código; las
 # claves solo en el .env del servidor:
-#   PANEL_EQUIPO_CLAVES="registro1:xxxx,registro2:xxxx,...,controladm:xxxx"
+#   PANEL_EQUIPO_CLAVES="impresion1:xxxx,...,impresion10:xxxx,controladm:xxxx,puerta1:xxxx,..."
 # Quien no tenga clave en esa lista no se crea (y si existía, queda desactivado).
-EQUIPO_MESA = (
-    [(f"registro{n}", f"Registro {n}", "registro") for n in range(1, 6)]
-    + [(f"impresion{n}", f"Impresión {n}", "impresion") for n in range(1, 6)]
-    + [("controladm", "Control ADM", "control")]
-)
+EQUIPO_MESA = [("controladm", "Control ADM", "control")]
 
 # Equipo sin número fijo: cualquier "<prefijo><n>" de PANEL_EQUIPO_CLAVES se
-# crea con ese alcance ("puerta1:xxxx,...,puerta8:xxxx"). Cuántas puertas
-# hay lo decide el .env del servidor, no el código.
-EQUIPO_POR_PREFIJO = {"puerta": ("Puerta", "puerta")}
+# crea con ese alcance ("puerta1:xxxx,...,puerta8:xxxx"). Cuántas cuentas hay
+# lo decide el .env del servidor, no el código.
+# Desde el 14-10-2026 la mesa es una sola («Mesa de registro e impresión»): las
+# cuentas son impresion1…impresion10 (antes registro1-5 + impresion1-5). Un
+# registro<n> que quede fuera de la lista se desactiva solo.
+EQUIPO_POR_PREFIJO = {
+    "puerta": ("Puerta", "puerta"),
+    "impresion": ("Impresión", "impresion"),
+}
 
 
 def _equipo_mesa() -> list:
