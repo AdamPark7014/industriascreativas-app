@@ -22,7 +22,7 @@ from flask import Flask, request, url_for, send_from_directory, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import ARRAY
-from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadTimeSignature
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadTimeSignature, BadData
 
 WEB_DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'web', 'dist')
 LOGO_GABOR_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'logo-gabor.png')
@@ -88,6 +88,19 @@ PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL', '').strip().rstrip('/')
 BREVO_API_KEY = (os.getenv('API_KEYY') or os.getenv('BREVO_API_KEY') or '').strip()
 REMITENTE_EMAIL = os.getenv('REMITENTE_EMAIL', 'myticket@experiencebt.com.mx').strip()
 REMITENTE_NOMBRE = os.getenv('REMITENTE_NOMBRE', 'Gabor FICTI').strip()
+
+# El enlace del correo de confirmación vale hasta después del evento. Con una
+# hora (lo de antes) quien abría el correo más tarde veía «expiró» y nunca
+# recibía su gafete.
+CONFIRMACION_MAX_AGE = int(os.getenv('CONFIRMACION_MAX_AGE_S') or 30 * 24 * 3600)
+
+# Si Brevo no acepta el correo de confirmación (sin créditos, caído), el
+# formulario lo dice en vez de prometer un correo que nunca llega.
+MENSAJE_CORREO_NO_SALIO = (
+    'Tu registro SÍ quedó guardado, pero no pudimos enviarte el correo de confirmación. '
+    'No te registres otra vez: el día del evento da tu nombre en la mesa de registro '
+    'y ahí te entregan tu gafete.'
+)
 
 if not BREVO_API_KEY:
     print('⚠️ BREVO: no se encontró API_KEYY / BREVO_API_KEY en backend/.env')
@@ -430,6 +443,37 @@ def pagina_confirmacion(titulo, cuerpo_html='', tipo_usuario='ALUMNO'):
   </div>
 </body>
 </html>"""
+
+
+def bloque_descarga_gafete(tipo_usuario, registro_id, enviado=None):
+    """Botón para bajar el gafete desde la página de confirmación.
+
+    El gafete ya no depende del segundo correo: si Brevo no lo entrega (sin
+    créditos, spam, buzón lleno) la persona lo descarga aquí mismo. El enlace
+    pasa por /boleto/<token>, que solo sirve a registros confirmados.
+    """
+    acento = acento_hex(tipo_usuario)
+    if enviado is True:
+        nota = 'Descárgalo aquí; también te lo enviamos por correo.'
+    elif enviado is False:
+        nota = 'El correo con tu gafete no pudo salir: descárgalo aquí y guárdalo en tu teléfono.'
+    else:
+        nota = 'Descárgalo y guárdalo en tu teléfono; en la entrada se escanea su código QR.'
+    enlace = enlace_descarga_gafete(clave_de_tag(tipo_usuario), registro_id)
+    return f'''
+    <p style="margin:0 0 18px;color:{HEX_TEXTO_TENUE};line-height:1.55;">{nota}</p>
+    <p style="margin:0 0 8px;"><a href="{enlace}" style="display:inline-block;padding:14px 26px;border-radius:11px;background:{acento};color:{texto_sobre_acento(tipo_usuario)};font-weight:700;text-decoration:none;">Descargar mi gafete (PDF)</a></p>'''
+
+
+def pagina_enlace_invalido(tipo_usuario, expirado=False):
+    """Enlace de confirmación vencido o cortado: página clara en vez de JSON o un 500."""
+    titulo = 'Este enlace ya expiró.' if expirado else 'Este enlace no es válido.'
+    cuerpo = (
+        f'<p style="margin:0 0 10px;color:{HEX_TEXTO_TENUE};line-height:1.55;">'
+        'Tu registro sigue guardado. Abre el botón del correo tal cual, sin copiar el enlace a medias, '
+        'o el día del evento da tu nombre en la mesa de registro y ahí te entregan tu gafete.</p>'
+    )
+    return pagina_confirmacion(titulo, cuerpo, tipo_usuario=tipo_usuario), 400
 
 
 def ensure_schema():
@@ -905,7 +949,7 @@ def enviar_correo_confirmacion(
         brevo_mail_api.send_transac_email(send_smtp_email)
         return True
     except Exception as e:
-        print(f"❌ Error enviando correo de confirmación: {e}")
+        print(f"❌ Error enviando correo de confirmación: {e}", flush=True)
         return False
 
 
@@ -1082,7 +1126,9 @@ def enviar_gafete_detalle(
         return resultado(True, message_id=getattr(respuesta, 'message_id', None))
 
     except ApiException as e:
-        print(f"❌ Error API Brevo enviando PDF: {e}")
+        print(f"❌ Error API Brevo enviando PDF: {e}", flush=True)
+        if 'credit' in str(getattr(e, 'body', '') or '').lower():
+            return resultado(False, 'Brevo sin créditos: el correo no salió (imprime la etiqueta o recarga créditos)')
         return resultado(False, f'Brevo {e.status}: {e.reason}')
     except Exception as e:
         print(f"❌ Error enviando correo con PDF: {e}")
@@ -1264,7 +1310,7 @@ def registro():
         url_confirmacion = url_for('confirmar_email', token=token_url, _external=True)
         nombre_completo = f'{Nombre} {Apellido}'.strip()
 
-        enviar_correo_confirmacion(
+        enviado = enviar_correo_confirmacion(
             Correo,
             nombre_completo,
             url_confirmacion,
@@ -1279,6 +1325,9 @@ def registro():
                 500,
             )
 
+        if not enviado:
+            return api_message(False, MENSAJE_CORREO_NO_SALIO)
+
         return api_message(
             True,
             'Te enviamos un correo de confirmación. Al confirmar recibirás tu gafete con QR.',
@@ -1291,19 +1340,20 @@ def registro():
 @app.route('/confirmar/<token>')
 def confirmar_email(token):
     try:
-        correo_validado = serializer.loads(token, salt='email-confirm-salt', max_age=3600)
+        correo_validado = serializer.loads(token, salt='email-confirm-salt', max_age=CONFIRMACION_MAX_AGE)
     except SignatureExpired:
-        return api_message(False, 'El enlace de confirmación expiró.', 400)
-    except BadTimeSignature:
-        return api_message(False, 'El enlace de confirmación no es válido.', 400)
+        return pagina_enlace_invalido('ALUMNO', expirado=True)
+    except BadData:
+        # Enlace cortado al copiarlo del correo: antes tronaba con 500.
+        return pagina_enlace_invalido('ALUMNO')
 
     alumno = Alumno.query.filter(Alumno.Correo.any(correo_validado)).first()
 
     if alumno:
         if alumno.confirmado:
             return pagina_confirmacion(
-                f"""Tu cuenta ya había sido confirmada previamente.""",
-                f'',
+                'Tu registro ya estaba confirmado.',
+                bloque_descarga_gafete('ALUMNO', alumno.idAlumno),
                 tipo_usuario="ALUMNO",
             )
 
@@ -1311,18 +1361,13 @@ def confirmar_email(token):
         alumno.qr_code = generar_bytes_qr(f"ALUMNO-{alumno.idAlumno}")
         nombre_completo = f"{alumno.Nombre} {alumno.ApellidoPaterno or ''}".strip()
 
-        enviar_correo_gafete(
-            email_destino=correo_validado,
-            nombre_usuario=nombre_completo,
-            id_usuario=alumno.idAlumno,
-            tipo_usuario="ALUMNO",
-            objeto_usuario=alumno,
-        )
-
+        # Primero se guarda: el botón de descarga necesita el registro confirmado
+        # aunque el correo con el gafete no salga.
         db.session.commit()
+        envio = enviar_gafete_detalle(correo_validado, nombre_completo, alumno.idAlumno, "ALUMNO", alumno)
         return pagina_confirmacion(
             f"""¡Registro Confirmado para {nombre_completo}!""",
-            f'''<p style="margin:0 0 10px;color:{HEX_TEXTO_TENUE};line-height:1.55;">Revisa tu correo: ahí llega tu gafete digital con código QR.</p>''',
+            bloque_descarga_gafete('ALUMNO', alumno.idAlumno, enviado=envio['ok']),
             tipo_usuario="ALUMNO",
         )
 
@@ -1391,7 +1436,7 @@ def registro_empresario():
         token_url = serializer.dumps(payload, salt='email-confirm-salt')
         url_confirmacion = url_for('confirmar_email_generico', token=token_url, _external=True)
 
-        enviar_correo_confirmacion(
+        enviado = enviar_correo_confirmacion(
             email,
             f"{nombre} {apellido_paterno}",
             url_confirmacion,
@@ -1406,6 +1451,9 @@ def registro_empresario():
                 500,
             )
 
+        if not enviado:
+            return api_message(False, MENSAJE_CORREO_NO_SALIO)
+
         return api_message(
             True,
             '¡Registro recibido! Revisa tu correo para confirmar y recibir tu gafete con QR.',
@@ -1419,13 +1467,11 @@ def registro_empresario():
 @app.route('/confirmar_generico/<token>')
 def confirmar_email_generico(token):
     try:
-        data = serializer.loads(token, salt='email-confirm-salt', max_age=3600)
-    except (SignatureExpired, BadTimeSignature):
-        return pagina_confirmacion(
-            f"""El enlace no es válido o expiró.""",
-            f'',
-            tipo_usuario="EMPRESARIO",
-        )
+        data = serializer.loads(token, salt='email-confirm-salt', max_age=CONFIRMACION_MAX_AGE)
+    except SignatureExpired:
+        return pagina_enlace_invalido('EMPRESARIO', expirado=True)
+    except BadData:
+        return pagina_enlace_invalido('EMPRESARIO')
     if isinstance(data, dict):
         email = data.get('email')
         tipo = data.get('tipo')
@@ -1455,26 +1501,19 @@ def confirmar_email_generico(token):
     if usuario:
         if usuario.confirmado:
             return pagina_confirmacion(
-                f"""Tu cuenta ya había sido confirmada previamente.""",
-                f'',
+                'Tu registro ya estaba confirmado.',
+                bloque_descarga_gafete(tipo_tag, id_reg),
                 tipo_usuario=tipo_tag,
             )
 
         usuario.confirmado = True
         usuario.qr_code = generar_bytes_qr(f"{tipo_tag}-{id_reg}")
 
-        enviar_correo_gafete(
-            email_destino=email,
-            nombre_usuario=nombre_completo,
-            id_usuario=id_reg,
-            tipo_usuario=tipo_tag,
-            objeto_usuario=usuario
-        )
-
         db.session.commit()
+        envio = enviar_gafete_detalle(email, nombre_completo, id_reg, tipo_tag, usuario)
         return pagina_confirmacion(
             f"""¡Registro Confirmado para {nombre_completo}!""",
-            f'''<p style="margin:0 0 10px;color:{HEX_TEXTO_TENUE};line-height:1.55;">Tu gafete digital con código QR fue enviado al correo.</p>''',
+            bloque_descarga_gafete(tipo_tag, id_reg, enviado=envio['ok']),
             tipo_usuario=tipo_tag,
         )
     return api_message(False, 'Usuario no encontrado.', 404)

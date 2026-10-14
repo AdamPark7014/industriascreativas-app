@@ -836,6 +836,16 @@ panel.post('/gafete/:tipo/:id/impresion', async (c) => {
     ],
   )
   if (!fila) return c.json({ ok: false, error: 'insert' }, 500)
+  // La etiqueta impresa ES el boleto y la mesa ya vio a la persona: queda
+  // confirmada. Sin esto la puerta marca NO CONFIRMADO a quien nunca recibió el
+  // correo (Brevo se quedó sin créditos el 12-10-2026 y nadie pudo confirmar).
+  const t = TIPOS[tipo as TipoClave]
+  const recienConfirmado = await query(
+    `UPDATE "${t.tabla}" SET confirmado = TRUE
+     WHERE "${t.id}" = $1 AND confirmado IS NOT TRUE RETURNING 1`,
+    [id],
+  )
+  if (recienConfirmado.length) resumenCache.clear()
   const conteo = await conteoImpresion(tipo, id)
   return c.json({
     ok: true,
