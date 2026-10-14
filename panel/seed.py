@@ -8,10 +8,12 @@ acceso. Cualquier usuario que no venga en la configuración queda desactivado.
 Alcances (ver consultas.ALCANCES):
     interno   → empresas, estudiantes y evento Elisa Carrillo
     promotor  → empresas y estudiantes
+    puerta    → solo el escáner (puerta1…N, tantas como claves haya)
 
     python seed.py
 """
 import os
+import re
 import sys
 
 from pathlib import Path
@@ -79,6 +81,11 @@ EQUIPO_MESA = (
     + [("controladm", "Control ADM", "control")]
 )
 
+# Equipo sin número fijo: cualquier "<prefijo><n>" de PANEL_EQUIPO_CLAVES se
+# crea con ese alcance ("puerta1:xxxx,...,puerta8:xxxx"). Cuántas puertas
+# hay lo decide el .env del servidor, no el código.
+EQUIPO_POR_PREFIJO = {"puerta": ("Puerta", "puerta")}
+
 
 def _equipo_mesa() -> list:
     claves = {}
@@ -86,10 +93,20 @@ def _equipo_mesa() -> list:
         usuario, _, clave = par.strip().partition(":")
         if usuario and clave:
             claves[usuario.strip().lower()] = clave.strip()
-    return [
+    equipo = [
         {"usuario": usuario, "clave": claves.get(usuario, ""), "nombre": nombre, "alcance": alcance}
         for usuario, nombre, alcance in EQUIPO_MESA
     ]
+    por_prefijo = []
+    for usuario, clave in claves.items():
+        m = re.fullmatch(r"([a-z]+)(\d{1,3})", usuario)
+        if m and m.group(1) in EQUIPO_POR_PREFIJO:
+            etiqueta, alcance = EQUIPO_POR_PREFIJO[m.group(1)]
+            num = int(m.group(2))
+            por_prefijo.append((m.group(1), num, {
+                "usuario": usuario, "clave": clave, "nombre": f"{etiqueta} {num}", "alcance": alcance,
+            }))
+    return equipo + [u for *_, u in sorted(por_prefijo, key=lambda t: t[:2])]
 
 
 def _sql_statements(sql: str) -> list[str]:

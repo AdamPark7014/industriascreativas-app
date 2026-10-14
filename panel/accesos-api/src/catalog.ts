@@ -48,6 +48,7 @@ export const ALCANCES: Record<string, TipoClave[]> = {
   control: ['empresas', 'estudiantes'],
   impresion: ['empresas', 'estudiantes'],
   registro: ['empresas', 'estudiantes'],
+  puerta: ['empresas', 'estudiantes'],
 }
 
 export const ZONA_DEFECTO = 'acreditacion'
@@ -65,11 +66,14 @@ export function tiposDe(alcance: string): TipoClave[] {
  *   control    Control ADM de la mesa: registra, busca, reenvía, imprime y supervisa.
  *   impresion  Mesa de impresión: busca registrados, reenvía e imprime.
  *   registro   Mesa de registro: da de alta a quien no se registró e imprime su etiqueta.
+ *   puerta     Personal de la entrada (puerta1…N): solo el escáner. Ve las zonas para
+ *              elegir dónde valida (GET /zonas es de cualquier sesión), nada más.
  */
 export type Permiso =
   | 'panel_datos'
   | 'elisa'
   | 'escanear'
+  | 'bloquear'
   | 'zonas_editar'
   | 'metricas'
   | 'registrar'
@@ -85,8 +89,8 @@ export const ROLES: Record<string, { nombre: string; permisos: readonly Permiso[
   interno: {
     nombre: 'NEXARA · Operación',
     permisos: [
-      'panel_datos', 'elisa', 'escanear', 'zonas_editar', 'metricas', 'registrar', 'buscar',
-      'reenviar', 'imprimir', 'desmarcar', 'informes', 'mesa', 'equipo',
+      'panel_datos', 'elisa', 'escanear', 'bloquear', 'zonas_editar', 'metricas', 'registrar',
+      'buscar', 'reenviar', 'imprimir', 'desmarcar', 'informes', 'mesa', 'equipo',
     ],
   },
   promotor: {
@@ -104,6 +108,10 @@ export const ROLES: Record<string, { nombre: string; permisos: readonly Permiso[
   registro: {
     nombre: 'Mesa de registro',
     permisos: ['registrar', 'imprimir'],
+  },
+  puerta: {
+    nombre: 'Puerta',
+    permisos: ['escanear'],
   },
 }
 

@@ -129,6 +129,7 @@ ALCANCES = {
     "control": ("empresas", "estudiantes"),
     "impresion": ("empresas", "estudiantes"),
     "registro": ("empresas", "estudiantes"),
+    "puerta": ("empresas", "estudiantes"),
 }
 
 # Nombre visible, si entra al panel de datos (tablas y exportación) y su
@@ -140,6 +141,7 @@ ROLES = {
     "control": {"nombre": "Control ADM", "panel_datos": False, "inicio": "/accesos/"},
     "impresion": {"nombre": "Mesa de impresión", "panel_datos": False, "inicio": "/accesos/buscar"},
     "registro": {"nombre": "Mesa de registro", "panel_datos": False, "inicio": "/accesos/registro"},
+    "puerta": {"nombre": "Puerta", "panel_datos": False, "inicio": "/accesos/escanear"},
 }
 
 

@@ -9,10 +9,11 @@ import RegistroPage from './pages/RegistroPage'
 import ReportesPage from './pages/ReportesPage'
 import ZonasPage from './pages/ZonasPage'
 
-/** Las mesas de registro e impresión no tienen resumen: entran directo a su pantalla. */
+/** Las mesas de registro e impresión y la puerta no tienen resumen: entran directo a su pantalla. */
 function Inicio() {
   const sesion = useOutletContext<Sesion | null>()
   if (PERMISOS_RESUMEN.some((p) => tiene(sesion, p))) return <HubPage />
+  if (tiene(sesion, 'escanear')) return <Navigate to="/escanear" replace />
   if (tiene(sesion, 'registrar')) return <Navigate to="/registro" replace />
   if (tiene(sesion, 'buscar')) return <Navigate to="/buscar" replace />
   return <HubPage />

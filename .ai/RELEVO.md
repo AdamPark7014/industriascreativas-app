@@ -3,7 +3,50 @@
 - **Último turno:** claude-code
 - **Fecha:** 2026-10-14
 - **Rama:** main
-- **HEAD:** (ver git log) — Evento de 3 días, modo enfocado, guardas de impresión. **Desplegado en DO.**
+- **HEAD:** (ver git log) — Rol `puerta` (puerta1–5 solo escanean). **Desplegado en DO.**
+
+## 2026-10-14 tarde · Rol puerta (claude-code) — DESPLEGADO
+
+Hasta hoy solo `admin` (interno) podía escanear: el personal de la entrada habría
+operado con la cuenta que ve y cambia todo. Ahora hay rol **`puerta`** y usuarios
+**`puerta1`–`puerta5`** que solo ven el escáner (modo enfocado, sin lateral).
+
+- **API** (`catalog.ts`, `index.ts`): rol `puerta` = permiso `escanear`; alcance
+  empresas + estudiantes (sin Elisa). `/escanear`, `/escaneos/:id/latencia`,
+  `/zonas` y `/bloqueos` ya no comprueban `alcance === 'interno'` en el cuerpo:
+  lo decide `REGLAS`. `/resumen` pasa a `informes|mesa` (la puerta no ve
+  números). `/bloqueos` (lista negra, sin UI) pide permiso nuevo `bloquear`,
+  solo interno. `puedeOperar` de zonas/métricas/reportes = permiso `escanear`.
+- **Flask** (`consultas.py`): `puerta` sin panel de datos, inicio
+  `/accesos/escanear`. **`seed.py`** crea cualquier `puerta<n>` de
+  `PANEL_EQUIPO_CLAVES` (el número de puertas lo decide el `.env`).
+- **UI**: `Inicio` manda a `/escanear` a quien escanea sin resumen; Zonas en el
+  menú y su formulario piden `zonas_editar` (antes `escanear`).
+- **Claves**: `C:\dev\secrets\ficti-puerta-2026-10-14.txt` (fuera del repo) y
+  añadidas a la línea `PANEL_EQUIPO_CLAVES` de `ficti-usuarios-2026-10-05.txt`
+  (así un `_deploy_mesa.py prep` no las borra). En el servidor:
+  `python .ai/_deploy_dias.py equipo` las fusiona en `panel/.env` (respaldo
+  `panel/.env.antes-equipo-*`). **No están aún en el Excel/PDF de usuarios**
+  (el Excel estaba abierto en Excel).
+- Deploy: `ETIQUETA=prev-puerta-20261014 python .ai/_deploy_dias.py respaldar`
+  → `equipo` → subir → canario → promover. `_deploy_dias.py` ahora sube también
+  `panel/seed.py` y acepta `ETIQUETA`. **Rollback** a `:prev-puerta-20261014`
+  (`ETIQUETA=prev-puerta-20261014 python .ai/_deploy_dias.py rollback`);
+  respaldo `/root/backups/bd_demo-prev-puerta-20261014.dump`. El rollback no
+  borra a puerta1-5 de la BD (quedarían sin permisos con el código viejo).
+- Ojo: a las 14:39 **otro agente** (sesión madre, impresión 62×29 mm:
+  `gafete.ts`, `BoletoPrintModal.tsx`, `boleto-face.css`, `boletoLayout.ts`,
+  `boletoRender.ts`, `printAgent.ts`) editaba el mismo checkout sin commitear.
+  Se subió y construyó desde un árbol limpio (HEAD + rol puerta); **esos
+  cambios de impresión NO están desplegados ni commiteados** por este turno.
+- Verificado: canario `_smoke_mesa.py` VERDE y `_smoke_dias.py` VERDE (ahora con
+  29 checks de `puerta1`: escanea entrada/salida, latencia, operador; 403 en
+  resumen, buscar, registro, mesa, reportes, métricas, impresiones, equipo,
+  bloqueos, zonas POST, gafete y ficha; Flask `/` → escáner y 403 en datos;
+  login real). Promovido ~20:46 UTC; por URL pública puerta1-5 entran y caen en
+  `/accesos/escanear`; bundle `index-BxJW92TF.js`.
+- El límite de `/escanear` es 180/min **por IP**: si todas las puertas salen por
+  la misma red del recinto, comparten ese tope (≈3 escaneos/s en total).
 
 ## 2026-10-14 · Evento de tres días + modo enfocado (claude-code) — DESPLEGADO
 

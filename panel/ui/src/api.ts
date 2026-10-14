@@ -3,6 +3,7 @@ export type Permiso =
   | 'panel_datos'
   | 'elisa'
   | 'escanear'
+  | 'bloquear'
   | 'zonas_editar'
   | 'metricas'
   | 'registrar'
@@ -49,7 +50,7 @@ export type TotalesDia = DiaEvento & {
 export type Sesion = {
   usuario: string
   nombre: string
-  alcance: 'interno' | 'promotor' | 'control' | 'impresion' | 'registro' | string
+  alcance: 'interno' | 'promotor' | 'control' | 'impresion' | 'registro' | 'puerta' | string
   /** Nombre visible del rol ("Mesa de impresión"). */
   rolNombre: string
   permisos: Permiso[]

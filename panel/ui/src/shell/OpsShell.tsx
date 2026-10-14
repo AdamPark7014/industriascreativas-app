@@ -12,8 +12,8 @@ type NavItem = {
   permisos: Permiso[]
 }
 
-/** Quién puede abrir el resumen (GET /resumen en accesos-api). */
-export const PERMISOS_RESUMEN: Permiso[] = ['informes', 'mesa', 'escanear']
+/** Quién puede abrir el resumen (GET /resumen en accesos-api). La puerta no. */
+export const PERMISOS_RESUMEN: Permiso[] = ['informes', 'mesa']
 
 const GROUPS: { titulo: string; items: NavItem[] }[] = [
   {
@@ -34,7 +34,7 @@ const GROUPS: { titulo: string; items: NavItem[] }[] = [
     titulo: 'En puerta',
     items: [
       { to: '/escanear', label: 'Escáner', hint: 'Entrada · salida · reingreso', permisos: ['escanear'] },
-      { to: '/zonas', label: 'Zonas y aforo', hint: 'Cupo por área, se reinicia cada día', permisos: ['escanear', 'informes'] },
+      { to: '/zonas', label: 'Zonas y aforo', hint: 'Cupo por área, se reinicia cada día', permisos: ['zonas_editar', 'informes'] },
     ],
   },
   {
@@ -104,8 +104,8 @@ export default function OpsShell() {
     items: g.items.filter((n) => n.permisos.some((p) => tiene(sesion, p))),
   })).filter((g) => g.items.length)
 
-  // Las mesas de registro e impresión solo tienen una pantalla: un menú con
-  // una sola opción estorba. Se les quita el lateral y queda una barra arriba.
+  // Las mesas de registro e impresión y la puerta solo tienen una pantalla: un
+  // menú con una sola opción estorba. Se les quita el lateral y queda una barra arriba.
   const items = grupos.flatMap((g) => g.items)
   const enfocado = Boolean(sesion) && items.length <= 1
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { api, type Sesion, type Zona } from '../api'
+import { api, tiene, type Sesion, type Zona } from '../api'
 import styles from './zonas.module.scss'
 
 export default function ZonasPage() {
@@ -30,7 +30,7 @@ export default function ZonasPage() {
   }, [])
 
   const guardar = async () => {
-    if (!sesion?.puedeOperar) return
+    if (!tiene(sesion, 'zonas_editar')) return
     setOkMsg(null)
     try {
       const data = await api.guardarZona({
@@ -92,7 +92,7 @@ export default function ZonasPage() {
         })}
       </ul>
 
-      {sesion?.puedeOperar ? (
+      {tiene(sesion, 'zonas_editar') ? (
         <form
           className={styles.form}
           onSubmit={(e) => {

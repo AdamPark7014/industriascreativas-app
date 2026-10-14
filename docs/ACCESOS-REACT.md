@@ -62,7 +62,7 @@ evento en hora de México** y el estado de puerta se reinicia cada día.
   por día en Resumen; chip "Día N · jue 15 oct" en la cabecera; banner del día
   en el escáner (y aviso si hoy no es día del evento). El escáner ignora la
   misma lectura repetida en < 0.9 s (ruido del lector USB).
-- **Modo enfocado**: `registro1–5` e `impresion1–5` tienen una sola pantalla,
+- **Modo enfocado**: `registro1–5`, `impresion1–5` y `puerta1–N` tienen una sola pantalla,
   así que `OpsShell` les quita el lateral y deja una barra superior (logos,
   título, día, usuario y Salir). Se activa solo cuando el rol ve ≤ 1 entrada
   del menú.
@@ -215,11 +215,20 @@ rol en el panel Flask: `panel/consultas.py` (`ROLES`).
 
 | Usuario(s) | Rol | Puede |
 |---|---|---|
-| `admin` | interno (NEXARA · Operación) | todo, incluido escáner, zonas, métricas y equipo |
+| `admin` | interno (NEXARA · Operación) | todo, incluido escáner, zonas, lista negra (`/bloqueos`), métricas y equipo |
 | `promotor` | promotor | panel de datos + registrar, buscar, reenviar, imprimir, informes, actividad |
 | `controladm` | control | registrar, buscar, reenviar, imprimir, desmarcar, informes, actividad |
 | `impresion1`–`5` | impresion | buscar (nombre/correo/teléfono/folio), ficha, reenviar, imprimir |
 | `registro1`–`5` | registro | alta en sitio + imprimir; reimprime solo sus altas (`/mis-altas`) |
+| `puerta1`–`N` | puerta | solo el escáner (`/accesos/escanear`, entrada/salida, zonas para elegir dónde valida); sin resumen, búsqueda, ficha, informes ni panel de datos |
+
+- **Puerta** (2026-10-14): antes solo `admin` podía escanear. Las rutas de
+  escaneo ya no miran `alcance === 'interno'`: las decide `REGLAS` por permiso
+  (`escanear`; `/bloqueos` pide `bloquear`, solo interno). `seed.py` crea
+  cualquier `puerta<n>` que venga en `PANEL_EQUIPO_CLAVES` (cuántas puertas hay
+  lo decide el `.env`); `python .ai/_deploy_dias.py equipo` fusiona en el
+  servidor las claves de `C:\dev\secrets\ficti-puerta-2026-10-14.txt` y luego
+  hay que recrear `panel_web` para que el seeder las cree.
 
 - **Registro en sitio** (`/accesos/registro`, `POST /api/accesos/registro`):
   mismos datos que el formulario público, queda `confirmado` al momento y abre

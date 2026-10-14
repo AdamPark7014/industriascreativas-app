@@ -289,10 +289,11 @@ type Ctx = Context<{ Variables: Vars }>
 const REGLAS: [metodo: string, ruta: RegExp, permisos: Permiso[]][] = [
   ['GET', /^\/sesion$/, []],
   ['GET', /^\/zonas$/, []],
-  ['GET', /^\/resumen$/, ['informes', 'mesa', 'escanear']],
+  // La puerta escanea pero no ve los números del evento.
+  ['GET', /^\/resumen$/, ['informes', 'mesa']],
   ['GET', /^\/buscar$/, ['buscar']],
   ['POST', /^\/zonas$/, ['zonas_editar']],
-  ['*', /^\/bloqueos$/, ['escanear']],
+  ['*', /^\/bloqueos$/, ['bloquear']],
   ['GET', /^\/metricas$/, ['metricas']],
   ['POST', /^\/escanear$/, ['escanear']],
   ['PATCH', /^\/escaneos\/\d+\/latencia$/, ['escanear']],
@@ -473,14 +474,11 @@ panel.get('/zonas', async (c) => {
   return c.json({
     zonas,
     evento: eventoJson(),
-    puedeOperar: c.get('alcance') === 'interno',
+    puedeOperar: puede(c.get('alcance'), 'escanear'),
   })
 })
 
 panel.post('/zonas', async (c) => {
-  if (c.get('alcance') !== 'interno') {
-    return c.json({ ok: false, error: 'solo_interno', codigo: CODIGOS.SOLO_INTERNO }, 403)
-  }
   const datos = await c.req.json().catch(() => ({}))
   const clave = String(datos.clave || '')
     .trim()
@@ -515,9 +513,6 @@ panel.post('/zonas', async (c) => {
 })
 
 panel.get('/bloqueos', async (c) => {
-  if (c.get('alcance') !== 'interno') {
-    return c.json({ ok: false, error: 'solo_interno', codigo: CODIGOS.SOLO_INTERNO }, 403)
-  }
   const rows = await query(
     `SELECT id, tipo, registro_id, motivo, activo, creado
      FROM accesos_bloqueos WHERE activo ORDER BY creado DESC LIMIT 500`,
@@ -526,9 +521,6 @@ panel.get('/bloqueos', async (c) => {
 })
 
 panel.post('/bloqueos', async (c) => {
-  if (c.get('alcance') !== 'interno') {
-    return c.json({ ok: false, error: 'solo_interno', codigo: CODIGOS.SOLO_INTERNO }, 403)
-  }
   const datos = await c.req.json().catch(() => ({}))
   const tipo = String(datos.tipo || '').trim()
   const registroId = Number(datos.registro_id || datos.registroId || 0)
@@ -609,14 +601,11 @@ panel.get('/metricas', async (c) => {
     hoy: hoy || { n: 0, p50: null, p95: null, avg_server: null, avg_client: null },
     devices,
     codigos,
-    puedeOperar: c.get('alcance') === 'interno',
+    puedeOperar: puede(c.get('alcance'), 'escanear'),
   })
 })
 
 panel.post('/escanear', async (c) => {
-  if (c.get('alcance') !== 'interno') {
-    return c.json({ ok: false, error: 'solo_interno', codigo: CODIGOS.SOLO_INTERNO }, 403)
-  }
   const startedAt = Date.now()
   const datos = await c.req.json().catch(() => ({}))
   const qr = String(datos.qr || datos.qr_data || '').trim()
@@ -691,9 +680,6 @@ panel.post('/escanear', async (c) => {
 })
 
 panel.patch('/escaneos/:id/latencia', async (c) => {
-  if (c.get('alcance') !== 'interno') {
-    return c.json({ ok: false, error: 'solo_interno' }, 403)
-  }
   const id = Number(c.req.param('id'))
   if (!Number.isFinite(id)) return c.json({ ok: false, error: 'id' }, 400)
   const datos = await c.req.json().catch(() => ({}))
@@ -1141,7 +1127,7 @@ panel.get('/reportes', async (c) => {
     registros,
     zonas: zonasOpts,
     dispositivos: devices.map((d) => d.dispositivo).filter(Boolean),
-    puedeOperar: c.get('alcance') === 'interno',
+    puedeOperar: puede(c.get('alcance'), 'escanear'),
   })
 })
 
