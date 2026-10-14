@@ -31,7 +31,14 @@ const MAX_DECODE_SIDE = 640
 /** Cada N intentos miramos el cuadro completo, por si el QR quedo fuera del marco. */
 const FULL_FRAME_EVERY = 4
 /** Mismo codigo repetido dentro de esta ventana = ignorado (la camara lee en continuo). */
-const REPEAT_WINDOW_MS = 2000
+const REPEAT_WINDOW_MS = 4000
+/**
+ * Una lectura sola no basta: el mismo valor tiene que salir en lecturas seguidas
+ * (menos de VENTANA_CONFIRMAR_MS entre ellas). Baja la sensibilidad: un QR de
+ * paso, a medio enfocar o del fondo ya no dispara un escaneo.
+ */
+const LECTURAS_PARA_CONFIRMAR = 2
+const VENTANA_CONFIRMAR_MS = 700
 /** Si BarcodeDetector revienta seguido (WebViews Android), nos pasamos a jsQR y no volvemos. */
 const DETECTOR_FAILURE_LIMIT = 5
 /** Respiro entre intentos cuando el navegador no expone requestVideoFrameCallback. */
@@ -283,8 +290,19 @@ export function useCameraCapture(options: {
       }
     })()
 
+    const candidato = { value: '', at: 0, hits: 0 }
+
     const emit = (raw: string) => {
       const now = Date.now()
+      if (candidato.value === raw && now - candidato.at < VENTANA_CONFIRMAR_MS) {
+        candidato.hits += 1
+      } else {
+        candidato.value = raw
+        candidato.hits = 1
+      }
+      candidato.at = now
+      if (candidato.hits < LECTURAS_PARA_CONFIRMAR) return
+      candidato.hits = 0
       const last = lastValueRef.current
       if (last && last.value === raw && now - last.at < REPEAT_WINDOW_MS) return
       lastValueRef.current = { value: raw, at: now }

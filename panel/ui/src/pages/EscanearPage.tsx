@@ -8,6 +8,18 @@ import styles from './escanear.module.scss'
 
 type Modo = 'entrada' | 'salida'
 
+/**
+ * Tras cada resultado la cámara se detiene para que la puerta lea la tarjeta y la
+ * persona retire el boleto: antes volvía a leer el mismo QR y rebotaba «ya dentro»
+ * varias veces seguidas.
+ */
+const PAUSA_OK_MS = 2000
+const PAUSA_RECHAZO_MS = 3500
+/** El mismo boleto en el mismo modo y zona no se vuelve a validar en este lapso. */
+const MISMO_BOLETO_MS = 10000
+
+type Origen = 'usb' | 'camara'
+
 function usePitido() {
   const ctxRef = useRef<AudioContext | null>(null)
   const asegurar = useCallback(() => {
@@ -79,8 +91,18 @@ export default function EscanearPage() {
   )
   const inputRef = useRef<HTMLInputElement>(null)
   const enVuelo = useRef(false)
-  /** Último código leído: los lectores USB a veces disparan dos veces la misma lectura. */
-  const ultimoRef = useRef<{ codigo: string; at: number }>({ codigo: '', at: 0 })
+  /** Último boleto validado (con su modo y zona) para no repetirlo por error. */
+  const ultimoRef = useRef<{ codigo: string; at: number; modo: string; zona: string }>({
+    codigo: '',
+    at: 0,
+    modo: '',
+    zona: '',
+  })
+  const [pausa, setPausa] = useState<{ ms: number; clave: number } | null>(null)
+  const pausadoRef = useRef(false)
+  const pausaTimer = useRef(0)
+  const [aviso, setAviso] = useState<string | null>(null)
+  const avisoTimer = useRef(0)
   const modoRef = useRef<Modo>('entrada')
   const zonaRef = useRef('acreditacion')
   const deviceRef = useRef(deviceId)
@@ -94,6 +116,40 @@ export default function EscanearPage() {
   modoRef.current = modo
   zonaRef.current = zona
   deviceRef.current = deviceId
+
+  const avisar = useCallback((texto: string) => {
+    window.clearTimeout(avisoTimer.current)
+    setAviso(texto)
+    avisoTimer.current = window.setTimeout(() => setAviso(null), 2500)
+  }, [])
+
+  const iniciarPausa = useCallback((ok: boolean) => {
+    const ms = ok ? PAUSA_OK_MS : PAUSA_RECHAZO_MS
+    window.clearTimeout(pausaTimer.current)
+    pausadoRef.current = true
+    setPausa({ ms, clave: Date.now() })
+    pausaTimer.current = window.setTimeout(() => {
+      pausadoRef.current = false
+      setPausa(null)
+    }, ms)
+  }, [])
+
+  /** «Siguiente»: corta la pausa y permite volver a leer incluso el mismo boleto. */
+  const siguiente = useCallback(() => {
+    window.clearTimeout(pausaTimer.current)
+    pausadoRef.current = false
+    setPausa(null)
+    ultimoRef.current = { codigo: '', at: 0, modo: '', zona: '' }
+    inputRef.current?.focus({ preventScroll: true })
+  }, [])
+
+  useEffect(
+    () => () => {
+      window.clearTimeout(pausaTimer.current)
+      window.clearTimeout(avisoTimer.current)
+    },
+    [],
+  )
 
   const refrescarZonas = useCallback(() => {
     void api.zonas().then((d) => {
@@ -170,17 +226,26 @@ export default function EscanearPage() {
   }, [vaciarCola])
 
   const escanear = useCallback(
-    async (qr: string) => {
+    async (qr: string, origen: Origen = 'usb') => {
       const codigo = qr.trim()
       if (!codigo || enVuelo.current) return
-      // Misma lectura dos veces en menos de un segundo: ruido del lector, no un
-      // segundo escaneo. Se ignora sin pitido ni rechazo en pantalla.
+      // En la pausa de confirmación la cámara sigue viendo el mismo QR: no valida nada.
+      if (origen === 'camara' && pausadoRef.current) return
       const ahora = Date.now()
-      if (ultimoRef.current.codigo === codigo && ahora - ultimoRef.current.at < 900) {
+      const u = ultimoRef.current
+      if (
+        u.codigo === codigo &&
+        u.modo === modoRef.current &&
+        u.zona === zonaRef.current &&
+        ahora - u.at < MISMO_BOLETO_MS
+      ) {
+        // Mismo boleto, mismo modo y zona: ya se validó. Sin pitido ni rechazo.
         if (inputRef.current) inputRef.current.value = ''
+        avisar('Ese boleto ya se validó hace un momento. Para leerlo otra vez pulsa «Siguiente».')
         return
       }
-      ultimoRef.current = { codigo, at: ahora }
+      ultimoRef.current = { codigo, at: ahora, modo: modoRef.current, zona: zonaRef.current }
+      let resultadoOk = false
       enVuelo.current = true
       // Optimistic UI — show pending before round-trip
       setResultado({
@@ -229,6 +294,7 @@ export default function EscanearPage() {
         const clientMs = Math.round(performance.now() - t0)
         setLatenciaMs(clientMs)
         setServerMs(typeof datos.serverMs === 'number' ? datos.serverMs : null)
+        resultadoOk = datos.ok
         setResultado(datos)
         setZonas((prev) =>
           aplicarAforo(prev, datos.zona, datos.zonaDentro, datos.zonaAforo),
@@ -279,10 +345,11 @@ export default function EscanearPage() {
         enVuelo.current = false
         setOcupado(false)
         if (inputRef.current) inputRef.current.value = ''
+        iniciarPausa(resultadoOk)
         enfocar()
       }
     },
-    [sonar, enfocar, registrarHistorial],
+    [sonar, enfocar, registrarHistorial, avisar, iniciarPausa],
   )
 
   if (sesion && !sesion.puedeOperar) {
@@ -388,7 +455,7 @@ export default function EscanearPage() {
           }}
         >
           <label className={styles.label} htmlFor="qr_input">
-            Lector USB / teclado (sin debounce)
+            Lector USB / teclado
           </label>
           <input
             ref={inputRef}
@@ -414,13 +481,16 @@ export default function EscanearPage() {
           active={camara}
           onToggle={setCamara}
           disabled={ocupado}
-          onScan={(code) => void escanear(code)}
+          paused={Boolean(pausa)}
+          onScan={(code) => void escanear(code, 'camara')}
         />
 
         <p className={styles.hint}>
           {ocupado
             ? 'Validando… un momento'
-            : modo === 'entrada'
+            : pausa
+              ? 'Resultado en pantalla: retira el boleto. Sigue leyendo en un momento o pulsa «Siguiente».'
+              : modo === 'entrada'
               ? 'Listo para ENTRADA. Si ya está dentro hoy, se rechaza hasta registrar una salida.'
               : 'Listo para SALIDA. Libera el aforo y permite que vuelva a entrar hoy.'}
           {latenciaMs != null
@@ -431,6 +501,12 @@ export default function EscanearPage() {
           {!online ? ' · Sin red' : ''}
           {cola > 0 ? ` · Cola offline: ${cola}` : ''}
         </p>
+
+        {aviso ? (
+          <p className={styles.aviso} role="status">
+            {aviso}
+          </p>
+        ) : null}
 
         {resultado ? (
           <div
@@ -464,6 +540,22 @@ export default function EscanearPage() {
                 ? ` · ${resultado.zonaNombre} ${resultado.zonaDentro ?? '—'}/${resultado.zonaAforo || '∞'}`
                 : ''}
             </span>
+            {pausa ? (
+              <div className={styles.pausa}>
+                <span className={styles.pausaPista}>
+                  <span
+                    key={pausa.clave}
+                    className={styles.pausaBarra}
+                    style={{ animationDuration: `${pausa.ms}ms` }}
+                  />
+                </span>
+                <button type="button" className={styles.siguiente} onClick={siguiente}>
+                  Siguiente
+                </button>
+              </div>
+            ) : resultado.codigo !== 'PENDING' ? (
+              <span className={styles.listo}>Listo para el siguiente boleto</span>
+            ) : null}
           </div>
         ) : (
           <div className={styles.espera}>

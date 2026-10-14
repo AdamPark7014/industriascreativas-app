@@ -4,16 +4,18 @@ import styles from './camera-scan.module.scss'
 type Props = {
   onScan: (code: string) => void
   disabled?: boolean
+  /** Pausa de confirmación: no decodifica, pero el botón de la cámara sigue usable. */
+  paused?: boolean
   active: boolean
   onToggle: (on: boolean) => void
 }
 
-export default function CameraScan({ onScan, disabled, active, onToggle }: Props) {
+export default function CameraScan({ onScan, disabled, paused, active, onToggle }: Props) {
   const camera = useCameraCapture({
     onDecode: (value) => {
-      if (!disabled) onScan(value)
+      if (!disabled && !paused) onScan(value)
     },
-    paused: disabled || !active,
+    paused: disabled || paused || !active,
   })
 
   const start = camera.start
@@ -34,6 +36,7 @@ export default function CameraScan({ onScan, disabled, active, onToggle }: Props
     if (camera.status === 'denied') return camera.error || 'Cámara bloqueada'
     if (camera.status === 'unsupported') return camera.error || 'Cámara no disponible — usa USB'
     if (camera.status === 'error') return camera.error || 'Error de cámara'
+    if (paused) return 'Pausa: retira el boleto'
     return 'Centra el QR en el marco'
   }
 

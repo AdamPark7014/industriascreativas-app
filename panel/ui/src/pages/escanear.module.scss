@@ -200,8 +200,83 @@
   text-align: center;
 
   strong {
-    font-size: 1.2rem;
+    font-size: 1.6rem;
     font-weight: 800;
+    letter-spacing: 0.02em;
+  }
+}
+
+/* Confirmación: barra que se vacía mientras la cámara espera, y «Siguiente». */
+.pausa {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.pausaPista {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.pausaBarra {
+  display: block;
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  background: currentColor;
+  transform-origin: left center;
+  animation: vaciar linear forwards;
+}
+
+@keyframes vaciar {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.siguiente {
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.16);
+  }
+}
+
+.listo {
+  margin-top: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #8fa3c7;
+}
+
+.aviso {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 193, 7, 0.12);
+  border: 1px solid rgba(255, 193, 7, 0.45);
+  color: #ffd25e;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pausaBarra {
+    animation: none;
   }
 }
 
@@ -219,7 +294,8 @@
 
 .persona {
   color: #fff;
-  font-weight: 600;
+  font-size: 1.2rem;
+  font-weight: 700;
 }
 
 .conteo {
