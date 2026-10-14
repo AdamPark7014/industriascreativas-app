@@ -25,11 +25,14 @@ export type CodigoAcceso = (typeof CODIGOS)[keyof typeof CODIGOS]
 /** Debounce servidor: mismo QR+modo dentro de esta ventana → COOLDOWN/DUPLICATE. */
 export const SCAN_COOLDOWN_MS = Number(process.env.SCAN_COOLDOWN_MS || 1200)
 
-/** Columnas mínimas por tipo (evita SELECT * en hot path). */
+/**
+ * Columnas mínimas por tipo (evita SELECT * en hot path).
+ * Registro_Alumnos NO tiene ApellidoMaterno (ver panel/consultas.py → CATALOGO):
+ * pedirla hacía que todo escaneo de alumno respondiera 500.
+ */
 export const SCAN_COLS: Record<string, string> = {
   empresas:
     '"idEmpresario", "Nombre", "ApellidoPaterno", "ApellidoMaterno", "confirmado", "asistencias"',
-  estudiantes:
-    '"idAlumno", "Nombre", "ApellidoPaterno", "ApellidoMaterno", "confirmado", "asistencias"',
+  estudiantes: '"idAlumno", "Nombre", "ApellidoPaterno", "confirmado", "asistencias"',
   elisa: '"idUsuario", "Nombre", "confirmado", "asistencias"',
 }

@@ -184,6 +184,37 @@ export async function ensureIndexes(): Promise<void> {
     'boleto_descargas_reg',
   )
 
+  // Evento de varios días. Espejo: migraciones/007_dias_evento.sql
+  await trySql(
+    `CREATE INDEX IF NOT EXISTS accesos_escaneos_fecha_idx
+      ON accesos_escaneos (((creado AT TIME ZONE 'America/Mexico_City')::date), creado DESC)`,
+    'escaneos_fecha',
+  )
+  await trySql(
+    `CREATE INDEX IF NOT EXISTS accesos_escaneos_persona_ok_idx
+      ON accesos_escaneos (tipo, registro_id, creado DESC) WHERE ok`,
+    'escaneos_persona_ok',
+  )
+  await trySql(
+    `CREATE INDEX IF NOT EXISTS accesos_impresiones_fecha_idx
+      ON accesos_impresiones (((creado AT TIME ZONE 'America/Mexico_City')::date))`,
+    'impresiones_fecha',
+  )
+  await trySql(
+    `CREATE INDEX IF NOT EXISTS accesos_altas_sitio_fecha_idx
+      ON accesos_altas_sitio (((creado AT TIME ZONE 'America/Mexico_City')::date))`,
+    'altas_sitio_fecha',
+  )
+  await trySql(
+    `CREATE INDEX IF NOT EXISTS correo_envios_fecha_idx
+      ON correo_envios (((creado AT TIME ZONE 'America/Mexico_City')::date))`,
+    'correo_envios_fecha',
+  )
+  await trySql(
+    `ALTER TABLE accesos_zonas ADD COLUMN IF NOT EXISTS dentro_fecha DATE`,
+    'col_dentro_fecha',
+  )
+
   await trySql(
     `CREATE INDEX IF NOT EXISTS accesos_escaneos_zona_creado_idx
       ON accesos_escaneos (zona_clave, creado DESC)`,

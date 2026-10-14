@@ -18,6 +18,43 @@
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
 }
 
+.diaBanner {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(18, 181, 176, 0.14);
+  border: 1px solid rgba(18, 181, 176, 0.5);
+
+  strong {
+    font-size: 1rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #5ff0ea;
+  }
+
+  span {
+    font-size: 0.74rem;
+    color: #93a6c4;
+    text-transform: lowercase;
+
+    &::first-letter {
+      text-transform: uppercase;
+    }
+  }
+}
+
+.diaBannerOff {
+  background: rgba(255, 171, 64, 0.12);
+  border-color: rgba(255, 171, 64, 0.5);
+
+  strong {
+    color: #ffc266;
+  }
+}
+
 .modes {
   display: grid;
   grid-template-columns: 1fr 1fr;

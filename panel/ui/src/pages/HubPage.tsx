@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { api, mesa, tiene, type MesaResp, type Resumen, type Sesion } from '../api'
+import DiaSelector from '../components/DiaSelector'
+import { useDiaSeleccionado } from '../lib/useDia'
 import styles from './hub.module.scss'
 
 function textoBienvenida(sesion: Sesion | null): string {
   if (sesion?.puedeOperar) {
-    return 'Desde aquí operas todo el evento: puerta, mesa de atención, impresión de gafetes e informes.'
+    return 'Desde aquí operas todo el evento: puerta, mesa de atención, impresión de gafetes e informes, día por día.'
   }
   if (tiene(sesion, 'registrar') && tiene(sesion, 'buscar')) {
-    return 'Registra a quien llega sin registro, atiende a los ya registrados (ficha, reenvío del boleto y etiqueta) y sigue lo que pasa hoy.'
+    return 'Registra a quien llega sin registro, atiende a los ya registrados (ficha, reenvío del boleto y etiqueta) y sigue lo que pasa cada día.'
   }
-  return 'Consulta los números del día, la actividad de la mesa y el historial de accesos.'
+  return 'Consulta los números de cada día, la actividad de la mesa y el historial de accesos.'
 }
 
 export default function HubPage() {
@@ -28,12 +30,16 @@ export default function HubPage() {
   } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const evento = data?.evento ?? sesion?.evento
+  const [dia, setDia, diaParam] = useDiaSeleccionado(evento, { conTodos: true })
 
   useEffect(() => {
     let vivo = true
+    setLoading(true)
+    setMesaHoy(null)
     const cargar = () => {
       void api
-        .resumen()
+        .resumen(diaParam)
         .then((d) => {
           if (vivo) {
             setData(d)
@@ -48,7 +54,7 @@ export default function HubPage() {
         })
       if (verMesa) {
         void mesa
-          .actividad()
+          .actividad(diaParam)
           .then((m) => {
             if (vivo) setMesaHoy(m.hoy)
           })
@@ -56,7 +62,7 @@ export default function HubPage() {
       }
       if (!verMetricas) return
       void api
-        .metricas()
+        .metricas(diaParam)
         .then((m) => {
           if (!vivo) return
           setLatency({
@@ -79,7 +85,10 @@ export default function HubPage() {
       vivo = false
       window.clearInterval(id)
     }
-  }, [verMesa, verMetricas])
+  }, [verMesa, verMetricas, diaParam])
+
+  // "Entradas · Día 2" / "Entradas · todo el evento"
+  const sufijo = data?.dia ? (data.dia.modo === 'todos' ? 'evento' : data.dia.etiqueta.split(' · ')[0]) : '…'
 
   return (
     <main className={styles.page}>
@@ -89,13 +98,56 @@ export default function HubPage() {
 
       {error ? <div className={styles.alerta}>{error}</div> : null}
 
+      {verPuerta || verMesa ? (
+        <section className={styles.diasBloque} aria-label="Días del evento">
+          <div className={styles.diasCab}>
+            <h2>Días del evento</h2>
+            <DiaSelector evento={evento} value={dia} onChange={setDia} compacto />
+          </div>
+          {data?.porDia?.length ? (
+            <div className={styles.dias}>
+              {data.porDia.map((d) => {
+                const esHoy = data.evento.hoy === d.num
+                const activo = dia === d.num
+                return (
+                  <button
+                    key={d.num}
+                    type="button"
+                    className={`${styles.diaCard} ${activo ? styles.diaCardActivo : ''} ${esHoy ? styles.diaCardHoy : ''}`}
+                    onClick={() => setDia(d.num)}
+                    aria-pressed={activo}
+                  >
+                    <span className={styles.diaNum}>
+                      {d.etiqueta}
+                      {esHoy ? <em>HOY</em> : null}
+                    </span>
+                    <span className={styles.diaFecha}>{d.nombre}</span>
+                    <strong>{d.unicos.toLocaleString('es-MX')}</strong>
+                    <span className={styles.diaDetalle}>
+                      personas · {d.entradas.toLocaleString('es-MX')} entradas
+                      {verMesa ? ` · ${d.impresiones.toLocaleString('es-MX')} etiquetas` : ''}
+                    </span>
+                  </button>
+                )
+              })}
+              {data.otrosDias ? (
+                <div className={`${styles.diaCard} ${styles.diaCardOtros}`}>
+                  <span className={styles.diaNum}>Fuera de fechas</span>
+                  <span className={styles.diaFecha}>pruebas y previos</span>
+                  <strong>{data.otrosDias.unicos.toLocaleString('es-MX')}</strong>
+                  <span className={styles.diaDetalle}>
+                    personas · {data.otrosDias.entradas.toLocaleString('es-MX')} entradas
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
       {latency ? (
-        <section className={styles.kpis} aria-label="Latencia de escaneo hoy">
-          <Kpi
-            label="Escaneos medidos"
-            value={latency.n}
-            loading={false}
-          />
+        <section className={styles.kpis} aria-label="Latencia de escaneo">
+          <Kpi label={`Escaneos medidos · ${sufijo}`} value={latency.n} loading={false} />
           <Kpi
             label="p50 server"
             value={latency.p50 != null ? Math.round(latency.p50) : null}
@@ -146,7 +198,7 @@ export default function HubPage() {
               <span className={styles.ahoraNum}>≡</span>
               <div>
                 <strong>Actividad de la mesa</strong>
-                <p>Altas, impresiones y reenvíos de hoy por usuario.</p>
+                <p>Altas, impresiones y reenvíos por usuario y por día.</p>
               </div>
             </Link>
           ) : null}
@@ -155,7 +207,7 @@ export default function HubPage() {
               <span className={styles.ahoraNum}>▣</span>
               <div>
                 <strong>Validar en puerta</strong>
-                <p>Escanea QR: entrada, salida o reingreso.</p>
+                <p>Escanea QR: entrada, salida o reingreso. El estado se reinicia cada día.</p>
               </div>
             </Link>
           ) : null}
@@ -164,7 +216,7 @@ export default function HubPage() {
               <span className={styles.ahoraNum}>↗</span>
               <div>
                 <strong>Ver informes</strong>
-                <p>Historial del día, filtros y exportar Excel.</p>
+                <p>Historial por día, filtros y Excel con una hoja por día y asistentes.</p>
               </div>
             </Link>
           ) : null}
@@ -173,7 +225,7 @@ export default function HubPage() {
               <span className={styles.ahoraNum}>◫</span>
               <div>
                 <strong>Zonas y aforo</strong>
-                <p>Cuántas personas hay y caben en cada área.</p>
+                <p>Cuántas personas hay y caben en cada área hoy.</p>
               </div>
             </Link>
           ) : null}
@@ -181,21 +233,23 @@ export default function HubPage() {
       </section>
 
       {verMesa ? (
-        <section className={styles.kpis} aria-label="Mesa de atención hoy">
-          <Kpi label="Altas en sitio hoy" value={mesaHoy?.altas} loading={!mesaHoy} accent="navy" />
-          <Kpi label="Etiquetas impresas hoy" value={mesaHoy?.impresiones} loading={!mesaHoy} />
-          <Kpi label="Boletos reenviados hoy" value={mesaHoy?.reenvios} loading={!mesaHoy} />
-          <Kpi label="Reenvíos fallidos hoy" value={mesaHoy?.fallos} loading={!mesaHoy} accent="warn" />
+        <section className={styles.kpis} aria-label={`Mesa de atención · ${sufijo}`}>
+          <Kpi label={`Altas en sitio · ${sufijo}`} value={mesaHoy?.altas} loading={!mesaHoy} accent="navy" />
+          <Kpi label={`Etiquetas impresas · ${sufijo}`} value={mesaHoy?.impresiones} loading={!mesaHoy} />
+          <Kpi label={`Boletos reenviados · ${sufijo}`} value={mesaHoy?.reenvios} loading={!mesaHoy} />
+          <Kpi label={`Reenvíos fallidos · ${sufijo}`} value={mesaHoy?.fallos} loading={!mesaHoy} accent="warn" />
         </section>
       ) : null}
 
       {verPuerta ? (
-        <section className={styles.kpis} aria-label="Puerta hoy">
-          <Kpi label="Personas dentro" value={data?.dentro} loading={loading} accent="navy" />
-          <Kpi label="Entradas hoy" value={data?.entradasHoy} loading={loading} />
-          <Kpi label="Salidas hoy" value={data?.salidasHoy} loading={loading} />
-          <Kpi label="Rechazos hoy" value={data?.rechazosHoy} loading={loading} accent="warn" />
-          <Kpi label="Confirmados" value={data?.confirmados} loading={loading} />
+        <section className={styles.kpis} aria-label={`Puerta · ${sufijo}`}>
+          <Kpi label="Personas dentro ahora" value={data?.dentro} loading={loading} accent="navy" />
+          <Kpi label={`Personas distintas · ${sufijo}`} value={data?.unicosHoy} loading={loading} />
+          <Kpi label={`Entradas · ${sufijo}`} value={data?.entradasHoy} loading={loading} />
+          <Kpi label={`Salidas · ${sufijo}`} value={data?.salidasHoy} loading={loading} />
+          <Kpi label={`Reingresos · ${sufijo}`} value={data?.reingresosHoy} loading={loading} />
+          <Kpi label={`Rechazos · ${sufijo}`} value={data?.rechazosHoy} loading={loading} accent="warn" />
+          <Kpi label="Confirmados (registro)" value={data?.confirmados} loading={loading} />
         </section>
       ) : null}
 
@@ -203,7 +257,7 @@ export default function HubPage() {
       <section className={styles.tarjeta}>
         <div className={styles.tarjetaCab}>
           <h2>Actividad reciente</h2>
-          <p>Últimos escaneos — se actualiza sola cada 15 s.</p>
+          <p>Últimos escaneos de la puerta — se actualiza sola cada 15 s.</p>
         </div>
         {loading && !data ? (
           <p className={styles.vacio}>Cargando actividad…</p>
@@ -235,7 +289,9 @@ export default function HubPage() {
                 <span className={styles.modo}>
                   {r.modo === 'entrada' ? 'Entrada' : r.modo === 'salida' ? 'Salida' : r.modo}
                 </span>
-                <span className={styles.estado}>{r.ok ? 'OK' : 'Rechazado'}</span>
+                <span className={styles.estado}>
+                  {r.ok ? 'OK' : r.codigo === 'COOLDOWN' ? 'Duplicado' : 'Rechazado'}
+                </span>
               </li>
             ))}
           </ul>

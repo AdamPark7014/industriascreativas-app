@@ -6,6 +6,10 @@ tabla, el buscador, el ordenamiento, la ficha de detalle y el Excel. Al ser la
 única fuente de nombres de columna, evita SQL armado con texto del usuario:
 todo lo que llega de fuera se valida contra este catálogo.
 """
+import os
+import re
+from datetime import date
+
 from db import conexion, escalar, filas
 
 # El evento es en Puebla; la BD guarda timestamptz y aquí se convierte una sola
@@ -428,3 +432,61 @@ def resumen(tipos=None) -> dict:
                           f'{c["asistencias"]}:{c["ultimo_id"]}'
                           for c in categorias),
     }
+
+
+# ==========================================
+# DIAS DEL EVENTO Y ASISTENCIA
+# ==========================================
+# Mismo criterio que accesos-api/src/evento.ts: EVENTO_DIAS trae las fechas del
+# evento en hora de México; sin la variable, los tres días de FICTI 2026.
+
+DIAS_DEFECTO = "2026-10-15,2026-10-16,2026-10-17"
+_DIAS_SEMANA = ("lun", "mar", "mié", "jue", "vie", "sáb", "dom")
+_MESES = ("ene", "feb", "mar", "abr", "may", "jun",
+          "jul", "ago", "sep", "oct", "nov", "dic")
+# Prefijo del folio que va en el QR (accesos-api/src/catalog.ts → TIPOS.qr).
+FOLIO_PREFIJO = {"empresas": "EMPRESARIO", "estudiantes": "ALUMNO",
+                 "elisa": "ELISA_CARRILLO"}
+
+
+def _nombre_fecha(fecha: str) -> str:
+    d = date.fromisoformat(fecha)
+    return f"{_DIAS_SEMANA[d.weekday()]} {d.day} {_MESES[d.month - 1]}"
+
+
+def dias_evento() -> list:
+    """[{num, fecha, etiqueta, nombre}] en orden, a partir de EVENTO_DIAS."""
+    crudo = os.getenv("EVENTO_DIAS") or DIAS_DEFECTO
+    fechas = sorted({s for s in re.split(r"[,\s;]+", crudo)
+                     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s)})
+    if not fechas:
+        fechas = DIAS_DEFECTO.split(",")
+    return [{"num": i + 1, "fecha": f, "etiqueta": f"Día {i + 1}",
+             "nombre": _nombre_fecha(f)} for i, f in enumerate(fechas)]
+
+
+def folio(tipo: str, id_) -> str:
+    return f"{FOLIO_PREFIJO.get(tipo, tipo.upper())}-{id_}"
+
+
+def asistencia_por_dia(tipos) -> list:
+    """Una fila por persona y fecha local con sus escaneos aceptados: primera
+    entrada, última salida y número de entradas. Solo escaneos OK."""
+    tipos = [t for t in tipos if t in CATALOGO]
+    if not tipos:
+        return []
+    with conexion() as con:
+        registros = filas(con, f'''
+            SELECT tipo, registro_id, MAX(nombre) AS nombre,
+                   TO_CHAR(creado AT TIME ZONE '{ZONA_HORARIA}', 'YYYY-MM-DD') AS fecha,
+                   TO_CHAR((MIN(creado) FILTER (WHERE modo = 'entrada'))
+                           AT TIME ZONE '{ZONA_HORARIA}', 'HH24:MI') AS primera_entrada,
+                   TO_CHAR((MAX(creado) FILTER (WHERE modo = 'salida'))
+                           AT TIME ZONE '{ZONA_HORARIA}', 'HH24:MI') AS ultima_salida,
+                   COUNT(*) FILTER (WHERE modo = 'entrada') AS entradas
+            FROM accesos_escaneos
+            WHERE ok AND tipo = ANY(:tipos)
+            GROUP BY tipo, registro_id, 4
+            ORDER BY 3, 4
+        ''', tipos=tipos)
+    return [dict(r) for r in registros]

@@ -49,12 +49,17 @@ export default function ZonasPage() {
     }
   }
 
+  const evento = sesion?.evento
+  const diaHoy = evento?.dias.find((d) => d.num === evento.hoy) ?? null
+
   return (
     <main className={styles.page}>
       <p className={styles.lead}>
         Cada zona tiene un cupo. Al escanear <b>entrada</b> se ocupa un lugar; al
         escanear <b>salida</b> se libera. Si está llena, la puerta rechaza hasta que
-        alguien salga.
+        alguien salga. <b>El cupo se cuenta por día</b>: al empezar otro día del evento
+        todas las zonas arrancan en cero
+        {diaHoy ? ` (hoy: ${diaHoy.etiqueta} · ${diaHoy.nombre})` : ''}.
       </p>
 
       {error ? <div className={styles.alerta}>{error}</div> : null}

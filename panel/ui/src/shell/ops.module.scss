@@ -253,6 +253,104 @@
   }
 }
 
+.diaChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #041024;
+  background: #d6f4f2;
+  border: 1px solid #9fe3df;
+  white-space: nowrap;
+
+  small {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #0d6b67;
+    text-transform: capitalize;
+  }
+}
+
+.diaChipOff {
+  background: #fff4e5;
+  border-color: #ffd9a8;
+  color: #8a4b00;
+}
+
+// ---- Modo enfocado: una sola pantalla, sin lateral (mesas de registro e impresión)
+.appEnfocado {
+  flex-direction: column;
+}
+
+.barra {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 24px;
+  background: linear-gradient(90deg, #071a3a 0%, #0f2d5c 100%);
+  color: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  box-shadow: 0 6px 18px rgba(7, 26, 58, 0.18);
+
+  .kicker {
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .titulo {
+    color: #fff;
+    font-size: 1.15rem;
+  }
+
+  .insignia {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.22);
+    color: #fff;
+  }
+}
+
+.barraMarca {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 16px;
+  border-right: 1px solid rgba(255, 255, 255, 0.16);
+
+  img {
+    width: 78px;
+    height: auto;
+  }
+}
+
+.barraTech {
+  width: 62px !important;
+  opacity: 0.95;
+}
+
+.salir {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-decoration: none;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.12);
+  }
+}
+
+.principalEnfocado {
+  margin-left: 0;
+}
+
 .aviso {
   margin: 14px 24px 0;
   padding: 12px 14px;
@@ -381,5 +479,30 @@
     padding: 9px;
     border-radius: 50%;
     font-size: 0;
+  }
+
+  .diaChip small {
+    display: none;
+  }
+
+  .barra {
+    padding: 10px 14px;
+    gap: 10px;
+  }
+
+  .barraMarca {
+    padding-right: 10px;
+
+    img {
+      width: 58px;
+    }
+  }
+
+  .barraTech {
+    display: none;
+  }
+
+  .barra .insignia {
+    display: none;
   }
 }

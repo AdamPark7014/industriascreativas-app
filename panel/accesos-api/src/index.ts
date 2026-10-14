@@ -2,7 +2,6 @@ import { serve } from '@hono/node-server'
 import { Hono, type Context } from 'hono'
 import { getCookie } from 'hono/cookie'
 import { compress } from 'hono/compress'
-import ExcelJS from 'exceljs'
 import {
   ROLES,
   TIPOS,
@@ -19,8 +18,21 @@ import { ensureIndexes, pool, query, queryOne, withClient } from './db.js'
 import { decodeFlaskSession } from './flaskSession.js'
 import { boletoPayload, boletoPdf } from './gafete.js'
 import { CODIGOS } from './codes.js'
+import {
+  DIAS,
+  SQL_DENTRO_HOY,
+  SQL_FECHA,
+  SQL_FECHA_TXT,
+  condFecha,
+  eventoJson,
+  fechaCdmx,
+  filtroDia,
+  filtroJson,
+  horaCdmx,
+} from './evento.js'
+import { csvEscaneos, nombreArchivo, xlsxEscaneos, type FilaAsistente, type FilaEscaneo } from './informes.js'
 import { clientIp, origenConfiable, rateOk, safeEq } from './security.js'
-import { buscarExacto, buscarTexto, procesarEscaneo } from './scan.js'
+import { buscarExacto, buscarTexto, estadoLote, procesarEscaneo } from './scan.js'
 import {
   confirmarPersona,
   correoValido,
@@ -55,8 +67,80 @@ app.use('*', async (c, next) => {
 })
 
 app.get('/health', (c) =>
-  c.json({ ok: true, stack: 'accesos-ts', cooldownMs: Number(process.env.SCAN_COOLDOWN_MS || 1200) }),
+  c.json({
+    ok: true,
+    stack: 'accesos-ts',
+    cooldownMs: Number(process.env.SCAN_COOLDOWN_MS || 1200),
+    evento: eventoJson(),
+  }),
 )
+
+/** Los rechazos reales: el cooldown es el lector leyendo dos veces el mismo boleto. */
+const SQL_RECHAZO = `NOT ok AND COALESCE(codigo,'') <> 'COOLDOWN'`
+
+/** Personas cuyo último escaneo aceptado de hoy fue una entrada. */
+const SQL_DENTRO_AHORA = `
+  SELECT COUNT(*)::int AS n FROM (
+    SELECT DISTINCT ON (tipo, registro_id) modo FROM accesos_escaneos
+    WHERE ok AND ${SQL_FECHA('creado')} = $1::date
+    ORDER BY tipo, registro_id, creado DESC
+  ) s WHERE modo = 'entrada'`
+
+type TotalesDia = {
+  fecha: string
+  entradas: number
+  salidas: number
+  reingresos: number
+  rechazos: number
+  unicos: number
+  impresiones: number
+  altas: number
+}
+
+/** Totales de cada día del evento (y una fila "otros" si hubo movimiento fuera de fechas). */
+async function totalesPorDia(): Promise<{ dias: (TotalesDia & { num: number; etiqueta: string; nombre: string })[]; otros: TotalesDia | null }> {
+  const [esc, imp, altas] = await Promise.all([
+    query<{ fecha: string; entradas: number; salidas: number; reingresos: number; rechazos: number; unicos: number }>(
+      `SELECT ${SQL_FECHA_TXT('creado')} AS fecha,
+         COUNT(*) FILTER (WHERE ok AND modo = 'entrada')::int AS entradas,
+         COUNT(*) FILTER (WHERE ok AND modo = 'salida')::int AS salidas,
+         COUNT(*) FILTER (WHERE ok AND codigo = 'OK_REENTRY')::int AS reingresos,
+         COUNT(*) FILTER (WHERE ${SQL_RECHAZO})::int AS rechazos,
+         COUNT(DISTINCT (tipo, registro_id)) FILTER (WHERE ok AND modo = 'entrada')::int AS unicos
+       FROM accesos_escaneos GROUP BY 1`,
+    ),
+    query<{ fecha: string; n: number }>(
+      `SELECT ${SQL_FECHA_TXT('creado')} AS fecha, COUNT(*)::int AS n FROM accesos_impresiones GROUP BY 1`,
+    ),
+    query<{ fecha: string; n: number }>(
+      `SELECT ${SQL_FECHA_TXT('creado')} AS fecha, COUNT(*)::int AS n FROM accesos_altas_sitio GROUP BY 1`,
+    ),
+  ])
+  const vacio = (fecha: string): TotalesDia => ({
+    fecha, entradas: 0, salidas: 0, reingresos: 0, rechazos: 0, unicos: 0, impresiones: 0, altas: 0,
+  })
+  const porFecha = new Map<string, TotalesDia>()
+  const de = (fecha: string) => {
+    let t = porFecha.get(fecha)
+    if (!t) {
+      t = vacio(fecha)
+      porFecha.set(fecha, t)
+    }
+    return t
+  }
+  for (const r of esc) Object.assign(de(r.fecha), { entradas: r.entradas, salidas: r.salidas, reingresos: r.reingresos, rechazos: r.rechazos, unicos: r.unicos })
+  for (const r of imp) de(r.fecha).impresiones = r.n
+  for (const r of altas) de(r.fecha).altas = r.n
+  const dias = DIAS.map((d) => ({ ...(porFecha.get(d.fecha) ?? vacio(d.fecha)), num: d.num, etiqueta: d.etiqueta, nombre: d.nombre }))
+  const fechasEvento = new Set(DIAS.map((d) => d.fecha))
+  let otros: TotalesDia | null = null
+  for (const [fecha, t] of porFecha) {
+    if (fechasEvento.has(fecha)) continue
+    if (!otros) otros = vacio('')
+    for (const k of ['entradas', 'salidas', 'reingresos', 'rechazos', 'unicos', 'impresiones', 'altas'] as const) otros[k] += t[k]
+  }
+  return { dias, otros }
+}
 
 function sanitizeDevice(v: unknown): string {
   return String(v || '')
@@ -268,18 +352,22 @@ panel.use('*', async (c, next) => {
 })
 
 panel.get('/sesion', (c) =>
-  c.json(
-    sesionJson({
+  c.json({
+    ...sesionJson({
       usuario: c.get('usuario'),
       nombre: c.get('nombre'),
       alcance: c.get('alcance'),
     }),
-  ),
+    evento: eventoJson(),
+  }),
 )
 
 panel.get('/resumen', async (c) => {
   const alcance = c.get('alcance')
-  const cacheKey = alcance
+  // ?dia=1|2|3|hoy|todos|YYYY-MM-DD · sin parámetro: el día de hoy.
+  const filtro = filtroDia(c.req.query('dia'), 'hoy')
+  if (!filtro) return c.json({ ok: false, error: 'dia' }, 400)
+  const cacheKey = `${alcance}|${filtro.modo === 'todos' ? 'todos' : filtro.fecha}`
   const hit = resumenCache.get(cacheKey)
   if (hit && Date.now() - hit.at < RESUMEN_TTL_MS) {
     c.header('X-Cache', 'HIT')
@@ -288,35 +376,38 @@ panel.get('/resumen', async (c) => {
 
   const tipos = tiposDe(alcance)
   const confirmSql = tipos
-    .map((k, i) => `SELECT COUNT(*)::int AS n FROM "${TIPOS[k].tabla}" WHERE "confirmado"`)
+    .map((k) => `SELECT COUNT(*)::int AS n FROM "${TIPOS[k].tabla}" WHERE "confirmado"`)
     .join(' UNION ALL ')
-  const dentroSql = tipos
-    .map((k) => `SELECT COALESCE(SUM("asistencias"),0)::int AS n FROM "${TIPOS[k].tabla}"`)
-    .join(' UNION ALL ')
+  const pDia: unknown[] = []
+  const cDia = condFecha('creado', filtro, pDia)
 
-  const [confirmRows, dentroRows, hoy, zonas, recientes] = await Promise.all([
+  const [confirmRows, dentroAhora, kpis, zonas, recientes, porDia] = await Promise.all([
     query<{ n: number }>(`SELECT SUM(n)::int AS n FROM (${confirmSql}) s`),
-    query<{ n: number }>(`SELECT SUM(n)::int AS n FROM (${dentroSql}) s`),
+    queryOne<{ n: number }>(SQL_DENTRO_AHORA, [fechaCdmx()]),
     queryOne<{
       entradas: number
       salidas: number
+      reingresos: number
       rechazos: number
       total: number
-    }>(`
-      SELECT
+      unicos: number
+    }>(
+      `SELECT
         COUNT(*) FILTER (WHERE ok AND modo = 'entrada')::int AS entradas,
         COUNT(*) FILTER (WHERE ok AND modo = 'salida')::int AS salidas,
-        COUNT(*) FILTER (WHERE NOT ok)::int AS rechazos,
-        COUNT(*)::int AS total
-      FROM accesos_escaneos
-      WHERE creado >= date_trunc('day', NOW() AT TIME ZONE 'America/Mexico_City')
-            AT TIME ZONE 'America/Mexico_City'
-    `),
-    query(`SELECT id, clave, nombre, aforo, dentro, activo FROM accesos_zonas ORDER BY id`),
+        COUNT(*) FILTER (WHERE ok AND codigo = 'OK_REENTRY')::int AS reingresos,
+        COUNT(*) FILTER (WHERE ${SQL_RECHAZO})::int AS rechazos,
+        COUNT(*)::int AS total,
+        COUNT(DISTINCT (tipo, registro_id)) FILTER (WHERE ok AND modo = 'entrada')::int AS unicos
+      FROM accesos_escaneos WHERE ${cDia}`,
+      pDia,
+    ),
+    query(`SELECT id, clave, nombre, aforo, ${SQL_DENTRO_HOY} AS dentro, activo FROM accesos_zonas ORDER BY id`),
     query(`
-      SELECT id, creado, tipo, registro_id, nombre, modo, ok, mensaje, zona_clave
+      SELECT id, creado, tipo, registro_id, nombre, modo, ok, mensaje, zona_clave, codigo
       FROM accesos_escaneos ORDER BY creado DESC LIMIT 12
     `),
+    totalesPorDia(),
   ])
 
   const body = {
@@ -325,12 +416,20 @@ panel.get('/resumen', async (c) => {
       nombre: c.get('nombre'),
       alcance,
     }),
+    evento: eventoJson(),
+    dia: filtroJson(filtro),
     confirmados: confirmRows[0]?.n || 0,
-    dentro: dentroRows[0]?.n || 0,
-    entradasHoy: hoy?.entradas || 0,
-    salidasHoy: hoy?.salidas || 0,
-    rechazosHoy: hoy?.rechazos || 0,
-    escaneosHoy: hoy?.total || 0,
+    /** Personas dentro en este momento (siempre de hoy, sin importar el día consultado). */
+    dentro: dentroAhora?.n || 0,
+    // Nombres históricos: ahora son del día consultado (o de todo el evento).
+    entradasHoy: kpis?.entradas || 0,
+    salidasHoy: kpis?.salidas || 0,
+    reingresosHoy: kpis?.reingresos || 0,
+    rechazosHoy: kpis?.rechazos || 0,
+    escaneosHoy: kpis?.total || 0,
+    unicosHoy: kpis?.unicos || 0,
+    porDia: porDia.dias,
+    otrosDias: porDia.otros,
     zonas,
     recientes: recientes.map(escaneoJson),
   }
@@ -353,12 +452,14 @@ panel.get('/buscar', async (c) => {
   const exact = await buscarExacto(q, tipos)
   const hits = exact.length ? exact : await buscarTexto(q, tipos)
   const results = hits.slice(0, 20)
-  // impresiones / ultimaImpresion por resultado: una sola consulta agregada por lote (sin N+1).
-  const conteos = await conteoImpresiones(results.map((h) => ({ tipo: h.tipo, id: h.id })))
+  // impresiones / ultimaImpresion y "dentro ahora" por resultado: dos consultas por lote (sin N+1).
+  const claves = results.map((h) => ({ tipo: h.tipo, id: h.id }))
+  const [conteos, estados] = await Promise.all([conteoImpresiones(claves), estadoLote(claves)])
   return c.json({
     q,
     results: results.map((h) => ({
       ...h,
+      dentro: estados.get(`${h.tipo}:${h.id}`)?.dentro ?? false,
       ...(conteos.get(claveImpresion(h.tipo, h.id)) ?? SIN_IMPRESIONES),
     })),
   })
@@ -366,11 +467,12 @@ panel.get('/buscar', async (c) => {
 
 panel.get('/zonas', async (c) => {
   const zonas = await query(
-    `SELECT id, clave, nombre, aforo, dentro, activo, hora_inicio, hora_fin, zona_requerida
+    `SELECT id, clave, nombre, aforo, ${SQL_DENTRO_HOY} AS dentro, activo, hora_inicio, hora_fin, zona_requerida
      FROM accesos_zonas ORDER BY id`,
   )
   return c.json({
     zonas,
+    evento: eventoJson(),
     puedeOperar: c.get('alcance') === 'interno',
   })
 })
@@ -405,7 +507,7 @@ panel.post('/zonas', async (c) => {
     [clave, nombre, aforo, horaInicio, horaFin, zonaRequerida],
   )
   const zonas = await query(
-    `SELECT id, clave, nombre, aforo, dentro, activo, hora_inicio, hora_fin, zona_requerida
+    `SELECT id, clave, nombre, aforo, ${SQL_DENTRO_HOY} AS dentro, activo, hora_inicio, hora_fin, zona_requerida
      FROM accesos_zonas ORDER BY id`,
   )
   resumenCache.clear()
@@ -453,52 +555,57 @@ panel.post('/bloqueos', async (c) => {
 })
 
 panel.get('/metricas', async (c) => {
+  const filtro = filtroDia(c.req.query('dia'), 'hoy')
+  if (!filtro) return c.json({ ok: false, error: 'dia' }, 400)
+  const pDia: unknown[] = []
+  const cDia = condFecha('creado', filtro, pDia)
   const hoy = await queryOne<{
     n: number
     p50: number | null
     p95: number | null
     avg_server: number | null
     avg_client: number | null
-  }>(`
-    SELECT
+  }>(
+    `SELECT
       COUNT(*)::int AS n,
       percentile_cont(0.5) WITHIN GROUP (ORDER BY server_ms)::float AS p50,
       percentile_cont(0.95) WITHIN GROUP (ORDER BY server_ms)::float AS p95,
       AVG(server_ms)::float AS avg_server,
       AVG(client_ms)::float AS avg_client
     FROM accesos_escaneos
-    WHERE creado >= date_trunc('day', NOW() AT TIME ZONE 'America/Mexico_City')
-          AT TIME ZONE 'America/Mexico_City'
-      AND server_ms IS NOT NULL
-  `)
+    WHERE ${cDia} AND server_ms IS NOT NULL`,
+    pDia,
+  )
   const devices = await query<{
     dispositivo: string
     n: number
     p50: number | null
     ok_rate: number | null
-  }>(`
-    SELECT
+  }>(
+    `SELECT
       COALESCE(NULLIF(dispositivo,''), '(sin etiqueta)') AS dispositivo,
       COUNT(*)::int AS n,
       percentile_cont(0.5) WITHIN GROUP (ORDER BY server_ms)::float AS p50,
       (AVG(CASE WHEN ok THEN 1.0 ELSE 0.0 END))::float AS ok_rate
     FROM accesos_escaneos
-    WHERE creado >= date_trunc('day', NOW() AT TIME ZONE 'America/Mexico_City')
-          AT TIME ZONE 'America/Mexico_City'
+    WHERE ${cDia}
     GROUP BY 1
     ORDER BY n DESC
-    LIMIT 40
-  `)
-  const codigos = await query<{ codigo: string; n: number }>(`
-    SELECT COALESCE(codigo,'(sin)') AS codigo, COUNT(*)::int AS n
+    LIMIT 40`,
+    pDia,
+  )
+  const codigos = await query<{ codigo: string; n: number }>(
+    `SELECT COALESCE(codigo,'(sin)') AS codigo, COUNT(*)::int AS n
     FROM accesos_escaneos
-    WHERE creado >= date_trunc('day', NOW() AT TIME ZONE 'America/Mexico_City')
-          AT TIME ZONE 'America/Mexico_City'
+    WHERE ${cDia}
     GROUP BY 1
     ORDER BY n DESC
-    LIMIT 30
-  `)
+    LIMIT 30`,
+    pDia,
+  )
   return c.json({
+    evento: eventoJson(),
+    dia: filtroJson(filtro),
     hoy: hoy || { n: 0, p50: null, p95: null, avg_server: null, avg_client: null },
     devices,
     codigos,
@@ -825,12 +932,15 @@ panel.get('/impresiones', async (c) => {
   limite = Math.min(Math.max(1, Math.floor(limite)), 2000)
 
   const tipos = tiposDe(c.get('alcance'))
+  const filtro = filtroDia(c.req.query('dia'), 'todos')
+  if (!filtro) return c.json({ ok: false, error: 'dia' }, 400)
   const cond: string[] = ['TRUE']
   const params: unknown[] = []
   const add = (sql: string, v: unknown) => {
     params.push(v)
     cond.push(sql.replace('?', `$${params.length}`))
   }
+  cond.push(condFecha('i.creado', filtro, params))
   if (tipoFiltro) {
     if (!tipos.includes(tipoFiltro as TipoClave)) return c.json({ ok: false, error: 'tipo' }, 400)
     add('i.tipo = ?', tipoFiltro)
@@ -884,7 +994,7 @@ panel.get('/impresiones', async (c) => {
     tipoEtiqueta: TIPOS[r.tipo as TipoClave]?.etiqueta ?? r.tipo,
   }))
   const siguiente = rows.length === limite ? registros[registros.length - 1].id : null
-  return c.json({ ok: true, total: total?.n || 0, registros, siguiente, puedeOperar: true })
+  return c.json({ ok: true, dia: filtroJson(filtro), total: total?.n || 0, registros, siguiente, puedeOperar: true })
 })
 
 panel.get('/reportes', async (c) => {
@@ -898,9 +1008,14 @@ panel.get('/reportes', async (c) => {
   let q = (c.req.query('q') || '').trim()
   if (q.length > 120) return c.json({ ok: false, error: 'q_larga' }, 400)
   const formato = (c.req.query('formato') || 'json').toLowerCase()
+  const exporta = formato === 'csv' || formato === 'xlsx' || formato === 'xls'
   let limite = Number(c.req.query('limite') || 200)
   if (!Number.isFinite(limite)) return c.json({ ok: false, error: 'limite' }, 400)
-  limite = Math.min(Math.max(1, Math.floor(limite)), 2000)
+  // La pantalla pagina; la exportación debe traer el día (o el evento) completo.
+  limite = Math.min(Math.max(1, Math.floor(limite)), exporta ? 50_000 : 2000)
+  // ?dia=1|2|3|hoy|todos|YYYY-MM-DD · sin parámetro: todo el evento.
+  const filtro = filtroDia(c.req.query('dia'), 'todos')
+  if (!filtro) return c.json({ ok: false, error: 'dia' }, 400)
 
   const cond: string[] = ['TRUE']
   const params: unknown[] = []
@@ -908,6 +1023,7 @@ panel.get('/reportes', async (c) => {
     params.push(v)
     cond.push(sql.replace('?', `$${params.length}`))
   }
+  cond.push(condFecha('creado', filtro, params))
   if (modo === 'entrada' || modo === 'salida') add('modo = ?', modo)
   if (okArg === '1' || okArg === '0' || okArg === 'true' || okArg === 'false') {
     add('ok = ?', okArg === '1' || okArg === 'true')
@@ -951,8 +1067,9 @@ panel.get('/reportes', async (c) => {
         COUNT(*)::int AS total,
         COUNT(*) FILTER (WHERE ok AND modo = 'entrada')::int AS entradas,
         COUNT(*) FILTER (WHERE ok AND modo = 'salida')::int AS salidas,
-        COUNT(*) FILTER (WHERE NOT ok)::int AS rechazos,
+        COUNT(*) FILTER (WHERE ${SQL_RECHAZO})::int AS rechazos,
         COUNT(*) FILTER (WHERE ok AND codigo = 'OK_REENTRY')::int AS reingresos,
+        COUNT(DISTINCT (tipo, registro_id)) FILTER (WHERE ok AND modo = 'entrada')::int AS unicos,
         percentile_cont(0.5) WITHIN GROUP (ORDER BY server_ms)::float AS p50_server,
         percentile_cont(0.95) WITHIN GROUP (ORDER BY server_ms)::float AS p95_server
       FROM accesos_escaneos WHERE ${donde}`,
@@ -974,94 +1091,50 @@ panel.get('/reportes', async (c) => {
     ),
   ])
 
-  const registros = rows.map(escaneoJson)
+  const registros = rows.map(escaneoJson) as unknown as FilaEscaneo[]
   if (formato === 'csv') {
-    const header =
-      'hora,ok,codigo,modo,nombre,tipo,folio_id,zona,mensaje,origen,operador,dispositivo,server_ms,client_ms\n'
-    const lines = registros.map((r) =>
-      [
-        r.creado,
-        r.ok,
-        r.codigo,
-        r.modo,
-        r.nombre,
-        r.tipo,
-        r.registro_id,
-        r.zona_clave,
-        r.mensaje,
-        r.origen,
-        r.operador,
-        r.dispositivo,
-        r.server_ms,
-        r.client_ms,
-      ]
-        .map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`)
-        .join(','),
-    )
-    const bom = '\uFEFF'
-    return new Response(bom + header + lines.join('\n'), {
+    return new Response(csvEscaneos(registros), {
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': 'attachment; filename="accesos-ficti.csv"',
+        'Content-Disposition': `attachment; filename="${nombreArchivo(filtro, 'csv')}"`,
         'Cache-Control': 'no-store',
       },
     })
   }
   if (formato === 'xlsx' || formato === 'xls') {
-    const wb = new ExcelJS.Workbook()
-    const ws = wb.addWorksheet('Accesos')
-    ws.addRow([
-      'Hora',
-      'OK',
-      'Codigo',
-      'Modo',
-      'Nombre',
-      'Tipo',
-      'ID',
-      'Zona',
-      'Mensaje',
-      'Origen',
-      'Operador',
-      'Dispositivo',
-      'ServerMs',
-      'ClientMs',
-    ])
-    for (const r of registros) {
-      ws.addRow([
-        r.creado,
-        r.ok,
-        r.codigo,
-        r.modo,
-        r.nombre,
-        r.tipo,
-        r.registro_id,
-        r.zona_clave,
-        r.mensaje,
-        r.origen,
-        r.operador,
-        r.dispositivo,
-        r.server_ms,
-        r.client_ms,
-      ])
-    }
-    const buf = await wb.xlsx.writeBuffer()
-    return new Response(Buffer.from(buf), {
+    // Una fila por persona y d\u00EDa: primera entrada, \u00FAltima salida y accesos.
+    const asistentes = await query<FilaAsistente>(
+      `SELECT tipo, registro_id, MAX(nombre) AS nombre, ${SQL_FECHA_TXT('creado')} AS fecha,
+              MIN(creado) FILTER (WHERE modo = 'entrada') AS primera_entrada,
+              MAX(creado) FILTER (WHERE modo = 'salida') AS ultima_salida,
+              COUNT(*) FILTER (WHERE modo = 'entrada')::int AS entradas
+       FROM accesos_escaneos WHERE ${donde} AND ok
+       GROUP BY tipo, registro_id, 4
+       ORDER BY 3, 4`,
+      kpiParams,
+    )
+    const generado = `${fechaCdmx()} ${horaCdmx(new Date())}`
+    const buf = await xlsxEscaneos({ registros, asistentes, filtro, generado })
+    return new Response(buf, {
       headers: {
         'Content-Type':
           'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': 'attachment; filename="accesos-ficti.xlsx"',
+        'Content-Disposition': `attachment; filename="${nombreArchivo(filtro, 'xlsx')}"`,
         'Cache-Control': 'no-store',
       },
     })
   }
 
   return c.json({
+    evento: eventoJson(),
+    dia: filtroJson(filtro),
     kpis: kpis || {
       total: 0,
       entradas: 0,
       salidas: 0,
       rechazos: 0,
       reingresos: 0,
+      unicos: 0,
       p50_server: null,
       p95_server: null,
     },
@@ -1073,8 +1146,6 @@ panel.get('/reportes', async (c) => {
 })
 
 // ===================== Mesa de atención (registro en sitio, ficha, reenvío) =====================
-
-const DESDE_HOY = `date_trunc('day', NOW() AT TIME ZONE 'America/Mexico_City') AT TIME ZONE 'America/Mexico_City'`
 
 type PersonaRef = { tipo: TipoClave; id: number }
 type PersonaErr = { error: string; status: 400 | 403 | 404 }
@@ -1219,6 +1290,11 @@ panel.get('/persona/:tipo/:id/correo-eventos', async (c) => {
 
 panel.get('/mesa', async (c) => {
   const tipos = tiposDe(c.get('alcance'))
+  // ?dia=1|2|3|hoy|todos · sin parámetro: hoy.
+  const filtro = filtroDia(c.req.query('dia'), 'hoy')
+  if (!filtro) return c.json({ ok: false, error: 'dia' }, 400)
+  const pDia: unknown[] = []
+  const cDia = condFecha('creado', filtro, pDia)
   const nombres = tipos
     .map(
       (k) =>
@@ -1226,21 +1302,24 @@ panel.get('/mesa', async (c) => {
          FROM "${TIPOS[k].tabla}"`,
     )
     .join(' UNION ALL ')
-  const [altas, impresiones, envios, recientes, totalAltas, usuarios] = await Promise.all([
+  const [altas, impresiones, envios, recientes, totalAltas, usuarios, porDia] = await Promise.all([
     query<{ operador: string; n: number }>(
       `SELECT operador, COUNT(*)::int AS n FROM accesos_altas_sitio
-       WHERE creado >= ${DESDE_HOY} GROUP BY 1`,
+       WHERE ${cDia} GROUP BY 1`,
+      pDia,
     ),
     query<{ operador: string; n: number }>(
       `SELECT COALESCE(operador,'') AS operador, COUNT(*)::int AS n FROM accesos_impresiones
-       WHERE creado >= ${DESDE_HOY} GROUP BY 1`,
+       WHERE ${cDia} GROUP BY 1`,
+      pDia,
     ),
     query<{ operador: string; n: number; fallos: number }>(
       `SELECT COALESCE(operador,'') AS operador,
               COUNT(*) FILTER (WHERE ok)::int AS n,
               COUNT(*) FILTER (WHERE NOT ok)::int AS fallos
        FROM correo_envios
-       WHERE creado >= ${DESDE_HOY} AND motivo IN ('reenvio','alta_sitio') GROUP BY 1`,
+       WHERE ${cDia} AND motivo IN ('reenvio','alta_sitio') GROUP BY 1`,
+      pDia,
     ),
     query<{ accion: string; tipo: string; registro_id: number; operador: string; creado: Date; detalle: string; nombre: string }>(
       `SELECT a.*, COALESCE(n.nombre,'') AS nombre FROM (
@@ -1261,6 +1340,7 @@ panel.get('/mesa', async (c) => {
     ),
     queryOne<{ n: number }>(`SELECT COUNT(*)::int AS n FROM accesos_altas_sitio`),
     query<{ usuario: string; nombre: string }>(`SELECT usuario, nombre FROM panel_usuarios`),
+    totalesPorDia(),
   ])
 
   const nombreOp = new Map(usuarios.map((u) => [u.usuario, u.nombre]))
@@ -1286,8 +1366,21 @@ panel.get('/mesa', async (c) => {
 
   return c.json({
     ok: true,
+    evento: eventoJson(),
+    dia: filtroJson(filtro),
+    // "hoy" = el día consultado (nombre histórico de la respuesta).
     hoy: { altas: suma('altas'), impresiones: suma('impresiones'), reenvios: suma('reenvios'), fallos: suma('fallos') },
     altasTotales: totalAltas?.n ?? 0,
+    porDia: porDia.dias.map((d) => ({
+      num: d.num,
+      etiqueta: d.etiqueta,
+      nombre: d.nombre,
+      fecha: d.fecha,
+      altas: d.altas,
+      impresiones: d.impresiones,
+      entradas: d.entradas,
+      unicos: d.unicos,
+    })),
     operadores,
     recientes: recientes.map((r) => ({
       accion: r.accion,
@@ -1338,9 +1431,9 @@ app.get('/api/zonas', async (c) => {
   }
   try {
     const zonas = await query(
-      `SELECT clave, nombre, aforo, dentro, activo FROM accesos_zonas WHERE activo ORDER BY id`,
+      `SELECT clave, nombre, aforo, ${SQL_DENTRO_HOY} AS dentro, activo FROM accesos_zonas WHERE activo ORDER BY id`,
     )
-    return c.json({ zonas })
+    return c.json({ zonas, evento: eventoJson() })
   } catch (e) {
     console.error('api_zonas', e)
     return c.json({ zonas: [] })

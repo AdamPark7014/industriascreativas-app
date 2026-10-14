@@ -14,6 +14,38 @@ export type Permiso =
   | 'mesa'
   | 'equipo'
 
+/** Un día del evento (EVENTO_DIAS en el servidor, hora de México). */
+export type DiaEvento = { num: number; fecha: string; etiqueta: string; nombre: string }
+
+export type EventoInfo = {
+  tz: string
+  dias: DiaEvento[]
+  /** Número del día de hoy, o null si hoy no es día del evento. */
+  hoy: number | null
+  fechaHoy: string
+}
+
+/** Cómo interpretó el API el `?dia=` de la consulta. */
+export type DiaFiltro = {
+  modo: 'dia' | 'fecha' | 'todos'
+  num: number | null
+  fecha: string | null
+  etiqueta: string
+}
+
+/** Lo que se manda en `?dia=`: número de día, hoy o todo el evento. */
+export type DiaParam = number | 'hoy' | 'todos'
+
+export type TotalesDia = DiaEvento & {
+  entradas: number
+  salidas: number
+  reingresos: number
+  rechazos: number
+  unicos: number
+  impresiones: number
+  altas: number
+}
+
 export type Sesion = {
   usuario: string
   nombre: string
@@ -23,6 +55,8 @@ export type Sesion = {
   permisos: Permiso[]
   puedeOperar: boolean
   puedeImprimir: boolean
+  /** Días del evento y cuál es hoy (lo manda GET /sesion). */
+  evento?: EventoInfo
 }
 
 export function tiene(sesion: Sesion | null | undefined, permiso: Permiso): boolean {
@@ -57,14 +91,27 @@ export type Escaneo = {
 }
 
 export type Resumen = Sesion & {
+  evento: EventoInfo
+  /** Día consultado (los campos *Hoy son de ese día, o de todo el evento). */
+  dia: DiaFiltro
   confirmados: number
+  /** Personas dentro en este momento (siempre de hoy). */
   dentro: number
   entradasHoy: number
   salidasHoy: number
+  reingresosHoy: number
   rechazosHoy: number
   escaneosHoy: number
+  unicosHoy: number
+  porDia: TotalesDia[]
+  otrosDias: Omit<TotalesDia, keyof DiaEvento> | null
   zonas: Zona[]
   recientes: Escaneo[]
+}
+
+export function diaQuery(dia?: DiaParam): string {
+  if (dia == null) return ''
+  return String(dia)
 }
 
 export type GafeteHit = {
@@ -158,6 +205,12 @@ export type ScanResult = {
   scanId?: number
   serverMs?: number
   reentry?: boolean
+  /** Día del evento en que cayó el escaneo (null fuera de las fechas). */
+  dia?: { num: number; etiqueta: string; nombre: string; fecha: string } | null
+  /** Días del evento en que la persona ya había entrado antes de hoy. */
+  diasPrevios?: number[]
+  /** Entradas aceptadas hoy, contando esta. */
+  entradasHoy?: number
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -188,8 +241,11 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   sesion: () => req<Sesion>('/api/accesos/sesion'),
-  resumen: () => req<Resumen>('/api/accesos/resumen'),
-  zonas: () => req<{ zonas: Zona[]; puedeOperar: boolean }>('/api/accesos/zonas'),
+  resumen: (dia?: DiaParam) => {
+    const q = diaQuery(dia)
+    return req<Resumen>(`/api/accesos/resumen${q ? `?dia=${q}` : ''}`)
+  },
+  zonas: () => req<{ zonas: Zona[]; evento?: EventoInfo; puedeOperar: boolean }>('/api/accesos/zonas'),
   guardarZona: (body: { clave: string; nombre: string; aforo: number }) =>
     req<{ ok: boolean; zonas: Zona[] }>('/api/accesos/zonas', {
       method: 'POST',
@@ -224,8 +280,11 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ clientLatencyMs }),
     }),
-  metricas: () =>
-    req<{
+  metricas: (dia?: DiaParam) => {
+    const q = diaQuery(dia)
+    return req<{
+      evento?: EventoInfo
+      dia?: DiaFiltro
       hoy: {
         n: number
         p50: number | null
@@ -236,15 +295,19 @@ export const api = {
       devices: { dispositivo: string; n: number; p50: number | null; ok_rate: number | null }[]
       codigos: { codigo: string; n: number }[]
       puedeOperar: boolean
-    }>('/api/accesos/metricas'),
+    }>(`/api/accesos/metricas${q ? `?dia=${q}` : ''}`)
+  },
   reportes: (params: URLSearchParams, signal?: AbortSignal) =>
     req<{
+      evento?: EventoInfo
+      dia?: DiaFiltro
       kpis: {
         total: number
         entradas: number
         salidas: number
         rechazos: number
         reingresos?: number
+        unicos?: number
         p50_server?: number | null
         p95_server?: number | null
       }
@@ -543,8 +606,12 @@ export type OperadorMesa = {
 
 export type MesaResp = {
   ok: boolean
+  evento?: EventoInfo
+  dia?: DiaFiltro
+  /** Totales del día consultado (nombre histórico). */
   hoy: { altas: number; impresiones: number; reenvios: number; fallos: number }
   altasTotales: number
+  porDia?: (DiaEvento & { altas: number; impresiones: number; entradas: number; unicos: number })[]
   operadores: OperadorMesa[]
   recientes: AccionMesa[]
 }
@@ -583,7 +650,10 @@ export const mesa = {
   confirmar: (tipo: string, id: number) =>
     reqCuerpo<{ ok: boolean; error?: string }>(`${persona(tipo, id)}/confirmar`, { method: 'POST' }),
   correoEventos: (tipo: string, id: number) => reqCuerpo<EventosCorreoResp>(`${persona(tipo, id)}/correo-eventos`),
-  actividad: () => req<MesaResp>('/api/accesos/mesa'),
+  actividad: (dia?: DiaParam) => {
+    const q = diaQuery(dia)
+    return req<MesaResp>(`/api/accesos/mesa${q ? `?dia=${q}` : ''}`)
+  },
   equipo: () => req<{ ok: boolean; usuarios: UsuarioEquipo[] }>('/api/accesos/equipo'),
 }
 

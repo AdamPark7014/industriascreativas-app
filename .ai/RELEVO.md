@@ -1,9 +1,52 @@
 # RELEVO
 
-- **Último turno:** cursor
-- **Fecha:** 2026-10-07
+- **Último turno:** claude-code
+- **Fecha:** 2026-10-14
 - **Rama:** main
-- **HEAD:** `c8a6eaa` — Login con botón Ver y clave tolerante. **Desplegado en DO.**
+- **HEAD:** (ver git log) — Evento de 3 días, modo enfocado, guardas de impresión. **Desplegado en DO.**
+
+## 2026-10-14 · Evento de tres días + modo enfocado (claude-code) — DESPLEGADO
+
+El evento es **15, 16 y 17 de octubre** (jue/vie/sáb). Adam pidió separar todo por
+día, blindar impresión y escaneo, y quitar el lateral a quien solo ve una pantalla.
+Detalle técnico en `docs/ACCESOS-REACT.md` → "Evento de varios días".
+
+- **Por día** (`accesos-api/src/evento.ts`, `EVENTO_DIAS` en `panel/.env` del
+  servidor): dentro/fuera sale del último escaneo aceptado de HOY; reingreso solo
+  dentro del mismo día; el veredicto dice "también vino el día 1". Aforo por día
+  (`accesos_zonas.dentro_fecha`, migración `007_dias_evento.sql`). `?dia=` en
+  resumen/reportes/métricas/mesa/impresiones. `asistencias` ahora es total de
+  entradas (no baja con la salida).
+- **Excel**: `/reportes?formato=xlsx` → Resumen por día + una hoja por día +
+  Asistentes (1.ª entrada / última salida / accesos por día). El Excel del panel
+  Flask trae hoja "Asistencia" (`consultas.asistencia_por_dia`, `exportar.py`).
+- **UI**: `DiaSelector` + `useDia` (Resumen, Informes, Mesa), franja de días en
+  Resumen, chip del día en cabecera, banner en el escáner, lector USB sin dobles.
+  **Modo enfocado**: registro1-5 e impresion1-5 ven barra superior, sin lateral.
+- **Impresión**: no se manda el job si Windows dice QL apagada; un reintento si el
+  agente no contestó; `watched:timeout` se muestra como "enviado · confirma".
+- **Bug previo arreglado**: `codes.ts` pedía `ApellidoMaterno` en
+  `Registro_Alumnos` (no existe): **todo escaneo de alumno daba 500** desde que
+  existe el API TS. Lo destapó el humo nuevo.
+- **Seguridad**: el droplet tenía un minero XMRig (`[kworker/0:2]`, 99 % CPU,
+  2.1 GB RAM) desde el 27-09, metido por fuerza bruta SSH. Matado y en cuarentena
+  en `/root/quarantine-xmrig-20261014/` (bashrc, profile, crontab, unidades
+  systemd y binario). **Adam: cambiar la contraseña de root** (se pegó en el chat
+  hoy) y, si puede, `PasswordAuthentication no` (hay 2 llaves ed25519 del 09-09).
+- Deploy: `python .ai/_deploy_dias.py respaldar|subir|canario|promover|rollback`.
+  Respaldo `/root/backups/bd_demo-prev-20261014.dump`; rollback a `:prev-20261014`.
+  Canario: `_smoke_mesa.py` VERDE (36/36) y `_smoke_dias.py` VERDE. Promovido
+  17:43 UTC; `panel_web` y `accesos_api` healthy, índices y columna presentes.
+- Excel de usuarios (13 del panel + Hetzner) en
+  `C:\dev\secrets\experiencebt-usuarios-2026-10-07.xlsx` (fuera del repo).
+
+### Pendiente / siguiente
+
+- Confirmar con Adam que las fechas son 15-17 oct (si no: `EVENTO_DIAS` en
+  `panel/.env` y `docker compose up -d` de panel_web + accesos_api).
+- Probar en sitio con la QL-800 real (impresión física) y un lector USB.
+- Rotar root del droplet; valorar fail2ban. Zona `acreditacion` quedó con
+  `dentro=0, dentro_fecha=2026-10-14` tras el humo (sana).
 
 ## 2026-10-07 tarde · Login (cursor) — DESPLEGADO
 

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { fechaHora, mesa, tiene, type MesaResp, type Sesion, type UsuarioEquipo } from '../api'
+import DiaSelector from '../components/DiaSelector'
+import { nombreDia, useDiaSeleccionado } from '../lib/useDia'
 import styles from './mesa.module.scss'
 
 const ACCIONES: Record<string, { texto: string; clase: string }> = {
@@ -18,12 +20,15 @@ export default function MesaPage() {
   const [error, setError] = useState<string | null>(null)
   const verEquipo = tiene(sesion, 'equipo')
   const puedeBuscar = tiene(sesion, 'buscar')
+  const evento = data?.evento ?? sesion?.evento
+  const [dia, setDia, diaParam] = useDiaSeleccionado(evento, { conTodos: true })
 
   useEffect(() => {
     let vivo = true
+    setData(null)
     const cargar = () => {
       void mesa
-        .actividad()
+        .actividad(diaParam)
         .then((d) => {
           if (!vivo) return
           setData(d)
@@ -47,27 +52,70 @@ export default function MesaPage() {
       vivo = false
       window.clearInterval(t)
     }
-  }, [verEquipo])
+  }, [verEquipo, diaParam])
+
+  const tituloDia = data?.dia?.etiqueta ?? nombreDia(evento, dia)
+  const corto = dia === 'todos' ? 'evento' : tituloDia.split(' · ')[0]
 
   return (
     <main className={styles.page}>
       <p className={styles.lead}>
-        Lo que hizo hoy cada usuario de la mesa: altas en sitio, etiquetas impresas y boletos reenviados
-        por correo. Se actualiza cada 20 s.
+        Lo que hizo cada usuario de la mesa en el día elegido: altas en sitio, etiquetas impresas
+        y boletos reenviados por correo. Se actualiza cada 20 s.
       </p>
+
+      <div className={styles.diaBloque}>
+        <DiaSelector evento={evento} value={dia} onChange={setDia} />
+      </div>
 
       {error ? <div className={styles.alerta}>{error}</div> : null}
 
-      <section className={styles.kpis} aria-label="Totales de hoy">
-        <Kpi label="Altas en sitio hoy" value={data?.hoy.altas} />
-        <Kpi label="Etiquetas impresas hoy" value={data?.hoy.impresiones} />
-        <Kpi label="Boletos reenviados hoy" value={data?.hoy.reenvios} />
-        <Kpi label="Reenvíos fallidos hoy" value={data?.hoy.fallos} warn />
+      <section className={styles.kpis} aria-label={`Totales · ${tituloDia}`}>
+        <Kpi label={`Altas en sitio · ${corto}`} value={data?.hoy.altas} />
+        <Kpi label={`Etiquetas impresas · ${corto}`} value={data?.hoy.impresiones} />
+        <Kpi label={`Boletos reenviados · ${corto}`} value={data?.hoy.reenvios} />
+        <Kpi label={`Reenvíos fallidos · ${corto}`} value={data?.hoy.fallos} warn />
         <Kpi label="Altas en sitio (todo el evento)" value={data?.altasTotales} />
       </section>
 
+      {data?.porDia?.length ? (
+        <section className={styles.tarjeta}>
+          <h2>Por día del evento</h2>
+          <div className={styles.tablaWrap}>
+            <table className={styles.tabla}>
+              <thead>
+                <tr>
+                  <th>Día</th>
+                  <th>Altas en sitio</th>
+                  <th>Etiquetas impresas</th>
+                  <th>Personas que entraron</th>
+                  <th>Entradas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.porDia.map((d) => (
+                  <tr key={d.num} className={dia === d.num ? styles.filaActiva : undefined}>
+                    <td>
+                      <strong>
+                        {d.etiqueta}
+                        {evento?.hoy === d.num ? ' · hoy' : ''}
+                      </strong>
+                      <span>{d.nombre}</span>
+                    </td>
+                    <td>{d.altas}</td>
+                    <td>{d.impresiones}</td>
+                    <td>{d.unicos}</td>
+                    <td>{d.entradas}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+
       <section className={styles.tarjeta}>
-        <h2>Por usuario · hoy</h2>
+        <h2>Por usuario · {tituloDia}</h2>
         {!data ? (
           <p className={styles.vacio}>Cargando…</p>
         ) : data.operadores.length ? (
@@ -99,7 +147,7 @@ export default function MesaPage() {
             </table>
           </div>
         ) : (
-          <p className={styles.vacio}>Nadie ha registrado actividad hoy.</p>
+          <p className={styles.vacio}>Nadie registró actividad en {tituloDia.toLowerCase()}.</p>
         )}
       </section>
 

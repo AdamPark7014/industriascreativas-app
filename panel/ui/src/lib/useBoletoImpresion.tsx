@@ -210,17 +210,36 @@ export function useBoletoImpresion({ sesion, onContador, textoCerrar }: Opciones
   const imprimirQl = async () => {
     if (!boleto) return
     const b = boleto
+    // Windows ya dijo que la QL-800 está apagada o sin USB: no vale la pena
+    // esperar los 45 s del agente para enterarse.
+    if (bridgeReady === true && bridgePrinterOnline === false) {
+      setError(
+        `La ${bridgePrinter || 'Brother QL-800'} está apagada o desconectada según Windows. ` +
+          'Enciéndela, revisa el cable USB y vuelve a pulsar "Imprimir boleto". No se envió nada.',
+      )
+      setToast({ texto: `No se envió nada a la impresora · ${b.nombre}`, tono: 'aviso' })
+      void probe()
+      return
+    }
     setPrinting(claveDe(b.tipoKey, b.id))
     printingRef.current = true
     setError(null)
     try {
       const png = await renderBoletoPngBase64(b)
-      const res = await printPngViaAgent(png, {
+      const pedido = {
         title: b.nombre,
         body: `${b.tipo}\n${b.folio}`,
         footer: 'FICTI Accesos',
-        colorMode: 'auto',
-      })
+        colorMode: 'auto' as const,
+      }
+      let res = await printPngViaAgent(png, pedido)
+      if (!res.ok && res.reachable === false) {
+        // El agente no contestó (parpadeo de red local o Chrome pidiendo permiso):
+        // se espera un momento, se comprueba que esté y se intenta UNA vez más.
+        await new Promise((r) => window.setTimeout(r, 1200))
+        const h = await probePrintAgent()
+        if (h.ok && h.reachable) res = await printPngViaAgent(png, pedido)
+      }
       if (!res.ok) {
         // Si el agente contestó (aunque con error) sigue estando online; solo
         // se marca offline cuando ni siquiera hubo respuesta de red.
@@ -243,9 +262,16 @@ export function useBoletoImpresion({ sesion, onContador, textoCerrar }: Opciones
         jobId: jobIdParaApi(res.jobId),
       })
       const rollo = describeColorMode(res.colorMode) ?? res.mediaName ?? '62 mm'
+      // `watched: 'timeout'`: el job entró a la cola pero el agente no lo vio salir.
+      const sinConfirmar = res.watched === 'timeout'
       setToast(
         reg
-          ? { texto: `Boleto impreso y registrado (×${reg.total}) · ${b.nombre} · ${rollo}`, tono: 'ok' }
+          ? {
+              texto: `Boleto ${sinConfirmar ? 'enviado' : 'impreso'} y registrado (×${reg.total}) · ${b.nombre} · ${rollo}${
+                sinConfirmar ? ' · confirma que salió la etiqueta' : ''
+              }`,
+              tono: sinConfirmar ? 'aviso' : 'ok',
+            }
           : { texto: `Impreso, pero no se pudo registrar · ${b.nombre}`, tono: 'aviso' },
       )
     } catch (e) {

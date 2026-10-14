@@ -24,6 +24,57 @@ Código: `panel/accesos-api/` (EVENTO-ELISA). Cookie de sesión Flask
 - Informes zona/reingresos/CSV/XLSX
 - Pool Postgres + gzip nginx
 
+## Evento de varios días (2026-10-14)
+
+FICTI dura tres días. Todo lo que pasa en el panel se agrupa por el **día del
+evento en hora de México** y el estado de puerta se reinicia cada día.
+
+- **Fechas**: `EVENTO_DIAS=2026-10-15,2026-10-16,2026-10-17` en `panel/.env`
+  (la leen `panel_web` y `accesos_api` vía `docker-compose.panel.yml`). Sin la
+  variable se usan esas tres. Código: `panel/accesos-api/src/evento.ts`
+  (`DIAS`, `fechaCdmx`, `filtroDia`, `condFecha`) y `panel/consultas.py`
+  (`dias_evento`, `asistencia_por_dia`).
+- **Escaneo** (`scan.ts`): "dentro / fuera" sale del **último escaneo aceptado
+  de hoy** de la persona (`estadoPersona`), no de un contador global. Quien
+  entró el día 1 y no escaneó salida entra sin problema el día 2. *Reingreso*
+  = volvió a entrar **el mismo día** tras una salida. El veredicto trae `dia`,
+  `entradasHoy` y `diasPrevios` ("también vino el día 1"). `asistencias` en las
+  tablas de registro pasa a ser el **total histórico de entradas** (ya no baja
+  con la salida).
+- **Aforo por día**: `accesos_zonas.dentro_fecha` (migración
+  `007_dias_evento.sql`, también en `ensureIndexes`). Si el contador es de otro
+  día arranca en 0 en el primer escaneo; `/zonas`, `/resumen` y el PDA ya
+  devuelven el `dentro` de hoy.
+- **Filtro `?dia=`** en `/resumen` (defecto hoy), `/reportes` (defecto todos),
+  `/metricas`, `/mesa` e `/impresiones`: `1|2|3`, `hoy`, `todos` o
+  `YYYY-MM-DD`. Las respuestas traen `evento` (días y cuál es hoy), `dia` (cómo
+  se interpretó) y, en resumen/mesa, `porDia`. `GET /sesion` también trae
+  `evento`. Los rechazos ya no cuentan `COOLDOWN` (lector que lee dos veces).
+- **Excel de accesos** (`/reportes?formato=xlsx`, `informes.ts`): hoja
+  *Resumen* (totales por día), **una hoja por día**, *Otros días* si hubo
+  escaneos fuera de fechas y *Asistentes* (una fila por persona: 1.ª entrada,
+  última salida y accesos de cada día). El CSV añade `fecha`, `hora` y `dia`.
+  La exportación trae hasta 50 000 filas (la pantalla sigue en 300).
+- **Excel de registros** del panel Flask (`exportar.py`): hoja nueva
+  *Asistencia* con los mismos datos por persona y día.
+- **UI**: selector de día (`components/DiaSelector.tsx`, estado compartido en
+  `lib/useDia.ts` por pestaña) en Resumen, Informes y Mesa; franja con tarjeta
+  por día en Resumen; chip "Día N · jue 15 oct" en la cabecera; banner del día
+  en el escáner (y aviso si hoy no es día del evento). El escáner ignora la
+  misma lectura repetida en < 0.9 s (ruido del lector USB).
+- **Modo enfocado**: `registro1–5` e `impresion1–5` tienen una sola pantalla,
+  así que `OpsShell` les quita el lateral y deja una barra superior (logos,
+  título, día, usuario y Salir). Se activa solo cuando el rol ve ≤ 1 entrada
+  del menú.
+- **Impresión**: si Windows reporta la QL-800 apagada/sin USB el panel no manda
+  el job (aviso inmediato en vez de esperar 45 s); si el agente no contestó,
+  espera 1.2 s, lo sondea y reintenta **una vez**; `watched: 'timeout'` se
+  muestra como "enviado · confirma que salió la etiqueta".
+- Deploy: `python .ai/_deploy_dias.py respaldar|subir|canario|promover|rollback`
+  (rollback a `:prev-20261014`, respaldo `/root/backups/bd_demo-prev-20261014.dump`).
+  Humo: `.ai/_smoke_dias.py` (ciclo entrada → ya dentro → salida → reingreso y
+  "entrada de ayer no bloquea hoy").
+
 ## Impresión QL-800 (cinta continua 62 mm)
 
 El gafete de puerta ya **no** es 5×8 in. `@page` y el PDF son **62 mm × 100 mm**

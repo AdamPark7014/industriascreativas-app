@@ -79,6 +79,8 @@ export default function EscanearPage() {
   )
   const inputRef = useRef<HTMLInputElement>(null)
   const enVuelo = useRef(false)
+  /** Último código leído: los lectores USB a veces disparan dos veces la misma lectura. */
+  const ultimoRef = useRef<{ codigo: string; at: number }>({ codigo: '', at: 0 })
   const modoRef = useRef<Modo>('entrada')
   const zonaRef = useRef('acreditacion')
   const deviceRef = useRef(deviceId)
@@ -171,6 +173,14 @@ export default function EscanearPage() {
     async (qr: string) => {
       const codigo = qr.trim()
       if (!codigo || enVuelo.current) return
+      // Misma lectura dos veces en menos de un segundo: ruido del lector, no un
+      // segundo escaneo. Se ignora sin pitido ni rechazo en pantalla.
+      const ahora = Date.now()
+      if (ultimoRef.current.codigo === codigo && ahora - ultimoRef.current.at < 900) {
+        if (inputRef.current) inputRef.current.value = ''
+        return
+      }
+      ultimoRef.current = { codigo, at: ahora }
       enVuelo.current = true
       // Optimistic UI — show pending before round-trip
       setResultado({
@@ -280,10 +290,32 @@ export default function EscanearPage() {
   }
 
   const zonaActiva = zonas.find((z) => z.clave === zona)
+  const evento = sesion?.evento
+  const diaHoy = evento?.dias.find((d) => d.num === evento.hoy) ?? null
 
   return (
     <div className={styles.page}>
       <div className={styles.station}>
+        {evento ? (
+          <div className={`${styles.diaBanner} ${diaHoy ? '' : styles.diaBannerOff}`} role="status">
+            {diaHoy ? (
+              <>
+                <strong>{diaHoy.etiqueta}</strong>
+                <span>
+                  {diaHoy.nombre} · {evento.dias.length} días de evento · dentro/fuera y aforo se
+                  reinician cada día
+                </span>
+              </>
+            ) : (
+              <>
+                <strong>Fuera de fechas</strong>
+                <span>
+                  Hoy ({evento.fechaHoy}) no es día del evento: los escaneos quedarán en «Otros días».
+                </span>
+              </>
+            )}
+          </div>
+        ) : null}
         <div className={styles.modes}>
           <button
             type="button"
@@ -389,8 +421,8 @@ export default function EscanearPage() {
           {ocupado
             ? 'Validando… un momento'
             : modo === 'entrada'
-              ? 'Listo para ENTRADA. Si ya está dentro, se rechaza hasta registrar una salida.'
-              : 'Listo para SALIDA. Libera el aforo y permite que vuelva a entrar.'}
+              ? 'Listo para ENTRADA. Si ya está dentro hoy, se rechaza hasta registrar una salida.'
+              : 'Listo para SALIDA. Libera el aforo y permite que vuelva a entrar hoy.'}
           {latenciaMs != null
             ? ` · cliente ${latenciaMs} ms${serverMs != null ? ` · server ${serverMs} ms` : ''}`
             : ''}
@@ -422,10 +454,11 @@ export default function EscanearPage() {
               </span>
             ) : null}
             <span className={styles.conteo}>
-              {resultado.currentlyInside || resultado.dentro || resultado.asistencias > 0
-                ? 'Ahora: DENTRO'
-                : 'Ahora: FUERA'}
+              {(resultado.currentlyInside ?? resultado.dentro) ? 'Ahora: DENTRO' : 'Ahora: FUERA'}
               {resultado.reentry ? ' · REINGRESO' : ''}
+              {resultado.diasPrevios?.length
+                ? ` · ya vino: ${resultado.diasPrevios.map((n) => `día ${n}`).join(', ')}`
+                : ''}
               {resultado.lastDirection ? ` · último ${resultado.lastDirection}` : ''}
               {resultado.zonaNombre
                 ? ` · ${resultado.zonaNombre} ${resultado.zonaDentro ?? '—'}/${resultado.zonaAforo || '∞'}`

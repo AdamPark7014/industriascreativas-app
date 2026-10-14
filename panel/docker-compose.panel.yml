@@ -21,6 +21,8 @@ services:
       PANEL_PROMOTOR_NOMBRE: ${PANEL_PROMOTOR_NOMBRE:-Promotor}
       # Mesa de atención: "registro1:clave,...,impresion5:clave,controladm:clave" (ver seed.py).
       PANEL_EQUIPO_CLAVES: ${PANEL_EQUIPO_CLAVES:-}
+      # Días del evento (hora de México), en orden: la exportación agrupa la asistencia por día.
+      EVENTO_DIAS: ${EVENTO_DIAS:-2026-10-15,2026-10-16,2026-10-17}
       PANEL_COOKIE_SECURE: "1"
     expose:
       - "5000"
@@ -46,6 +48,8 @@ services:
       # Reenvío de boletos: llama a eventos_demo_web con X-Interno-Key (mismo valor en backend/.env).
       PANEL_INTERNO_KEY: ${PANEL_INTERNO_KEY:-}
       REGISTRO_INTERNO_URL: ${REGISTRO_INTERNO_URL:-http://eventos_demo_web:5000}
+      # Mismo valor que panel_web: escaneos, aforo e informes se separan por estos días.
+      EVENTO_DIAS: ${EVENTO_DIAS:-2026-10-15,2026-10-16,2026-10-17}
       PORT: "3080"
       PG_POOL_MAX: "12"
     expose:

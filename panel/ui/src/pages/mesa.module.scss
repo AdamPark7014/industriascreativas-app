@@ -20,6 +20,14 @@
   font-size: 0.88rem;
 }
 
+.diaBloque {
+  margin-bottom: 14px;
+}
+
+.filaActiva td {
+  background: #eef7f6;
+}
+
 .kpis {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));

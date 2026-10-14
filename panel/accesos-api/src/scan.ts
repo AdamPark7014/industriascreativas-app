@@ -15,6 +15,7 @@ import {
   type CodigoAcceso,
 } from './codes.js'
 import { query, queryOne, type Row } from './db.js'
+import { SQL_FECHA, diaDeFecha, diaJson, fechaCdmx } from './evento.js'
 
 export type ScanResult = {
   ok: boolean
@@ -38,6 +39,12 @@ export type ScanResult = {
   scanId?: number
   serverMs?: number
   reentry?: boolean
+  /** Día del evento en que cayó el escaneo (null fuera de las fechas). */
+  dia?: { num: number; etiqueta: string; nombre: string; fecha: string } | null
+  /** Días del evento (num) en que la persona ya había entrado antes de hoy. */
+  diasPrevios?: number[]
+  /** Entradas aceptadas de la persona en el día de hoy, contando esta. */
+  entradasHoy?: number
 }
 
 type ScanOpts = {
@@ -72,7 +79,9 @@ function resultado(
   asistencias: number,
   extra: Record<string, unknown> = {},
 ): ScanResult {
-  const dentro = asistencias > 0
+  // `asistencias` es el total histórico de entradas; "dentro" se decide con
+  // los escaneos de hoy y llega explícito en `extra`.
+  const dentro = extra.dentro === true
   return {
     ok,
     codigo,
@@ -82,9 +91,9 @@ function resultado(
     nombre,
     tipo,
     asistencias,
+    ...extra,
     dentro,
     currentlyInside: dentro,
-    ...extra,
   } as ScanResult
 }
 
@@ -102,6 +111,18 @@ function metaZona(zona: Row | null): Record<string, unknown> {
 
 function serverMsOf(startedAt: number): number {
   return Math.max(0, Math.round(Date.now() - startedAt))
+}
+
+const fmtHoraCorta = new Intl.DateTimeFormat('es-MX', {
+  timeZone: 'America/Mexico_City',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+})
+
+function horaCorta(iso: string): string {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '' : fmtHoraCorta.format(d)
 }
 
 export function parseFolio(q: string): { tag: string | null; num: number | null } {
@@ -141,28 +162,83 @@ async function estaBloqueado(
   return String(r.rows[0].motivo || 'Lista negra')
 }
 
-async function ultimoOk(
+type EstadoPersona = {
+  /** true si su último escaneo aceptado de HOY fue una entrada. */
+  dentro: boolean
+  modo: 'entrada' | 'salida' | null
+  at: string | null
+  /** Entradas aceptadas hoy (antes de este escaneo). */
+  entradasHoy: number
+  /** Fechas (YYYY-MM-DD, CDMX) con al menos una entrada aceptada, hoy incluido. */
+  fechas: string[]
+}
+
+/**
+ * Estado de una persona para el día de hoy. Un evento de varios días no puede
+ * fiarse de un contador global: quien entró el día 1 y no escaneó salida debe
+ * poder entrar el día 2, y "reingreso" solo tiene sentido dentro del mismo día.
+ */
+async function estadoPersona(
   client: pg.PoolClient,
   tipo: string,
   registroId: number,
-): Promise<{ modo: 'entrada' | 'salida' | null; at: string | null }> {
+  hoy: string,
+): Promise<EstadoPersona> {
   const r = await client.query(
-    `SELECT modo, creado FROM accesos_escaneos
-     WHERE tipo = $1 AND registro_id = $2 AND ok
-     ORDER BY creado DESC LIMIT 1`,
-    [tipo, registroId],
+    `SELECT
+       (SELECT modo FROM accesos_escaneos
+         WHERE tipo = $1 AND registro_id = $2 AND ok AND ${SQL_FECHA('creado')} = $3::date
+         ORDER BY creado DESC LIMIT 1) AS ultimo_modo,
+       (SELECT creado FROM accesos_escaneos
+         WHERE tipo = $1 AND registro_id = $2 AND ok AND ${SQL_FECHA('creado')} = $3::date
+         ORDER BY creado DESC LIMIT 1) AS ultimo_at,
+       (SELECT COUNT(*)::int FROM accesos_escaneos
+         WHERE tipo = $1 AND registro_id = $2 AND ok AND modo = 'entrada'
+           AND ${SQL_FECHA('creado')} = $3::date) AS entradas_hoy,
+       (SELECT COALESCE(array_agg(DISTINCT f::text ORDER BY f::text), '{}')
+          FROM (SELECT ${SQL_FECHA('creado')} AS f FROM accesos_escaneos
+                WHERE tipo = $1 AND registro_id = $2 AND ok AND modo = 'entrada') s) AS fechas`,
+    [tipo, registroId, hoy],
   )
-  const row = r.rows[0]
-  if (!row) return { modo: null, at: null }
-  const modo = row.modo === 'salida' ? 'salida' : row.modo === 'entrada' ? 'entrada' : null
-  const creado = row.creado
-  const at =
-    creado instanceof Date
-      ? creado.toISOString()
-      : creado
-        ? String(creado)
-        : null
-  return { modo, at }
+  const row = r.rows[0] ?? {}
+  const modo = row.ultimo_modo === 'salida' ? 'salida' : row.ultimo_modo === 'entrada' ? 'entrada' : null
+  const creado = row.ultimo_at
+  const at = creado instanceof Date ? creado.toISOString() : creado ? String(creado) : null
+  return {
+    dentro: modo === 'entrada',
+    modo,
+    at,
+    entradasHoy: Number(row.entradas_hoy || 0),
+    fechas: Array.isArray(row.fechas) ? row.fechas.map(String) : [],
+  }
+}
+
+/**
+ * "Dentro ahora" de varias personas de golpe (búsqueda): último escaneo
+ * aceptado de hoy por persona, en una sola consulta.
+ */
+export async function estadoLote(
+  claves: { tipo: string; id: number }[],
+): Promise<Map<string, { dentro: boolean }>> {
+  const out = new Map<string, { dentro: boolean }>()
+  if (!claves.length) return out
+  const params: unknown[] = [fechaCdmx()]
+  const pares = claves.map((k) => {
+    params.push(k.tipo, k.id)
+    return `($${params.length - 1}::text,$${params.length}::int)`
+  })
+  const rows = await query<{ tipo: string; registro_id: number; modo: string }>(
+    `SELECT DISTINCT ON (tipo, registro_id) tipo, registro_id, modo
+     FROM accesos_escaneos
+     WHERE ok AND ${SQL_FECHA('creado')} = $1::date
+       AND (tipo, registro_id) IN (${pares.join(',')})
+     ORDER BY tipo, registro_id, creado DESC`,
+    params,
+  )
+  for (const r of rows) {
+    out.set(`${r.tipo}:${Number(r.registro_id)}`, { dentro: r.modo === 'entrada' })
+  }
+  return out
 }
 
 async function logEscaneo(
@@ -208,11 +284,13 @@ async function logEscaneo(
   return res.rows[0]?.id as number | undefined
 }
 
-async function cargarZona(client: pg.PoolClient, clave: string): Promise<Row | null> {
+/** Zona con `dentro` del día de hoy: lo contado otro día no ocupa cupo. */
+async function cargarZona(client: pg.PoolClient, clave: string, hoy: string): Promise<Row | null> {
   const r = await client.query(
-    `SELECT clave, nombre, aforo, dentro, activo, hora_inicio, hora_fin, zona_requerida
+    `SELECT clave, nombre, aforo, activo, hora_inicio, hora_fin, zona_requerida,
+            CASE WHEN dentro_fecha = $2::date THEN dentro ELSE 0 END AS dentro
      FROM accesos_zonas WHERE clave = $1 AND activo`,
-    [clave],
+    [clave, hoy],
   )
   return (r.rows[0] as Row) ?? null
 }
@@ -379,10 +457,16 @@ export async function procesarEscaneo(
   const nombre = nombreDe(fila)
   const etiqueta = TIPOS[clave].etiqueta
   const folio = folioDe(clave, id)
-  let asistencias = Number(fila.asistencias || 0)
+  // Total histórico de entradas aceptadas (nunca baja); el "dentro" sale de hoy.
+  const asistencias = Number(fila.asistencias || 0)
   const t = TIPOS[clave]
-  const zona = await cargarZona(client, zonaClave)
-  const mz = metaZona(zona)
+  const hoy = fechaCdmx()
+  const dia = diaJson(hoy)
+  const [zona, estado] = await Promise.all([
+    cargarZona(client, zonaClave, hoy),
+    estadoPersona(client, clave, id, hoy),
+  ])
+  const mz = { ...metaZona(zona), dia, dentro: estado.dentro, lastDirection: estado.modo, lastScanAt: estado.at }
 
   if (!zona) {
     const codigo = CODIGOS.ZONE_REQUIRED
@@ -478,23 +562,19 @@ export async function procesarEscaneo(
   }
 
   if (modo === 'salida') {
-    if (asistencias <= 0) {
-      const last = await ultimoOk(client, clave, id)
+    if (!estado.dentro) {
       const codigo = CODIGOS.NOT_INSIDE
       const res = resultado(
         false,
         codigo,
         demo ? '❌ SALIDA DENEGADA' : 'SALIDA DENEGADA',
-        `${nombre} no tiene una entrada activa. No hay reingreso pendiente.`,
+        estado.modo === 'salida'
+          ? `${nombre} ya registró su salida hoy. Para volver a entrar escanea ENTRADA.`
+          : `${nombre} no tiene una entrada registrada hoy.`,
         nombre,
         etiqueta,
         asistencias,
-        {
-          folio,
-          lastDirection: last.modo,
-          lastScanAt: last.at,
-          ...mz,
-        },
+        { folio, ...mz },
       )
       return finish(res, {
         tipo: clave,
@@ -506,30 +586,32 @@ export async function procesarEscaneo(
         zona: zonaClave,
       })
     }
-    await client.query(
-      `UPDATE "${t.tabla}" SET asistencias = GREATEST(COALESCE(asistencias,0) - 1, 0)
-       WHERE "${t.id}" = $1`,
-      [id],
-    )
     if (zona) {
-      await client.query(
-        `UPDATE accesos_zonas SET dentro = GREATEST(dentro - 1, 0) WHERE clave = $1`,
-        [zona.clave],
+      // El contador de la zona es del día: si quedó de otro día arranca en 0.
+      const z = await client.query(
+        `UPDATE accesos_zonas
+         SET dentro = GREATEST(CASE WHEN dentro_fecha = $2::date THEN dentro ELSE 0 END - 1, 0),
+             dentro_fecha = $2::date
+         WHERE clave = $1
+         RETURNING dentro`,
+        [zona.clave, hoy],
       )
-      zona.dentro = Math.max(Number(zona.dentro || 0) - 1, 0)
+      zona.dentro = Number(z.rows[0]?.dentro ?? 0)
     }
-    const nueva = Math.max(asistencias - 1, 0)
     const codigo = CODIGOS.OK_EXIT
     const res = resultado(
       true,
       codigo,
       demo ? '✅ SALIDA REGISTRADA' : 'SALIDA REGISTRADA',
-      `${nombre} (${etiqueta}). Puede reingresar con ENTRADA.`,
+      `${nombre} (${etiqueta}). Puede reingresar hoy con ENTRADA.`,
       nombre,
       etiqueta,
-      nueva,
+      asistencias,
       {
         folio,
+        dentro: false,
+        dia,
+        entradasHoy: estado.entradasHoy,
         lastDirection: 'salida',
         lastScanAt: new Date().toISOString(),
         ...metaZona(zona),
@@ -547,23 +629,17 @@ export async function procesarEscaneo(
   }
 
   // entrada
-  if (asistencias >= 1) {
-    const last = await ultimoOk(client, clave, id)
+  if (estado.dentro) {
     const codigo = CODIGOS.ALREADY_INSIDE
     const res = resultado(
       false,
       codigo,
       demo ? '❌ YA DENTRO' : 'YA DENTRO',
-      `${nombre} ya ingresó. Escanea SALIDA antes del reingreso.`,
+      `${nombre} ya ingresó hoy${estado.at ? ` a las ${horaCorta(estado.at)}` : ''}. Escanea SALIDA antes del reingreso.`,
       nombre,
       etiqueta,
       asistencias,
-      {
-        folio,
-        lastDirection: last.modo,
-        lastScanAt: last.at,
-        ...mz,
-      },
+      { folio, ...mz },
     )
     return finish(res, {
       tipo: clave,
@@ -577,18 +653,20 @@ export async function procesarEscaneo(
   }
 
   if (zona) {
+    // Cupo del día: lo contado otro día no ocupa lugar. Atómico contra el aforo.
     const cap = await client.query(
       `UPDATE accesos_zonas
-       SET dentro = dentro + 1
+       SET dentro = CASE WHEN dentro_fecha = $2::date THEN dentro ELSE 0 END + 1,
+           dentro_fecha = $2::date
        WHERE clave = $1
          AND activo
-         AND (aforo = 0 OR dentro < aforo)
+         AND (aforo = 0 OR (CASE WHEN dentro_fecha = $2::date THEN dentro ELSE 0 END) < aforo)
        RETURNING clave, nombre, aforo, dentro`,
-      [zona.clave],
+      [zona.clave, hoy],
     )
     if (!cap.rows[0]) {
       // refresh counts for message
-      const z2 = await cargarZona(client, String(zona.clave))
+      const z2 = await cargarZona(client, String(zona.clave), hoy)
       const codigo = CODIGOS.ZONE_FULL
       const res = resultado(
         false,
@@ -618,14 +696,16 @@ export async function procesarEscaneo(
     [id],
   )
 
-  const priorExit = await client.query(
-    `SELECT 1 FROM accesos_escaneos
-     WHERE tipo = $1 AND registro_id = $2 AND ok AND modo = 'salida'
-     LIMIT 1`,
-    [clave, id],
-  )
-  const reentry = (priorExit.rowCount ?? priorExit.rows.length) > 0
+  // Reingreso = ya había entrado HOY (y salió). Lo de otros días se informa aparte.
+  const reentry = estado.entradasHoy > 0
+  const diasPrevios = estado.fechas
+    .filter((f) => f !== hoy)
+    .map((f) => diaDeFecha(f)?.num)
+    .filter((n): n is number => typeof n === 'number')
   const codigo = reentry ? CODIGOS.OK_REENTRY : CODIGOS.OK_ENTRY
+  const detallePrevios = diasPrevios.length
+    ? ` · también vino el ${diasPrevios.map((n) => `día ${n}`).join(' y el ')}`
+    : ''
   const res = resultado(
     true,
     codigo,
@@ -636,13 +716,17 @@ export async function procesarEscaneo(
       : reentry
         ? 'REINGRESO'
         : 'ENTRADA REGISTRADA',
-    `${nombre} (${etiqueta})${reentry ? ' · reingreso' : ''}`,
+    `${nombre} (${etiqueta})${reentry ? ' · reingreso' : ''}${dia ? ` · ${dia.etiqueta}` : ''}${detallePrevios}`,
     nombre,
     etiqueta,
     asistencias + 1,
     {
       folio,
       reentry,
+      dentro: true,
+      dia,
+      diasPrevios,
+      entradasHoy: estado.entradasHoy + 1,
       lastDirection: 'entrada',
       lastScanAt: new Date().toISOString(),
       ...metaZona(zona),
@@ -692,7 +776,8 @@ function hitDe(clave: TipoClave, fila: Row, match: string): Hit {
     extra,
     confirmado: Boolean(fila.confirmado),
     asistencias,
-    dentro: asistencias > 0,
+    // "Dentro" se decide con los escaneos de hoy: /buscar lo rellena con estadoLote.
+    dentro: false,
     match,
   }
 }

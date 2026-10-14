@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, type Escaneo } from '../api'
+import { useOutletContext } from 'react-router-dom'
+import { api, type DiaFiltro, type Escaneo, type EventoInfo, type Sesion } from '../api'
+import DiaSelector from '../components/DiaSelector'
+import { etiquetaDiaDe, nombreDia, useDiaSeleccionado } from '../lib/useDia'
 import styles from './reportes.module.scss'
 
 export default function ReportesPage() {
+  const sesion = useOutletContext<Sesion | null>()
   const [modo, setModo] = useState('')
   const [ok, setOk] = useState('')
   const [zona, setZona] = useState('')
@@ -16,18 +20,27 @@ export default function ReportesPage() {
     salidas: 0,
     rechazos: 0,
     reingresos: 0,
+    unicos: 0,
     p50_server: null as number | null,
     p95_server: null as number | null,
   })
   const [zonas, setZonas] = useState<{ clave: string; nombre: string }[]>([])
   const [dispositivos, setDispositivos] = useState<string[]>([])
   const [rows, setRows] = useState<Escaneo[]>([])
+  const [evento, setEvento] = useState<EventoInfo | null>(sesion?.evento ?? null)
+  const [diaResp, setDiaResp] = useState<DiaFiltro | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [live, setLive] = useState(true)
+  const [dia, setDia, diaParam] = useDiaSeleccionado(evento ?? sesion?.evento, { conTodos: true })
 
-  const load = useCallback(async (signal?: AbortSignal) => {
+  useEffect(() => {
+    if (!evento && sesion?.evento) setEvento(sesion.evento)
+  }, [sesion, evento])
+
+  const filtros = useCallback(() => {
     const p = new URLSearchParams()
+    p.set('dia', String(diaParam))
     if (modo) p.set('modo', modo)
     if (ok) p.set('ok', ok)
     if (zona) p.set('zona', zona)
@@ -35,6 +48,11 @@ export default function ReportesPage() {
     if (dispositivo) p.set('dispositivo', dispositivo)
     if (origen) p.set('origen', origen)
     if (q.trim()) p.set('q', q.trim())
+    return p
+  }, [diaParam, modo, ok, zona, codigo, dispositivo, origen, q])
+
+  const load = useCallback(async (signal?: AbortSignal) => {
+    const p = filtros()
     p.set('limite', '300')
     setLoading(true)
     try {
@@ -46,10 +64,13 @@ export default function ReportesPage() {
         salidas: data.kpis.salidas ?? 0,
         rechazos: data.kpis.rechazos ?? 0,
         reingresos: data.kpis.reingresos ?? 0,
+        unicos: data.kpis.unicos ?? 0,
         p50_server: data.kpis.p50_server ?? null,
         p95_server: data.kpis.p95_server ?? null,
       })
       setRows(data.registros)
+      if (data.evento) setEvento(data.evento)
+      if (data.dia) setDiaResp(data.dia)
       if (data.zonas?.length) setZonas(data.zonas)
       if (data.dispositivos) setDispositivos(data.dispositivos)
       setError(null)
@@ -59,7 +80,7 @@ export default function ReportesPage() {
     } finally {
       if (!signal?.aborted) setLoading(false)
     }
-  }, [modo, ok, zona, codigo, dispositivo, origen, q])
+  }, [filtros])
 
   useEffect(() => {
     const ac = new AbortController()
@@ -77,30 +98,31 @@ export default function ReportesPage() {
   }, [live, load])
 
   const descargar = (formato: 'csv' | 'xlsx') => {
-    const p = new URLSearchParams()
-    if (modo) p.set('modo', modo)
-    if (ok) p.set('ok', ok)
-    if (zona) p.set('zona', zona)
-    if (codigo) p.set('codigo', codigo)
-    if (dispositivo) p.set('dispositivo', dispositivo)
-    if (origen) p.set('origen', origen)
-    if (q.trim()) p.set('q', q.trim())
+    const p = filtros()
     p.set('formato', formato)
-    p.set('limite', '2000')
+    p.set('limite', '50000')
     window.location.href = `/api/accesos/reportes?${p}`
   }
+
+  const todos = dia === 'todos'
+  const tituloDia = diaResp?.etiqueta ?? nombreDia(evento, dia)
 
   return (
     <main className={styles.page}>
       <p className={styles.lead}>
-        Revisa quién entró o salió. Filtra por zona, código de rechazo, estación,
-        origen y latencia. Reingresos = código OK_REENTRY.
+        Quién entró o salió, separado por día del evento. Filtra por zona, código, estación u
+        origen y exporta a Excel: una hoja por día más la lista de asistentes.
       </p>
+
+      <section className={styles.diaBloque} aria-label="Día">
+        <DiaSelector evento={evento} value={dia} onChange={setDia} />
+        <span className={styles.diaTitulo}>{tituloDia}</span>
+      </section>
 
       <section className={styles.kpis} aria-label="Totales filtrados">
         <article>
-          <span>Total</span>
-          <strong>{kpis.total.toLocaleString('es-MX')}</strong>
+          <span>Personas</span>
+          <strong>{kpis.unicos.toLocaleString('es-MX')}</strong>
         </article>
         <article>
           <span>Entradas</span>
@@ -119,8 +141,8 @@ export default function ReportesPage() {
           <strong className={styles.warn}>{kpis.rechazos.toLocaleString('es-MX')}</strong>
         </article>
         <article>
-          <span>p50 server</span>
-          <strong>{kpis.p50_server != null ? `${Math.round(kpis.p50_server)} ms` : '—'}</strong>
+          <span>Escaneos</span>
+          <strong>{kpis.total.toLocaleString('es-MX')}</strong>
         </article>
         <article>
           <span>p95 server</span>
@@ -200,8 +222,13 @@ export default function ReportesPage() {
         <button type="button" className={styles.secundario} onClick={() => descargar('csv')}>
           Exportar CSV
         </button>
-        <button type="button" className={styles.primario} onClick={() => descargar('xlsx')}>
-          Exportar Excel
+        <button
+          type="button"
+          className={styles.primario}
+          onClick={() => descargar('xlsx')}
+          title={todos ? 'Una hoja por día + resumen + asistentes' : 'El día completo + asistentes del día'}
+        >
+          Exportar Excel {todos ? '(por día)' : ''}
         </button>
       </div>
 
@@ -211,14 +238,16 @@ export default function ReportesPage() {
         {loading ? <p className={styles.vacio}>Cargando informes…</p> : null}
         {!loading && !rows.length ? (
           <p className={styles.vacio}>
-            No hay movimientos con estos filtros. Prueba quitar el filtro o ampliar la búsqueda.
+            No hay movimientos en {tituloDia.toLowerCase()} con estos filtros. Prueba otro día o
+            quita el filtro.
           </p>
         ) : null}
         {!loading && rows.length ? (
           <table className={styles.tabla}>
             <thead>
               <tr>
-                <th>Hora</th>
+                <th>{todos ? 'Fecha y hora' : 'Hora'}</th>
+                {todos ? <th>Día</th> : null}
                 <th>Nombre</th>
                 <th>Movimiento</th>
                 <th>Código</th>
@@ -234,13 +263,17 @@ export default function ReportesPage() {
                 <tr key={r.id}>
                   <td>
                     {new Date(r.creado).toLocaleString('es-MX', {
-                      day: '2-digit',
-                      month: '2-digit',
+                      ...(todos ? { day: '2-digit', month: '2-digit' } : {}),
                       hour: '2-digit',
                       minute: '2-digit',
                       second: '2-digit',
                     })}
                   </td>
+                  {todos ? (
+                    <td>
+                      <span className={styles.chip}>{etiquetaDiaDe(evento, r.creado)}</span>
+                    </td>
+                  ) : null}
                   <td className={styles.nombre}>{r.nombre || '—'}</td>
                   <td>
                     <span className={styles.chip}>
@@ -254,7 +287,9 @@ export default function ReportesPage() {
                     {r.server_ms != null ? r.server_ms : '—'}
                     {r.client_ms != null ? `/${r.client_ms}` : ''}
                   </td>
-                  <td className={r.ok ? styles.ok : styles.mal}>{r.mensaje}</td>
+                  <td className={r.ok ? styles.ok : r.codigo === 'COOLDOWN' ? styles.neutro : styles.mal}>
+                    {r.mensaje}
+                  </td>
                   <td>{r.origen || '—'}</td>
                 </tr>
               ))}

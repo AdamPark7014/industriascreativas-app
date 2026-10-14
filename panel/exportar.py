@@ -22,6 +22,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
 import consultas
+from db import ErrorBaseDatos
 
 TZ = ZoneInfo("America/Mexico_City")
 IMG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "img")
@@ -557,6 +558,124 @@ def _hoja_registros(wb, tipo):
 
 
 # ==========================================
+# ASISTENCIA POR DIA
+# ==========================================
+
+def _hoja_asistencia(wb, tipos, generado):
+    """Quién vino cada día: totales por día y una fila por persona con su
+    primera entrada, última salida y accesos de cada día del evento."""
+    dias = consultas.dias_evento()
+    try:
+        registros = consultas.asistencia_por_dia(tipos)
+    except ErrorBaseDatos:
+        # Sin tabla de escaneos (base sin accesos) el libro sigue saliendo.
+        registros = []
+
+    ws = wb.create_sheet("Asistencia")
+    ws.sheet_view.showGridLines = False
+    ws.sheet_properties.tabColor = TEAL_DEEP
+    ancho = 5 + 3 * len(dias)
+    _banda(ws, 1, "Asistencia por día",
+           f"Primera entrada y última salida por persona · hora de México · {generado}",
+           ancho, TEAL_DEEP)
+
+    fechas_evento = [d["fecha"] for d in dias]
+    por_persona = {}
+    for r in registros:
+        clave = (r["tipo"], r["registro_id"])
+        p = por_persona.setdefault(clave, {"tipo": r["tipo"], "id": r["registro_id"],
+                                           "nombre": r["nombre"] or "", "dias": {}})
+        if r["nombre"] and not p["nombre"]:
+            p["nombre"] = r["nombre"]
+        p["dias"][r["fecha"]] = r
+
+    # --- totales por día
+    fila = 4
+    ws.cell(row=fila, column=1, value="Personas que entraron cada día").font = _fuente(11, True, NAVY_MID)
+    fila += 1
+    for i, etq in enumerate(("Día", "Fecha", "Personas", "Entradas"), start=1):
+        c = ws.cell(row=fila, column=i, value=etq)
+        c.font = _fuente(10, True, BLANCO)
+        c.fill = _relleno(NAVY)
+        c.border = BORDE_FINO
+    otros_personas = otros_entradas = 0
+    for r in registros:
+        if r["fecha"] not in fechas_evento and r["entradas"]:
+            otros_personas += 1
+            otros_entradas += int(r["entradas"])
+    for d in dias:
+        fila += 1
+        personas = sum(1 for r in registros if r["fecha"] == d["fecha"] and r["entradas"])
+        entradas = sum(int(r["entradas"]) for r in registros if r["fecha"] == d["fecha"])
+        for i, v in enumerate((d["etiqueta"], f'{d["fecha"]} · {d["nombre"]}', personas, entradas), start=1):
+            c = ws.cell(row=fila, column=i, value=v)
+            c.font = _fuente(10, i == 1)
+            c.border = BORDE_FINO
+            if i > 2:
+                c.alignment = Alignment(horizontal="center")
+    if otros_personas:
+        fila += 1
+        for i, v in enumerate(("Fuera de fechas", "pruebas y previos", otros_personas, otros_entradas), start=1):
+            c = ws.cell(row=fila, column=i, value=v)
+            c.font = _fuente(10, italic=True, color=MUTED)
+            c.border = BORDE_FINO
+
+    # --- tabla por persona
+    fila += 3
+    enc = fila
+    cabecera = ["Tipo", "Folio", "Nombre"]
+    for d in dias:
+        cabecera += [f'{d["etiqueta"]} · 1.ª entrada', f'{d["etiqueta"]} · última salida',
+                     f'{d["etiqueta"]} · accesos']
+    cabecera += ["Días asistidos", "Accesos totales"]
+    for i, etq in enumerate(cabecera, start=1):
+        c = ws.cell(row=enc, column=i, value=etq)
+        c.font = _fuente(10, True, BLANCO)
+        c.fill = _relleno(NAVY)
+        c.alignment = Alignment(vertical="center", wrap_text=True)
+        c.border = BORDE_FINO
+    ws.row_dimensions[enc].height = 30
+
+    personas = sorted(por_persona.values(), key=lambda p: (p["nombre"], p["id"]))
+    for r, p in enumerate(personas, start=enc + 1):
+        nombre_tipo = consultas.CATALOGO[p["tipo"]]["corto"] if p["tipo"] in consultas.CATALOGO else p["tipo"]
+        valores = [nombre_tipo, consultas.folio(p["tipo"], p["id"]), p["nombre"]]
+        dias_asistidos = accesos = 0
+        for d in dias:
+            a = p["dias"].get(d["fecha"])
+            n = int(a["entradas"]) if a else 0
+            if n:
+                dias_asistidos += 1
+                accesos += n
+            valores += [(a or {}).get("primera_entrada") or "", (a or {}).get("ultima_salida") or "", n]
+        valores += [dias_asistidos, accesos]
+        for i, v in enumerate(valores, start=1):
+            c = ws.cell(row=r, column=i, value=v)
+            c.font = _fuente(10)
+            c.border = BORDE_FINO
+            if i > 3:
+                c.alignment = Alignment(horizontal="center")
+
+    ultima = enc + len(personas)
+    if personas:
+        ref = f"A{enc}:{get_column_letter(len(cabecera))}{ultima}"
+        tabla = Table(displayName="tbl_asistencia", ref=ref)
+        tabla.tableStyleInfo = TableStyleInfo(
+            name="TableStyleMedium2", showRowStripes=True, showColumnStripes=False)
+        ws.add_table(tabla)
+    else:
+        ws.cell(row=enc + 1, column=1,
+                value="Todavía no hay escaneos de puerta.").font = _fuente(10, italic=True, color=MUTED)
+
+    anchos = [11, 18, 36] + [14, 14, 9] * len(dias) + [13, 13]
+    for i, a in enumerate(anchos, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = a
+    ws.freeze_panes = ws.cell(row=enc + 1, column=4)
+    _imprimir(ws, len(cabecera), fila_enc=enc)
+    return len(personas)
+
+
+# ==========================================
 # CONSTRUCCION
 # ==========================================
 
@@ -580,6 +699,7 @@ def construir(tipos=None, alcance=None) -> tuple[bytes, str]:
     _hoja_portada(wb, datos, generado, tipos, alcance)
     _hoja_resumen(wb, datos, generado)
     _hoja_analisis(wb, datos, generado)
+    _hoja_asistencia(wb, tipos, generado)
     for tipo in tipos:
         _hoja_registros(wb, tipo)
 
