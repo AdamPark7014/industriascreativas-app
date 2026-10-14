@@ -23,7 +23,7 @@ a **62 × 29 sin girar**.
 - `boleto-face.css`, `boletoRender.ts` (PNG 697 × 272 px, camino Chrome @page 62 × 29),
   `BoletoPrintModal.tsx` (textos) y `accesos-api/src/gafete.ts` (PDF 62 × 29 con la
   misma cara; `formato` = «62×29 mm (etiqueta DK-11209)»).
-- Ejemplos (código real del panel) en `C:\dev	mpoleto-harness\salida\`.
+- Ejemplos (código real del panel) en `C:\dev\tmp\boleto-harness\salida\`.
 - Deploy: `python .ai/_deploy_boleto.py subir|canario|promover|rollback` (sube SOLO
   esos 7 archivos; rollback a `:prev-boleto-20261014`). Canario VERDE.
 - **Ojo**: con **cinta continua** cargada la QL-800 rechazaría estos trabajos (papel
@@ -35,7 +35,8 @@ a **62 × 29 sin girar**.
 
 Hasta hoy solo `admin` (interno) podía escanear: el personal de la entrada habría
 operado con la cuenta que ve y cambia todo. Ahora hay rol **`puerta`** y usuarios
-**`puerta1`–`puerta5`** que solo ven el escáner (modo enfocado, sin lateral).
+**`puerta1`–`puerta4`** (Adam: exactamente 4) que solo ven el escáner (modo
+enfocado, sin lateral) y marcan **ENTRADA, SALIDA y reingreso** en la zona que elijan.
 
 - **API** (`catalog.ts`, `index.ts`): rol `puerta` = permiso `escanear`; alcance
   empresas + estudiantes (sin Elisa). `/escanear`, `/escaneos/:id/latencia`,
@@ -52,25 +53,38 @@ operado con la cuenta que ve y cambia todo. Ahora hay rol **`puerta`** y usuario
   añadidas a la línea `PANEL_EQUIPO_CLAVES` de `ficti-usuarios-2026-10-05.txt`
   (así un `_deploy_mesa.py prep` no las borra). En el servidor:
   `python .ai/_deploy_dias.py equipo` las fusiona en `panel/.env` (respaldo
-  `panel/.env.antes-equipo-*`). **No están aún en el Excel/PDF de usuarios**
-  (el Excel estaba abierto en Excel).
+  `panel/.env.antes-equipo-*`). Se crearon 5 por error; `puerta5` se quitó del
+  `.env` (respaldo `panel/.env.antes-4puertas-*`) y su fila se borró de
+  `panel_usuarios` (nunca escaneó): quedan 17 activos. El `panel_web` vivo aún
+  tiene `puerta5` en su entorno de arranque: si se reinicia sin recrearse, el
+  seeder lo revive; `docker compose up -d panel_web` (recrear) lo evita.
+- **Excel de usuarios**: hoja «Panel FICTI (17)» con puerta1-4 en
+  `Documents\FICTI-Entrega-2026-10-14\04-Credenciales-PRIVADO\`. La copia de
+  `C:\dev\secrets\` **sigue sin actualizar**: Adam la tiene abierta en Excel desde
+  las 10:43 (bloqueada). Al cerrarla, copiar encima la de Entrega (eran idénticas;
+  respaldo `experiencebt-usuarios-2026-10-07.antes-puertas.xlsx`). El PDF de
+  usuarios no incluye las puertas.
 - Deploy: `ETIQUETA=prev-puerta-20261014 python .ai/_deploy_dias.py respaldar`
   → `equipo` → subir → canario → promover. `_deploy_dias.py` ahora sube también
   `panel/seed.py` y acepta `ETIQUETA`. **Rollback** a `:prev-puerta-20261014`
   (`ETIQUETA=prev-puerta-20261014 python .ai/_deploy_dias.py rollback`);
   respaldo `/root/backups/bd_demo-prev-puerta-20261014.dump`. El rollback no
-  borra a puerta1-5 de la BD (quedarían sin permisos con el código viejo).
+  borra a puerta1-4 de la BD (quedarían sin permisos con el código viejo).
 - Ojo: a las 14:39 **otro agente** (sesión madre, impresión 62×29 mm:
   `gafete.ts`, `BoletoPrintModal.tsx`, `boleto-face.css`, `boletoLayout.ts`,
   `boletoRender.ts`, `printAgent.ts`) editaba el mismo checkout sin commitear.
-  Se subió y construyó desde un árbol limpio (HEAD + rol puerta); **esos
-  cambios de impresión NO están desplegados ni commiteados** por este turno.
+  Se subió y construyó desde un árbol limpio (HEAD + rol puerta). Esa sesión
+  desplegó luego lo suyo (20:47 UTC) y lo commiteó en `1a27558`.
 - Verificado: canario `_smoke_mesa.py` VERDE y `_smoke_dias.py` VERDE (ahora con
   29 checks de `puerta1`: escanea entrada/salida, latencia, operador; 403 en
   resumen, buscar, registro, mesa, reportes, métricas, impresiones, equipo,
   bloqueos, zonas POST, gafete y ficha; Flask `/` → escáner y 403 en datos;
-  login real). Promovido ~20:46 UTC; por URL pública puerta1-5 entran y caen en
-  `/accesos/escanear`; bundle `index-BxJW92TF.js`.
+  login real). Promovido ~20:46 UTC. **Humo en producción** (dentro del
+  `panel_web` vivo, imágenes fd36176b/d83cef22): VERDE; puerta1 hace
+  OK_ENTRY → ALREADY_INSIDE → OK_EXIT → OK_REENTRY con su propia persona de
+  prueba (borrada al final). Por URL pública puerta1-4 entran y caen en
+  `/accesos/escanear`; la UI real (vía proxy local de solo lectura) muestra el
+  shell enfocado sin `<nav>` ni lateral.
 - El límite de `/escanear` es 180/min **por IP**: si todas las puertas salen por
   la misma red del recinto, comparten ese tope (≈3 escaneos/s en total).
 
