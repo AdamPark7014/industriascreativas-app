@@ -40,6 +40,7 @@ import {
   enviarBoleto,
   esAltaDe,
   eventosCorreo,
+  estadoCorreo,
   fichaPersona,
   filaPersona,
   correoPrincipal,
@@ -291,6 +292,8 @@ const REGLAS: [metodo: string, ruta: RegExp, permisos: Permiso[]][] = [
   ['GET', /^\/zonas$/, []],
   // La puerta escanea pero no ve los números del evento.
   ['GET', /^\/resumen$/, ['informes', 'mesa']],
+  // Aviso de créditos de Brevo en el inicio (quien ve los números del evento).
+  ['GET', /^\/correo-estado$/, ['informes', 'mesa']],
   ['GET', /^\/buscar$/, ['buscar']],
   ['POST', /^\/zonas$/, ['zonas_editar']],
   ['*', /^\/bloqueos$/, ['bloquear']],
@@ -1255,6 +1258,8 @@ panel.post('/persona/:tipo/:id/confirmar', async (c) => {
   resumenCache.clear()
   return c.json({ ok: true, confirmado: true })
 })
+
+panel.get('/correo-estado', async (c) => c.json(await estadoCorreo()))
 
 panel.get('/persona/:tipo/:id/correo-eventos', async (c) => {
   const p = await personaDe(c)

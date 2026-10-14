@@ -1,9 +1,30 @@
 import { useEffect, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
-import { api, mesa, tiene, type MesaResp, type Resumen, type Sesion } from '../api'
+import { api, mesa, tiene, type EstadoCorreo, type MesaResp, type Resumen, type Sesion } from '../api'
 import DiaSelector from '../components/DiaSelector'
 import { useDiaSeleccionado } from '../lib/useDia'
 import styles from './hub.module.scss'
+
+// Cada registro gasta 2 créditos (enlace + gafete); con menos de esto no alcanza el día.
+const CREDITOS_MINIMOS = 1000
+
+/** Aviso del inicio cuando los correos no van a salir (oct-2026: dos días sin créditos sin que nadie lo viera). */
+function avisoCorreo(c: EstadoCorreo | null): string | null {
+  if (!c) return null
+  if (!c.ok) {
+    return `No se pudo consultar Brevo (${c.error || c.mensaje || 'sin respuesta'}). Revisa que los correos estén saliendo.`
+  }
+  if (c.remitenteValido === false) {
+    return `Brevo no tiene validado el remitente ${c.remitente ?? ''}: acepta los correos y luego los tira. Autentica el dominio en Brevo.`
+  }
+  if (c.creditos != null && c.creditos <= 0) {
+    return 'Brevo se quedó sin créditos: no sale ningún correo (ni confirmaciones ni boletos). Recarga créditos en Brevo.'
+  }
+  if (c.creditos != null && c.creditos < CREDITOS_MINIMOS) {
+    return `Quedan ${c.creditos.toLocaleString('es-MX')} créditos de correo en Brevo y cada registro usa 2. Recarga antes de que se acaben.`
+  }
+  return null
+}
 
 function textoBienvenida(sesion: Sesion | null): string {
   if (sesion?.puedeOperar) {
@@ -20,6 +41,7 @@ export default function HubPage() {
   const verMesa = tiene(sesion, 'mesa')
   const verPuerta = tiene(sesion, 'escanear') || tiene(sesion, 'informes')
   const verMetricas = tiene(sesion, 'metricas')
+  const verCorreo = verMesa || tiene(sesion, 'informes')
   const [data, setData] = useState<Resumen | null>(null)
   const [mesaHoy, setMesaHoy] = useState<MesaResp['hoy'] | null>(null)
   const [latency, setLatency] = useState<{
@@ -29,6 +51,7 @@ export default function HubPage() {
     devices: { dispositivo: string; n: number; p50: number | null }[]
   } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [correo, setCorreo] = useState<EstadoCorreo | null>(null)
   const [loading, setLoading] = useState(true)
   const evento = data?.evento ?? sesion?.evento
   const [dia, setDia, diaParam] = useDiaSeleccionado(evento, { conTodos: true })
@@ -52,6 +75,14 @@ export default function HubPage() {
         .finally(() => {
           if (vivo) setLoading(false)
         })
+      if (verCorreo) {
+        void api
+          .correoEstado()
+          .then((e) => {
+            if (vivo) setCorreo(e)
+          })
+          .catch(() => undefined)
+      }
       if (verMesa) {
         void mesa
           .actividad(diaParam)
@@ -85,7 +116,7 @@ export default function HubPage() {
       vivo = false
       window.clearInterval(id)
     }
-  }, [verMesa, verMetricas, diaParam])
+  }, [verMesa, verMetricas, verCorreo, diaParam])
 
   // "Entradas · Día 2" / "Entradas · todo el evento"
   const sufijo = data?.dia ? (data.dia.modo === 'todos' ? 'evento' : data.dia.etiqueta.split(' · ')[0]) : '…'
@@ -97,6 +128,11 @@ export default function HubPage() {
       </p>
 
       {error ? <div className={styles.alerta}>{error}</div> : null}
+      {avisoCorreo(correo) ? (
+        <div className={styles.alerta} role="alert">
+          {avisoCorreo(correo)}
+        </div>
+      ) : null}
 
       {verPuerta || verMesa ? (
         <section className={styles.diasBloque} aria-label="Días del evento">

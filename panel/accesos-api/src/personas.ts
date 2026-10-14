@@ -421,3 +421,8 @@ export function enviarBoleto(opts: {
 export function eventosCorreo(correo: string): Promise<RespInterna> {
   return backendInterno(`/api/interno/correo-eventos?correo=${encodeURIComponent(correo)}`)
 }
+
+/** Créditos de Brevo, remitente validado y fallas de 24 h (el backend lo cachea 2 min). */
+export function estadoCorreo(): Promise<RespInterna> {
+  return backendInterno('/api/interno/correo-estado')
+}

@@ -91,6 +91,20 @@ export type Escaneo = {
   client_ms?: number | null
 }
 
+/** Brevo visto desde el backend (cache de 2 min). */
+export type EstadoCorreo = {
+  ok: boolean
+  remitente?: string
+  creditos?: number | null
+  finPlan?: string | null
+  remitenteValido?: boolean | null
+  enviados24h?: number | null
+  fallidos24h?: number | null
+  ultimoError?: { error: string | null; creado: string | null } | null
+  error?: string | null
+  mensaje?: string | null
+}
+
 export type Resumen = Sesion & {
   evento: EventoInfo
   /** Día consultado (los campos *Hoy son de ese día, o de todo el evento). */
@@ -242,6 +256,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   sesion: () => req<Sesion>('/api/accesos/sesion'),
+  correoEstado: () => req<EstadoCorreo>('/api/accesos/correo-estado'),
   resumen: (dia?: DiaParam) => {
     const q = diaQuery(dia)
     return req<Resumen>(`/api/accesos/resumen${q ? `?dia=${q}` : ''}`)

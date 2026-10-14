@@ -43,6 +43,7 @@ const MOTIVOS: Record<string, string> = {
   confirmacion: 'Al confirmar',
   reenvio: 'Reenvío',
   alta_sitio: 'Alta en sitio',
+  enlace: 'Enlace de confirmación',
 }
 const VIAS: Record<string, string> = { ql: 'Brother QL-800', chrome: 'Chrome', pdf: 'PDF', test: 'Prueba' }
 

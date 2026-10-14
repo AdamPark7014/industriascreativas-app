@@ -4,6 +4,7 @@ import base64
 import hmac
 import json
 import time
+import urllib.request
 from collections import defaultdict
 from threading import Lock
 import qrcode 
@@ -907,7 +908,11 @@ def enviar_correo_confirmacion(
     url_confirmacion,
     titulo_evento="Evento",
     tipo_usuario="ALUMNO",
+    tipo_clave=None,
+    registro_id=None,
 ):
+    """Manda el enlace de confirmación. Con tipo_clave/registro_id queda en correo_envios
+    (motivo 'enlace'): antes solo se imprimía y en oct-2026 dos días de fallas pasaron sin verse."""
     try:
         if not BREVO_API_KEY:
             print('❌ Error enviando correo de confirmación: BREVO API key ausente (backend/.env → API_KEYY)')
@@ -946,10 +951,17 @@ def enviar_correo_confirmacion(
             html_content=html
         )
 
-        brevo_mail_api.send_transac_email(send_smtp_email)
+        respuesta = brevo_mail_api.send_transac_email(send_smtp_email)
+        if tipo_clave:
+            registrar_envio(tipo_clave, registro_id, email_destino, 'enlace', True,
+                            message_id=getattr(respuesta, 'message_id', None))
         return True
     except Exception as e:
         print(f"❌ Error enviando correo de confirmación: {e}", flush=True)
+        if tipo_clave:
+            detalle = str(getattr(e, 'body', '') or e)
+            error = 'Brevo sin créditos' if 'credit' in detalle.lower() else detalle[:200]
+            registrar_envio(tipo_clave, registro_id, email_destino, 'enlace', False, error=error)
         return False
 
 
@@ -1316,6 +1328,8 @@ def registro():
             url_confirmacion,
             'Registro Estudiante - Gabor FICTI',
             tipo_usuario='ALUMNO',
+            tipo_clave='estudiantes',
+            registro_id=nuevo.idAlumno,
         )
 
         if not BREVO_API_KEY:
@@ -1442,6 +1456,8 @@ def registro_empresario():
             url_confirmacion,
             "Registro Empresa - Gabor FICTI",
             tipo_usuario="EMPRESARIO",
+            tipo_clave='empresas',
+            registro_id=nuevo_empresario.idEmpresario,
         )
 
         if not BREVO_API_KEY:
@@ -1592,6 +1608,75 @@ def _fecha_iso(valor):
     if valor is None:
         return None
     return valor.isoformat() if hasattr(valor, 'isoformat') else str(valor)
+
+
+_ESTADO_CORREO = {'t': 0.0, 'datos': None}
+_ESTADO_CORREO_TTL = 120
+
+
+def _brevo_get(ruta):
+    # Sin User-Agent propio, Cloudflare de Brevo responde 1010 en /senders.
+    req = urllib.request.Request(
+        'https://api.brevo.com/v3' + ruta,
+        headers={'api-key': BREVO_API_KEY, 'accept': 'application/json', 'User-Agent': 'sib-api-v3-sdk/python'},
+    )
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.loads(r.read() or b'{}')
+
+
+@app.route('/api/interno/correo-estado')
+def api_interno_correo_estado():
+    """Créditos de Brevo, remitente validado y fallas de las últimas 24 h.
+
+    El panel avisa con esto. El 12-10-2026 la cuenta llegó a 0 créditos y dos días
+    después nadie lo sabía; el 14-10 una llave de otra cuenta aceptaba los correos
+    por API y Brevo los tiraba porque el remitente no estaba validado ahí.
+    """
+    if not _interno_autorizado():
+        return jsonify(ok=False, error='no_autorizado'), 403
+    ahora = time.time()
+    if _ESTADO_CORREO['datos'] and ahora - _ESTADO_CORREO['t'] < _ESTADO_CORREO_TTL:
+        return jsonify(_ESTADO_CORREO['datos'])
+    datos = {
+        'ok': True, 'remitente': REMITENTE_EMAIL, 'creditos': None, 'finPlan': None,
+        'remitenteValido': None, 'enviados24h': None, 'fallidos24h': None, 'ultimoError': None,
+        'error': None, 'consultado': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+    }
+    try:
+        if not BREVO_API_KEY:
+            raise RuntimeError('falta la API key de Brevo en el servidor')
+        plan = _brevo_get('/account').get('plan') or []
+        datos['creditos'] = sum(int(p.get('credits') or 0) for p in plan)
+        datos['finPlan'] = max((p.get('endDate') or '' for p in plan), default='') or None
+        rem = REMITENTE_EMAIL.strip().lower()
+        activos = {
+            (x.get('email') or '').lower()
+            for x in _brevo_get('/senders').get('senders', []) if x.get('active')
+        }
+        dominios = {
+            (d.get('domain_name') or '').lower()
+            for d in _brevo_get('/senders/domains').get('domains', []) if d.get('authenticated')
+        }
+        datos['remitenteValido'] = rem in activos or rem.split('@')[-1] in dominios
+    except Exception as e:
+        datos['ok'] = False
+        datos['error'] = str(e)[:200]
+    try:
+        with db.engine.connect() as conn:
+            fila = conn.execute(text(
+                "SELECT COUNT(*) FILTER (WHERE ok), COUNT(*) FILTER (WHERE NOT ok) "
+                "FROM correo_envios WHERE creado > NOW() - INTERVAL '24 hours'"
+            )).first()
+            datos['enviados24h'], datos['fallidos24h'] = int(fila[0] or 0), int(fila[1] or 0)
+            ultimo = conn.execute(text(
+                'SELECT error, creado FROM correo_envios WHERE NOT ok ORDER BY creado DESC LIMIT 1'
+            )).first()
+            if ultimo:
+                datos['ultimoError'] = {'error': ultimo[0], 'creado': _fecha_iso(ultimo[1])}
+    except Exception as e:
+        print(f'⚠️ correo-estado sin bitácora: {e}', flush=True)
+    _ESTADO_CORREO.update(t=ahora, datos=datos)
+    return jsonify(datos)
 
 
 @app.route('/api/interno/correo-eventos')
