@@ -3,7 +3,26 @@
 - **Último turno:** claude-code
 - **Fecha:** 2026-10-14
 - **Rama:** main
-- **HEAD:** (ver git log) — Escáner sin rebotes, purga de pruebas, reenvío masivo terminado y correos mal escritos corregidos; mesa fusionada; Brevo nuevo con aviso. **Todo desplegado en DO.**
+- **HEAD:** (ver git log) — Mesa = impresion1…10, instalador con prueba 62 × 29, claves cortas, escáner sin rebotes, reenvío masivo terminado. **Todo desplegado en DO.**
+
+## 2026-10-14 17:30 · Mesa = impresion1…impresion10 e instalador con prueba 62 × 29 (claude-code) — DESPLEGADO
+
+- **Cuentas**: Adam quiere que las 10 de la mesa se llamen impresion1-10. `registro1-5` pasaron a
+  `impresion6-10` con la misma clave corta; `seed.py` ahora crea cualquier `impresion<n>` de
+  `PANEL_EQUIPO_CLAVES` (como `puerta<n>`) y desactiva lo que no esté en la lista. Producción:
+  17 activos, `registro1-5` inactivos, las 17 claves del Excel abren su cuenta. Script:
+  `python .ai/_deploy_impresion10.py aplicar|rollback` (imagen `:prev-impresion10-20261014`,
+  `panel/.env.antes-impresion10`). Excel y secretos (`ficti-usuarios-2026-10-05.txt`,
+  `ficti-claves-cortas-2026-10-14.txt`) actualizados con respaldo `*.antes-impresion10.*`.
+- **Instalador de la impresora** (`panel/static/print-bridge.zip`, desplegado; la descarga pública
+  coincide por sha256): el agente usa por defecto «62mm x 29mm» (62 × 29) en vez de cinta continua
+  62 × 100. Antes la etiqueta de prueba del instalador salía en cinta continua y la QL-800 con
+  DK-11209 la rechazaba (luz roja). Los boletos del panel no cambian (mandan tamaño y papel en
+  cada trabajo). Zips de la carpeta de entrega actualizados; respaldos en `C:\dev\tmp\ficti-respaldos\`.
+  Las laptops que ya imprimen no necesitan reinstalar.
+- **Ojo, dos PCs**: Adam escribe desde una **Dell** (por control remoto) y esta sesión corre en su
+  **ASUS**. La impresora del evento está en la Dell; aquí solo se reinstaló el agente de la ASUS
+  (no arrancaba con Windows; quedó con acceso directo en Inicio). La Dell la instala Adam a mano.
 
 ## 2026-10-14 17:00 · Claves cortas para puerta, impresión y registro (claude-code) — APLICADO
 
