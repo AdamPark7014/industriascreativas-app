@@ -20,9 +20,11 @@ import { getDeviceId } from './deviceId'
 import {
   PRINT_BRIDGE_INSTALLER,
   describeColorMode,
+  diagnosticar,
   printPngViaAgent,
   probePrintAgent,
   type PrintColorMode,
+  type PrintDiag,
 } from './printAgent'
 
 /** Sondeo del agente local (/health): al montar y cada 20 s. */
@@ -69,6 +71,8 @@ export function useBoletoImpresion({ sesion, onContador, textoCerrar }: Opciones
   const [bridgeColorMode, setBridgeColorMode] = useState<PrintColorMode | null>(null)
   /** false = la QL-800 está apagada o sin USB según Windows (el agente sí responde). */
   const [bridgePrinterOnline, setBridgePrinterOnline] = useState<boolean | null>(null)
+  /** Qué falta en esta PC según el último sondeo (null = lista para imprimir). */
+  const [bridgeDiag, setBridgeDiag] = useState<PrintDiag | null>(null)
   const [bridgeProbing, setBridgeProbing] = useState(false)
   const [mostrarInstalar, setMostrarInstalar] = useState(false)
   const instalarRef = useRef<HTMLElement>(null)
@@ -90,6 +94,7 @@ export function useBoletoImpresion({ sesion, onContador, textoCerrar }: Opciones
     setBridgePrinter(h.printerName ?? null)
     setBridgeColorMode(h.colorMode ?? null)
     setBridgePrinterOnline(h.printerOnline ?? null)
+    setBridgeDiag(diagnosticar(h))
     setBridgeProbing(false)
   }, [])
 
@@ -345,11 +350,13 @@ export function useBoletoImpresion({ sesion, onContador, textoCerrar }: Opciones
         ) : bridgeReady === false ? (
           <button
             type="button"
-            className={styles.chipOff}
+            className={bridgeDiag?.tipo === 'sin_impresora' ? styles.chipWarn : styles.chipOff}
             onClick={() => setMostrarInstalar((v) => !v)}
             aria-expanded={mostrarInstalar}
           >
-            Impresora no instalada en esta PC → Instalar
+            {bridgeDiag?.tipo === 'sin_impresora'
+              ? 'Agente activo · Windows no ve la QL-800 (driver o USB) → ver qué hacer'
+              : 'Impresora no instalada en esta PC → Instalar'}
           </button>
         ) : (
           <span className={styles.chipProbe}>Comprobando impresora…</span>
@@ -357,7 +364,7 @@ export function useBoletoImpresion({ sesion, onContador, textoCerrar }: Opciones
       </div>
       {mostrarInstalar && bridgeReady === false ? (
         <section className={styles.instalarBloque} ref={instalarRef}>
-          <PrintBridgeInstall onReprobe={() => void probe()} probing={bridgeProbing} />
+          <PrintBridgeInstall onReprobe={() => void probe()} probing={bridgeProbing} diagnostico={bridgeDiag} />
         </section>
       ) : null}
     </>
@@ -372,6 +379,7 @@ export function useBoletoImpresion({ sesion, onContador, textoCerrar }: Opciones
       bridgeColorMode={bridgeColorMode}
       bridgePrinterOnline={bridgePrinterOnline}
       bridgeProbing={bridgeProbing}
+      bridgeDiag={bridgeDiag}
       impresiones={boleto.impresiones ?? 0}
       ultimaImpresion={boleto.ultimaImpresion ?? null}
       unmarking={unmarking}

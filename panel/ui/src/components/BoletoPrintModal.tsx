@@ -3,7 +3,7 @@ import BoletoFace, { type BoletoData } from './BoletoFace'
 import PrintBridgeInstall from './PrintBridgeInstall'
 import { horaCorta } from '../api'
 import { GEO } from '../lib/boletoLayout'
-import { PRINT_BRIDGE_CHROME_HINT, describeColorMode, type PrintColorMode } from '../lib/printAgent'
+import { PRINT_BRIDGE_CHROME_HINT, describeColorMode, type PrintColorMode, type PrintDiag } from '../lib/printAgent'
 
 /** px CSS por mm (96 dpi): el boleto de 80 mm mide ≈302 px sin escalar. */
 const PX_POR_MM = 96 / 25.4
@@ -23,6 +23,8 @@ type Props = {
   /** false = Windows marca la QL-800 apagada o sin USB (el agente sí responde). */
   bridgePrinterOnline?: boolean | null
   bridgeProbing?: boolean
+  /** Qué falta en esta PC según el último sondeo (se muestra con el panel de instalación). */
+  bridgeDiag?: PrintDiag | null
   /** Impresiones registradas de este boleto (0 si nunca). */
   impresiones?: number
   ultimaImpresion?: string | null
@@ -51,6 +53,7 @@ export default function BoletoPrintModal({
   bridgeColorMode,
   bridgePrinterOnline,
   bridgeProbing,
+  bridgeDiag,
   impresiones = 0,
   ultimaImpresion,
   unmarking,
@@ -174,7 +177,7 @@ export default function BoletoPrintModal({
 
             <div className={styles.acciones}>
               {qlOffline ? (
-                <PrintBridgeInstall compact onReprobe={onReprobe} probing={bridgeProbing} />
+                <PrintBridgeInstall compact onReprobe={onReprobe} probing={bridgeProbing} diagnostico={bridgeDiag} />
               ) : (
                 <>
                   <button

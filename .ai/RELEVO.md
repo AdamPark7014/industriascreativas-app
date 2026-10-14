@@ -40,6 +40,16 @@ Detalle técnico en `docs/ACCESOS-REACT.md` → "Evento de varios días".
 - Excel de usuarios (13 del panel + Hetzner) en
   `C:\dev\secrets\experiencebt-usuarios-2026-10-07.xlsx` (fuera del repo).
 
+- **Instalación del agente en otra PC (12:00)**: Adam corrió el instalador en una
+  segunda laptop y «comprobar» no decía nada. `agent.ps1` responde `/health` con
+  `reachable:false` si Windows no tiene la QL-800, y el panel lo pintaba igual que
+  "no instalado". Ahora `printAgent.diagnosticar()` distingue *sin agente* (enlace
+  a `127.0.0.1:9631/health` + pasos: Extraer todo, instalador, permiso de red local
+  de Chrome) de *sin impresora* (driver/USB), y `PrintBridgeInstall` lo muestra.
+  Causa probable en esa laptop: `.cmd` ejecutado desde dentro del ZIP o sin driver
+  Brother (en ese caso el instalador abre la web de Brother y **no arranca** el
+  agente: `install.ps1` sale con código 2 antes del paso 7).
+
 ### Pendiente / siguiente
 
 - Confirmar con Adam que las fechas son 15-17 oct (si no: `EVENTO_DIAS` en

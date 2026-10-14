@@ -182,6 +182,33 @@
   gap: 10px;
 }
 
+/* Resultado de "Ya la instalé, comprobar": qué falta y qué hacer. */
+.diag {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #f3c6c6;
+  background: #fdeaea;
+  color: #7a1f1f;
+
+  a {
+    color: inherit;
+    font-weight: 700;
+    word-break: break-all;
+  }
+
+  .instalarPasos {
+    color: #5a2323;
+    margin-top: 6px;
+  }
+}
+
+.diagTexto {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
 .instalarPanel {
   padding: 14px 16px;
   border-radius: 12px;

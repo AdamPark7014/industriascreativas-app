@@ -52,7 +52,12 @@ export type PrintAttempt = {
 
 export type PrintAgentHealth = {
   ok: boolean
+  /** true solo si el agente responde Y Windows tiene una QL-800 instalada (así lo reporta agent.ps1). */
   reachable: boolean
+  /** true si hubo respuesta HTTP del agente (aunque no haya impresora). */
+  agenteResponde: boolean
+  /** Windows tiene listada la impresora resuelta (driver instalado). null = agente viejo. */
+  printerListed?: boolean | null
   error?: string
   printerName?: string | null
   jobName?: string | null
@@ -142,6 +147,7 @@ export async function probePrintAgent(baseUrl?: string): Promise<PrintAgentHealt
     const data = (await res.json()) as {
       ok?: boolean
       reachable?: boolean
+      printerListed?: boolean | null
       printerName?: string | null
       jobName?: string | null
       label?: { widthMm?: number; heightMm?: number; mediaName?: string | null }
@@ -157,6 +163,8 @@ export async function probePrintAgent(baseUrl?: string): Promise<PrintAgentHealt
       printerOnlineReason: data?.printerOnlineReason ?? null,
       ok: Boolean(data?.ok),
       reachable: Boolean(data?.reachable),
+      agenteResponde: true,
+      printerListed: typeof data?.printerListed === 'boolean' ? data.printerListed : null,
       printerName: data?.printerName ?? null,
       jobName: data?.jobName ?? null,
       label: data?.label,
@@ -169,6 +177,7 @@ export async function probePrintAgent(baseUrl?: string): Promise<PrintAgentHealt
     return {
       ok: false,
       reachable: false,
+      agenteResponde: false,
       error: isNetworkFailure(cause)
         ? explainNetworkError(base, cause)
         : cause instanceof Error
@@ -176,6 +185,34 @@ export async function probePrintAgent(baseUrl?: string): Promise<PrintAgentHealt
           : 'Sin respuesta',
     }
   }
+}
+
+/** Qué le falta a esta PC para imprimir, según el último sondeo. null = todo bien. */
+export type PrintDiag = {
+  tipo: 'sin_agente' | 'sin_impresora'
+  texto: string
+  /** "HH:MM" del sondeo. */
+  hora: string
+}
+
+export function diagnosticar(h: PrintAgentHealth): PrintDiag | null {
+  const hora = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })
+  if (!h.agenteResponde) {
+    return {
+      tipo: 'sin_agente',
+      hora,
+      texto: `Sin respuesta del agente en ${getPrintAgentUrl()} (comprobado a las ${hora}). O no está arrancado en esta PC, o Chrome bloqueó el acceso a la red local.`,
+    }
+  }
+  const listada = h.printerListed ?? h.reachable
+  if (!listada) {
+    return {
+      tipo: 'sin_impresora',
+      hora,
+      texto: `El agente sí corre en esta PC${h.version ? ` (v${h.version})` : ''}, pero Windows no tiene ninguna Brother QL-800 instalada (comprobado a las ${hora}). Falta el driver o el cable USB.`,
+    }
+  }
+  return null
 }
 
 /**
