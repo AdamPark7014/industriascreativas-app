@@ -10,12 +10,12 @@
 Adam pidió claves «de mucho más bajo nivel» para el evento. `puerta1-4`, `impresion1-5` y
 `registro1-5` tienen ahora «ficti» + 4 dígitos, distinta por cuenta (generadas al azar,
 sin patrones obvios). `admin`, `promotor` y `controladm` no cambian. Login: 8 fallos por
-usuario+IP bloquean 15 min. Claves en `C:\dev\secretsicti-claves-cortas-2026-10-14.txt`
+usuario+IP bloquean 15 min. Claves en `C:\dev\secrets\ficti-claves-cortas-2026-10-14.txt`
 (también actualizados `ficti-usuarios-2026-10-05.txt` y `ficti-puerta-2026-10-14.txt`, respaldos
 `*.antes-claves-cortas.txt`) y en el Excel de usuarios (las dos copias; respaldo
 `*.antes-claves-cortas.xlsx`). Servidor: `PANEL_EQUIPO_CLAVES` vía
 `SECRETOS_EQUIPO=… python .ai/_deploy_dias.py equipo` + recrear panel_web; verificado: los 15
-hashes coinciden. **Pendiente: volver a claves largas al terminar el evento (18-10).** El PDF de
+hashes coinciden; redeploy simulado (recrear panel_web) → el seeder actualizó los 17 sin errores y las 17 claves del Excel abren su cuenta en producción (check_password_hash). **Pendiente: volver a claves largas al terminar el evento (18-10).** El PDF de
 usuarios de la carpeta de entrega tiene las claves viejas: usar el Excel.
 
 ## 2026-10-14 noche · Escáner sin rebotes, purga de pruebas y correos corregidos (claude-code)
