@@ -105,7 +105,7 @@ a **62 × 29 sin girar**.
 - **Ojo**: con **cinta continua** cargada la QL-800 rechazaría estos trabajos (papel
   precortado ≠ rollo). Si cambian de rollo: volver a `62 × 100` o adaptar el agente
   para largo variable en continua (hoy el driver solo ofrece `62mm` = 62 × 100.1).
-- Pendiente: impresión física real en una QL-800 con DK-11209 (aquí estaba apagada).
+- Impresión física real en QL-800 con DK-11209: **probada OK por Adam el 14-10 a las 16:15.**
 
 ## 2026-10-14 tarde · Rol puerta (claude-code) — DESPLEGADO
 
