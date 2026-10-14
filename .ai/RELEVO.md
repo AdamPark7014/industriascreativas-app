@@ -3,7 +3,20 @@
 - **Último turno:** claude-code
 - **Fecha:** 2026-10-14
 - **Rama:** main
-- **HEAD:** (ver git log) — Correos: cuenta Brevo nueva (20k/mes) con experiencebt.com.mx autenticado, aviso de créditos en el panel y reenvío masivo de boletos. **Todo desplegado en DO.**
+- **HEAD:** (ver git log) — Mesa de registro e impresión fusionada (10 cuentas, mismos permisos) + correos por Brevo nuevo con aviso de créditos. **Todo desplegado en DO.**
+
+## 2026-10-14 tarde · Mesa de registro e impresión fusionada (claude-code) — DESPLEGADO
+
+Adam: «fusiona los 10 usuarios de impresión para que ambos puedan buscar registros e
+imprimir y llenar registros e imprimir». `registro1-5` e `impresion1-5` conservan cuenta,
+clave y alcance, pero los dos roles tienen ahora los mismos permisos (`registrar`,
+`buscar`, `reenviar`, `imprimir`) y el nombre «Mesa de registro e impresión»
+(`catalog.ts`, espejo `consultas.py`). Cada una arranca donde siempre (registro →
+`/registro`, impresión → `/buscar`). `OpsShell`: modo enfocado hasta 2 pantallas, con
+pestañas «Registrar» / «Buscar e imprimir» en la barra (en teléfono, fila propia).
+Deploy: `python .ai/_deploy_mesas.py subir|canario|promover|rollback`
+(`:prev-mesas-20261014`; no toca demo_web). Canario VERDE: las 10 con 4 permisos,
+buscar y mis-altas 200, `correo-estado` 403, puerta igual.
 
 ## 2026-10-14 tarde · Brevo nuevo, aviso de créditos y reenvío masivo (claude-code) — DESPLEGADO
 
