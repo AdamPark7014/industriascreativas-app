@@ -3,7 +3,37 @@
 - **Último turno:** claude-code
 - **Fecha:** 2026-10-14
 - **Rama:** main
-- **HEAD:** (ver git log) — Boleto 62 × 29 mm (etiqueta DK-11209) y rol `puerta`. **Desplegado en DO.**
+- **HEAD:** (ver git log) — Correos: Brevo sin créditos + enlace de 1 h. Arreglo **desplegado en DO**; **reenvío masivo pendiente de que recarguen créditos**.
+
+## 2026-10-14 tarde · «No llega el segundo correo» = Brevo sin créditos (claude-code) — DESPLEGADO
+
+**Causa:** la cuenta de Brevo (plan `sendLimit` del 29-09 al 29-10, ~5,100 envíos)
+llegó a **0 créditos el 12-10 a las 21:10 (MX)**. Brevo responde «Email not sent:
+Your account has insufficient credits». Desde entonces no sale **ningún** correo
+(ni confirmación ni gafete), nadie confirmó (0 de ~1,780 registros del 13 y 14) y el
+formulario seguía diciendo «te enviamos un correo». Además el enlace de confirmación
+vencía en **1 hora**: quien lo abría después veía «expiró» y nunca recibía el gafete.
+Y la puerta rechaza `NO CONFIRMADO`.
+
+Arreglo (commit `fix(correo)`, imágenes `eventos-demo-web` y `eventos-accesos-api`):
+- `backend/app.py`: enlace válido 30 días (`CONFIRMACION_MAX_AGE_S`); enlace cortado
+  o vencido → página clara (antes JSON o 500); la página de confirmación trae
+  **«Descargar mi gafete (PDF)»** (`/boleto/<token>`), también si ya estaba
+  confirmado; se hace commit antes de mandar el gafete; si el correo de
+  confirmación no sale el formulario responde `MENSAJE_CORREO_NO_SALIO` (manda a la
+  mesa); error «Brevo sin créditos» legible en el reenvío del panel.
+- `panel/accesos-api/src/index.ts`: registrar una impresión (`POST
+  /gafete/:tipo/:id/impresion`) **confirma** a la persona → la puerta la acepta.
+- Deploy: `python .ai/_deploy_correo.py subir|canario|promover|rollback`
+  (rollback a `:prev-correo-20261014`). Canario VERDE (7/7).
+
+**Pendiente — reenvío masivo** (Adam lo autorizó: «sí reenvía»): bloqueado por
+créditos. `python .ai/_do_reenvio_boletos.py simular` → 2,995 candidatos
+(1,786 registrados después del corte + 1,209 que nunca confirmaron). Cuando haya
+créditos: `python .ai/_do_reenvio_boletos.py enviar` (segundo plano dentro de
+`eventos_demo_web`, log `/tmp/reenvio-boletos.log`, `... estado` para ver avance).
+Confirma solo a quien Brevo aceptó, se detiene sin créditos y se puede repetir.
+Cada registro nuevo gasta 2 créditos (confirmación + gafete): ~1,000 registros/día.
 
 ## 2026-10-14 tarde · Boleto 62 × 29 mm (claude-code) — DESPLEGADO
 
