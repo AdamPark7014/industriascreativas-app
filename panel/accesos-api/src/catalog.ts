@@ -64,8 +64,10 @@ export function tiposDe(alcance: string): TipoClave[] {
  *   interno    NEXARA / ExperienceBT, quien opera la plataforma: todo.
  *   promotor   Organizador del evento (cliente): datos, Excel y mesa de atención.
  *   control    Control ADM de la mesa: registra, busca, reenvía, imprime y supervisa.
- *   impresion  Mesa de impresión: busca registrados, reenvía e imprime.
- *   registro   Mesa de registro: da de alta a quien no se registró e imprime su etiqueta.
+ *   impresion  Mesa de registro e impresión (impresion1…5) ┐ fusionadas el 14-10-2026 a pedido
+ *   registro   Mesa de registro e impresión (registro1…5)  ┘ de Adam: las 10 cuentas registran
+ *              en sitio, buscan, reenvían e imprimen. Se quedan los dos nombres para no tocar
+ *              cuentas ni claves; solo cambia la pantalla en la que arranca cada una.
  *   puerta     Personal de la entrada (puerta1…N): solo el escáner. Ve las zonas para
  *              elegir dónde valida (GET /zonas es de cualquier sesión), nada más.
  */
@@ -102,12 +104,12 @@ export const ROLES: Record<string, { nombre: string; permisos: readonly Permiso[
     permisos: ['registrar', 'buscar', 'reenviar', 'imprimir', 'desmarcar', 'informes', 'mesa'],
   },
   impresion: {
-    nombre: 'Mesa de impresión',
-    permisos: ['buscar', 'reenviar', 'imprimir'],
+    nombre: 'Mesa de registro e impresión',
+    permisos: ['registrar', 'buscar', 'reenviar', 'imprimir'],
   },
   registro: {
-    nombre: 'Mesa de registro',
-    permisos: ['registrar', 'imprimir'],
+    nombre: 'Mesa de registro e impresión',
+    permisos: ['registrar', 'buscar', 'reenviar', 'imprimir'],
   },
   puerta: {
     nombre: 'Puerta',

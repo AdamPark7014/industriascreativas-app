@@ -139,8 +139,10 @@ ROLES = {
     "interno": {"nombre": "NEXARA · Operación", "panel_datos": True, "inicio": "/"},
     "promotor": {"nombre": "Promotor FICTI", "panel_datos": True, "inicio": "/"},
     "control": {"nombre": "Control ADM", "panel_datos": False, "inicio": "/accesos/"},
-    "impresion": {"nombre": "Mesa de impresión", "panel_datos": False, "inicio": "/accesos/buscar"},
-    "registro": {"nombre": "Mesa de registro", "panel_datos": False, "inicio": "/accesos/registro"},
+    # Fusionadas el 14-10-2026: las dos registran, buscan, reenvían e imprimen
+    # (permisos en panel/accesos-api/src/catalog.ts); solo cambia dónde arrancan.
+    "impresion": {"nombre": "Mesa de registro e impresión", "panel_datos": False, "inicio": "/accesos/buscar"},
+    "registro": {"nombre": "Mesa de registro e impresión", "panel_datos": False, "inicio": "/accesos/registro"},
     "puerta": {"nombre": "Puerta", "panel_datos": False, "inicio": "/accesos/escanear"},
 }
 

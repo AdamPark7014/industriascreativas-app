@@ -351,6 +351,38 @@
   margin-left: 0;
 }
 
+/* Mesa de registro e impresión: sus dos pantallas como pestañas en la barra. */
+.pestanas {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.pestana {
+  padding: 8px 16px;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+
+  &:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
+.pestanaActiva,
+.pestanaActiva:hover {
+  background: #fff;
+  color: #071a3a;
+}
+
 .aviso {
   margin: 14px 24px 0;
   padding: 12px 14px;
@@ -488,6 +520,16 @@
   .barra {
     padding: 10px 14px;
     gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .pestanas {
+    order: 3;
+    width: 100%;
+  }
+
+  .pestana {
+    flex: 1;
   }
 
   .barraMarca {

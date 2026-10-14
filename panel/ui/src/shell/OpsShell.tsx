@@ -43,6 +43,12 @@ const GROUPS: { titulo: string; items: NavItem[] }[] = [
   },
 ]
 
+/** Nombre corto para las pestañas de la barra en modo enfocado. */
+const PESTANA: Record<string, string> = {
+  '/registro': 'Registrar',
+  '/buscar': 'Buscar e imprimir',
+}
+
 const TITULOS: Record<string, { kicker: string; titulo: string }> = {
   '/': { kicker: 'Accesos FICTI', titulo: 'Resumen del evento' },
   '/registro': { kicker: 'Mesa de registro', titulo: 'Registro en sitio' },
@@ -104,10 +110,10 @@ export default function OpsShell() {
     items: g.items.filter((n) => n.permisos.some((p) => tiene(sesion, p))),
   })).filter((g) => g.items.length)
 
-  // Las mesas de registro e impresión y la puerta solo tienen una pantalla: un
-  // menú con una sola opción estorba. Se les quita el lateral y queda una barra arriba.
+  // La puerta (1 pantalla) y la mesa de registro e impresión (2) no necesitan menú
+  // lateral: queda una barra arriba y, si son dos pantallas, van como pestañas.
   const items = grupos.flatMap((g) => g.items)
-  const enfocado = Boolean(sesion) && items.length <= 1
+  const enfocado = Boolean(sesion) && items.length <= 2
 
   const cuerpo = (
     <>
@@ -147,6 +153,20 @@ export default function OpsShell() {
             <p className={styles.kicker}>{meta.kicker}</p>
             <h1 className={styles.titulo}>{meta.titulo}</h1>
           </div>
+          {items.length > 1 ? (
+            <nav className={styles.pestanas} aria-label="Secciones">
+              {items.map((n) => (
+                <NavLink
+                  key={n.to}
+                  to={n.to}
+                  end={n.end}
+                  className={({ isActive }) => `${styles.pestana} ${isActive ? styles.pestanaActiva : ''}`}
+                >
+                  {PESTANA[n.to] ?? n.label}
+                </NavLink>
+              ))}
+            </nav>
+          ) : null}
           <div className={styles.cabeceraAcciones}>
             <DiaChip evento={sesion?.evento} />
             <span className={`${styles.insignia} ${styles.insigniaPromotor}`} title={sesion?.usuario}>
