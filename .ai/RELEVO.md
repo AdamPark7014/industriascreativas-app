@@ -3,7 +3,33 @@
 - **Último turno:** claude-code
 - **Fecha:** 2026-10-14
 - **Rama:** main
-- **HEAD:** (ver git log) — Rol `puerta` (puerta1–5 solo escanean). **Desplegado en DO.**
+- **HEAD:** (ver git log) — Boleto 62 × 29 mm (etiqueta DK-11209) y rol `puerta`. **Desplegado en DO.**
+
+## 2026-10-14 tarde · Boleto 62 × 29 mm (claude-code) — DESPLEGADO
+
+Adam: los boletos que les darán miden 6.2 × 2.9 cm (**etiqueta precortada Brother
+DK-11209**, confirmado). El boleto pasa de 80 × 59 girado sobre un corte de 62 × 100
+a **62 × 29 sin girar**.
+
+- `panel/ui/src/lib/boletoLayout.ts`: `ETIQUETA` (62 × 29, papel `62mm x 29mm`) y
+  `GEO` = **59 × 23 mm**, que es el `PrintableArea` del driver para esa etiqueta
+  (medido aquí: 58.9 × 22.9). Con 62 × 29 el agente lo encogía a 49 × 23. QR 21 mm,
+  nombre 5.2→2.2 mm hasta 3 líneas, folio 2.1 mm, `nombreAire` 0.14 em para que no
+  se corten los acentos de las mayúsculas (pasaba también antes).
+- `printAgent.ts` manda `widthMm 62, heightMm 29, mediaName '62mm x 29mm'`. El
+  agente de las laptops **no cambia**: `Find-QlContinuous62` toma ese nombre exacto
+  del driver y solo gira el PNG si el área imprimible es vertical (aquí no lo es).
+  Simulado con el driver real: papel `62mm x 29mm`, sin giro, sale 58.8 × 22.9 mm.
+- `boleto-face.css`, `boletoRender.ts` (PNG 697 × 272 px, camino Chrome @page 62 × 29),
+  `BoletoPrintModal.tsx` (textos) y `accesos-api/src/gafete.ts` (PDF 62 × 29 con la
+  misma cara; `formato` = «62×29 mm (etiqueta DK-11209)»).
+- Ejemplos (código real del panel) en `C:\dev	mpoleto-harness\salida\`.
+- Deploy: `python .ai/_deploy_boleto.py subir|canario|promover|rollback` (sube SOLO
+  esos 7 archivos; rollback a `:prev-boleto-20261014`). Canario VERDE.
+- **Ojo**: con **cinta continua** cargada la QL-800 rechazaría estos trabajos (papel
+  precortado ≠ rollo). Si cambian de rollo: volver a `62 × 100` o adaptar el agente
+  para largo variable en continua (hoy el driver solo ofrece `62mm` = 62 × 100.1).
+- Pendiente: impresión física real en una QL-800 con DK-11209 (aquí estaba apagada).
 
 ## 2026-10-14 tarde · Rol puerta (claude-code) — DESPLEGADO
 

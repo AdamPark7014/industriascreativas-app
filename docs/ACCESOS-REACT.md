@@ -159,6 +159,16 @@ Cada impresión real queda en la BD (`accesos_impresiones`, API en
 - Cliente: `registrarImpresion`, `listarImpresiones`, `borrarImpresion`,
   `borrarImpresiones` en `panel/ui/src/api.ts`.
 
+### Boleto 62 × 29 mm (vigente desde 2026-10-14)
+
+Etiqueta precortada **Brother DK-11209 (62 × 29 mm)**, papel `62mm x 29mm` del
+driver. La cara mide **59 × 23 mm** = área imprimible del driver para esa etiqueta
+(58.9 × 22.9) y no se gira: el agente solo gira cuando el área es vertical. QR 21 mm a
+la izquierda; nombre 5.2→2.2 mm hasta 3 líneas y folio 2.1 mm a la derecha. PNG
+697 × 272 px a 300 dpi. Números en `boletoLayout.ts` (`ETIQUETA`, `GEO`). Con cinta
+continua cargada la impresora rechaza el trabajo (papel distinto). Lo de abajo
+describe versiones anteriores.
+
 ### Diseño del boleto (apaisado 94 × 59, papel térmico negro/rojo, WYSIWYG)
 
 > **2026-10-05:** la etiqueta pasó a **80 × 59 mm** (cabe en los 8 cm útiles):

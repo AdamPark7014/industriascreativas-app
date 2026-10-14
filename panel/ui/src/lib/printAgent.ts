@@ -8,6 +8,8 @@
  * `colorMode: 'auto'` y mostramos lo que respondió.
  */
 
+import { ETIQUETA } from './boletoLayout'
+
 const STORAGE_KEY = 'ficti_print_agent_url'
 const DEFAULT_URL = 'http://127.0.0.1:9631'
 
@@ -262,7 +264,8 @@ export function diagnosticar(h: PrintAgentHealth): PrintDiag | null {
 }
 
 /**
- * Imprime PNG 62×100 vía GDI con media «62mm Cinta continua» (evita remap 29×90 de Chrome).
+ * Imprime el PNG del boleto vía GDI con el papel exacto del driver
+ * (ETIQUETA.papel = «62mm x 29mm», etiqueta precortada DK-11209).
  * `colorMode: 'auto'` → el agente detecta el rollo (mono o negro/rojo) y reintenta solo.
  */
 export async function printPngViaAgent(
@@ -283,9 +286,9 @@ export async function printPngViaAgent(
           body: meta.body ?? '',
           footer: meta.footer ?? 'FICTI Accesos · QL',
           pngBase64: png,
-          widthMm: 62,
-          heightMm: 100,
-          mediaName: '62mm Cinta continua',
+          widthMm: ETIQUETA.w,
+          heightMm: ETIQUETA.h,
+          mediaName: ETIQUETA.papel,
           colorMode: meta.colorMode ?? 'auto',
           // Impresora elegida a mano en esta PC (vacío = la QL-800 que detecte el agente).
           printerName: getPrinterOverride() || undefined,

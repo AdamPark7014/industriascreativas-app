@@ -4,6 +4,7 @@ import {
   BOLETO_BLANCO,
   BOLETO_NEGRO,
   COL_W,
+  ETIQUETA,
   GEO,
   aplicarFuente,
   fuentesListas,
@@ -12,17 +13,15 @@ import {
 } from './boletoLayout'
 
 /**
- * Cara del boleto APAISADA: 80 × 59 mm. El área imprimible real de la Brother
- * QL-800 en cinta continua 62 mm es 58.9 mm de ancho (cinta) × 94.2 mm de
- * largo (corte). El agente local gira 90° cualquier PNG apaisado (ancho > alto)
- * y lo encaja centrado en esa área, así que el panel genera el PNG tal cual se
- * ve en pantalla, sin girarlo: 945 × 697 px a 300 dpi.
+ * Cara del boleto APAISADA 59 × 23 mm = área imprimible de la etiqueta 62 × 29
+ * (papel «62mm x 29mm»). La página es apaisada, así que el agente local no gira
+ * el PNG: lo encaja a escala ≈1 en el área imprimible, centrado. 697 × 272 px a 300 dpi.
  */
 export const BOLETO_W_MM = GEO.w
 export const BOLETO_H_MM = GEO.h
 /** Etiqueta física (para @page en el camino Chrome). */
-export const ETIQUETA_W_MM = 62
-export const ETIQUETA_H_MM = 100
+export const ETIQUETA_W_MM = ETIQUETA.w
+export const ETIQUETA_H_MM = ETIQUETA.h
 
 const DPI = 300
 
@@ -37,7 +36,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 /**
- * PNG del boleto 80 × 59 mm @ 300 dpi (945 × 697 px) para el print-bridge.
+ * PNG del boleto 59 × 23 mm @ 300 dpi (697 × 272 px) para el print-bridge.
  * Papel térmico negro/rojo: solo blanco, negro y rojo puro; sin grises ni
  * gradientes. Misma geometría (en mm) que boleto-face.css → WYSIWYG.
  */
@@ -65,7 +64,7 @@ export async function renderBoletoPngBase64(data: BoletoData): Promise<string> {
   ctx.imageSmoothingEnabled = false
   ctx.drawImage(qr, qrX, qrY, qrLado, qrLado)
 
-  // Columna de texto (33 × 49 mm), centrada en vertical, alineada a la izquierda.
+  // Columna de texto (34 × 21 mm), centrada en vertical, alineada a la izquierda.
   const colX = qrX + qrLado + mm(GEO.hueco)
   const colW = mm(COL_W)
   const colH = mm(GEO.colH)
@@ -74,18 +73,20 @@ export async function renderBoletoPngBase64(data: BoletoData): Promise<string> {
 
   ctx.save()
   ctx.beginPath()
-  ctx.rect(colX, colTop, colW, colH)
+  // El recorte sube hasta el margen: los acentos de las mayúsculas sobresalen de la línea.
+  ctx.rect(colX, colTop - mm(GEO.pad) / 2, colW, colH + mm(GEO.pad) / 2)
   ctx.clip()
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
 
-  // Nombre: negritas, tamaño auto-ajustado (misma cuenta que el DOM), hasta 4 líneas
+  // Nombre: negritas, tamaño auto-ajustado (misma cuenta que el DOM), hasta 3 líneas
   ctx.fillStyle = BOLETO_NEGRO
   aplicarFuente(ctx, 800, mm(nombreMm), GEO.nombreTracking)
   const lineaNombre = mm(nombreMm) * GEO.nombreLh
+  const topNombre = colTop + mm(nombreMm) * GEO.nombreAire
   partirLineas(textoNombre(data), 800, nombreMm, GEO.nombreTracking, COL_W)
     .slice(0, GEO.nombreLineas)
-    .forEach((ln, i) => ctx.fillText(ln, colX, colTop + lineaNombre * (i + 0.5)))
+    .forEach((ln, i) => ctx.fillText(ln, colX, topNombre + lineaNombre * (i + 0.5)))
 
   // Folio pequeño anclado al pie de la columna
   aplicarFuente(ctx, 800, mm(GEO.folio), GEO.folioTracking)
@@ -97,13 +98,10 @@ export async function renderBoletoPngBase64(data: BoletoData): Promise<string> {
 
 /**
  * Ventana aislada solo con el boleto (camino Chrome, "Más opciones").
- * `@page` sigue siendo 62 × 100 porque la cinta sale en vertical; la cara es
- * apaisada 80 × 59, así que se gira 90° con CSS alrededor del centro de la
- * etiqueta: 59 mm quedan sobre los 62 de ancho y 80 sobre los 100 de largo,
- * centrados, igual que hace el agente local con el PNG apaisado.
+ * `@page` es la etiqueta (62 × 29) y la cara (59 × 23) va centrada, sin giro.
  */
 export function printBoletoIsolated(faceHtml: string): void {
-  const w = window.open('', '_blank', 'noopener,noreferrer,width=420,height=680')
+  const w = window.open('', '_blank', 'noopener,noreferrer,width=520,height=360')
   if (!w) throw new Error('Permite ventanas emergentes para imprimir')
   const doc = w.document
   doc.open()
@@ -111,7 +109,7 @@ export function printBoletoIsolated(faceHtml: string): void {
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <title>ExperienceBT-QL-62x100</title>
+  <title>${ETIQUETA.trabajo}</title>
   <style>
 ${boletoCss}
 @page { size: ${ETIQUETA_W_MM}mm ${ETIQUETA_H_MM}mm; margin: 0; }
@@ -131,17 +129,14 @@ html, body {
   overflow: hidden;
   background: #fff;
 }
-/* Giro de 90°: la cinta es vertical (62 × 100) y la cara apaisada (80 × 59).
-   Se rota alrededor del centro para que quede centrada como con el agente. */
 [data-boleto-face] {
   position: absolute !important;
-  left: 50% !important;
-  top: 50% !important;
+  left: ${(ETIQUETA_W_MM - BOLETO_W_MM) / 2}mm !important;
+  top: ${(ETIQUETA_H_MM - BOLETO_H_MM) / 2}mm !important;
   width: ${BOLETO_W_MM}mm !important;
   height: ${BOLETO_H_MM}mm !important;
   margin: 0 !important;
-  transform-origin: center center !important;
-  transform: translate(-50%, -50%) rotate(90deg) !important;
+  transform: none !important;
   border-radius: 0 !important;
   box-shadow: none !important;
 }

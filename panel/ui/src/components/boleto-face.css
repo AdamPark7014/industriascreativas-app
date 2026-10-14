@@ -1,25 +1,23 @@
-/* Cara del boleto QL-800 — rollo continuo 62 mm negro/rojo (DK-2251).
-   Papel térmico: solo blanco, negro y rojo puro. Sin grises ni gradientes.
+/* Cara del boleto QL-800 — etiqueta 62 × 29 mm (DK-11209, papel «62mm x 29mm»).
+   Papel térmico: solo blanco y negro (el rojo solo existe en rollos DK-2251).
 
-   Geometría APAISADA 80 × 59 mm (la misma que renderBoletoPngBase64, WYSIWYG;
-   los números viven en src/lib/boletoLayout.ts, cámbialos a juego):
-   - Área imprimible real de la QL-800 en cinta 62 mm: 58.9 mm de ancho (cinta)
-     × 94.2 mm de largo (corte). El agente local gira 90° el PNG apaisado y lo
-     centra ahí; aquí se dibuja tal cual se ve, sin girar.
-   - Margen interno 3 mm. Izquierda: QR 38 mm centrado en vertical, sin texto
-     encima ni debajo. Hueco 3 mm.
-   - Derecha: columna de texto 33 × 49 mm centrada en vertical, alineada a la
-     izquierda: nombre negro en negritas (auto-ajuste 9→3.2 mm, hasta 4
-     líneas) y folio pequeño (2.8 mm) anclado abajo.
-   - Sin marca, sin empresa/plantel, sin línea del evento, sin marco.
+   Geometría APAISADA 59 × 23 mm = área imprimible de la etiqueta 62 × 29 (la
+   misma que renderBoletoPngBase64, WYSIWYG; los números viven en
+   src/lib/boletoLayout.ts, cámbialos a juego):
+   - Margen interno 1 mm. Izquierda: QR 21 mm centrado en vertical, sin texto
+     encima ni debajo. Hueco 2 mm.
+   - Derecha: columna de texto 34 × 21 mm centrada en vertical, alineada a la
+     izquierda: nombre negro en negritas (auto-ajuste 5.2→2.2 mm, hasta 3
+     líneas) y folio pequeño (2.1 mm) anclado abajo.
+   - Sin girar: la página ya es apaisada, el agente la imprime tal cual.
    - El tamaño del nombre lo fija BoletoFace en línea con la misma medición
      que usa el PNG. */
 
 :root {
   --boleto-acento: #e60012;
   --boleto-negro: #000;
-  --boleto-w: 80mm;
-  --boleto-h: 59mm;
+  --boleto-w: 59mm;
+  --boleto-h: 23mm;
 }
 
 [data-boleto-face] {
@@ -27,12 +25,12 @@
   width: var(--boleto-w);
   height: var(--boleto-h);
   margin: 0;
-  padding: 3mm;
+  padding: 1mm;
   box-sizing: border-box;
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 3mm;
+  gap: 2mm;
   background: #fff;
   color: var(--boleto-negro);
   border: none;
@@ -44,11 +42,11 @@
   print-color-adjust: exact;
 }
 
-/* QR negro sobre blanco; el margen de 3 mm y el hueco de 3 mm hacen de zona en blanco. */
+/* QR negro sobre blanco; el margen de 1 mm, el hueco de 2 mm y el borde del propio QR hacen de zona en blanco. */
 .boletoQrWrap {
   flex: none;
-  width: 38mm;
-  height: 38mm;
+  width: 21mm;
+  height: 21mm;
   padding: 0;
   background: #fff;
   border: none;
@@ -58,16 +56,16 @@
 
 .boletoQr {
   display: block;
-  width: 38mm;
-  height: 38mm;
+  width: 21mm;
+  height: 21mm;
   image-rendering: pixelated;
 }
 
-/* Columna de texto: 33 mm de ancho (lo que queda), 49 mm de alto, folio al pie. */
+/* Columna de texto: 34 mm de ancho (lo que queda), 21 mm de alto, folio al pie. */
 .boletoTexto {
   flex: 1 1 auto;
   min-width: 0;
-  height: 49mm;
+  height: 21mm;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -77,15 +75,16 @@
 
 .boletoNombre {
   margin: 0;
-  font-size: 9mm; /* BoletoFace lo ajusta en línea (9 → 3.2 mm) */
+  font-size: 5.2mm; /* BoletoFace lo ajusta en línea (5.2 → 2.2 mm) */
+  padding-top: 0.14em; /* GEO.nombreAire: los acentos de las mayúsculas no se cortan */
   font-weight: 800;
-  line-height: 1.08;
+  line-height: 1.06;
   letter-spacing: 0.01em;
   text-transform: uppercase;
   color: var(--boleto-negro);
   overflow-wrap: anywhere;
   display: -webkit-box;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
   flex: none;
@@ -93,10 +92,10 @@
 
 .boletoFolio {
   margin: auto 0 0;
-  padding-top: 2mm;
-  font-size: 2.8mm;
+  padding-top: 0.8mm;
+  font-size: 2.1mm;
   font-weight: 800;
-  line-height: 1.2;
+  line-height: 1.15;
   letter-spacing: 0.06em;
   color: var(--boleto-negro);
   white-space: nowrap;
@@ -104,24 +103,20 @@
   flex: none;
 }
 
-/* ——— Impresión Chrome (secundaria): etiqueta 62 × 100 mm ———
-   La cinta sale en vertical (62 de ancho × 100 de largo) y la cara es apaisada
-   (80 × 59): se gira 90° con CSS para que el lado largo del boleto corra a lo
-   largo de la cinta, igual que hace el agente local con el PNG. El giro es
-   alrededor del centro de la etiqueta: 59 mm quedan sobre los 62 de ancho y
-   80 sobre los 100 de largo, centrados. */
+/* ——— Impresión Chrome (secundaria): etiqueta 62 × 29 mm ———
+   La página es la etiqueta (62 × 29) y la cara (59 × 23) va centrada, sin giro. Chrome no puede fijar el
+   papel del driver Brother; hay que elegir «62mm x 29mm» a mano en el diálogo.
+   Preferir «Imprimir boleto» (agente local). */
 @media print {
   @page {
-    /* mm explícito; Brother/Windows a veces ignora esto y usa preferencias
-       del driver (p. ej. 29×90). Preferir «Imprimir boleto» (agente local). */
-    size: 62mm 100mm;
+    size: 62mm 29mm;
     margin: 0;
   }
 
   html,
   body {
     width: 62mm !important;
-    height: 100mm !important;
+    height: 29mm !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
@@ -144,7 +139,7 @@
     top: 0 !important;
     left: 0 !important;
     width: 62mm !important;
-    height: 100mm !important;
+    height: 29mm !important;
     margin: 0 !important;
     padding: 0 !important;
     display: block !important;
@@ -155,13 +150,12 @@
 
   [data-boleto-face] {
     position: absolute !important;
-    left: 50% !important;
-    top: 50% !important;
-    width: 80mm !important;
-    height: 59mm !important;
+    left: 1.5mm !important;
+    top: 3mm !important;
+    width: 59mm !important;
+    height: 23mm !important;
     margin: 0 !important;
-    transform-origin: center center !important;
-    transform: translate(-50%, -50%) rotate(90deg) !important;
+    transform: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
     page-break-inside: avoid !important;

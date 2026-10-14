@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import BoletoFace, { type BoletoData } from './BoletoFace'
 import PrintBridgeInstall from './PrintBridgeInstall'
 import { horaCorta } from '../api'
-import { GEO } from '../lib/boletoLayout'
+import { ETIQUETA, GEO } from '../lib/boletoLayout'
 import { PRINT_BRIDGE_CHROME_HINT, describeColorMode, type PrintColorMode, type PrintDiag } from '../lib/printAgent'
 
 /** px CSS por mm (96 dpi): el boleto de 80 mm mide ≈302 px sin escalar. */
@@ -36,7 +36,7 @@ type Props = {
   onPrintQl: () => void
   /** "Más opciones": diálogo Chrome (puede remapear a 29×90). */
   onPrintChrome: () => void
-  /** "Más opciones": PDF 62×100. */
+  /** "Más opciones": PDF 62×29. */
   onPdf: () => void
   /** Vuelve a sondear /health del agente local. */
   onReprobe?: () => void
@@ -121,8 +121,8 @@ export default function BoletoPrintModal({
             <p className={styles.kicker}>Vista previa del boleto</p>
             <h2 id={tituloId}>¿Se ve bien para imprimir?</h2>
             <p className={styles.ayuda}>
-              Sale tal cual se ve: {GEO.w / 10} cm de largo, apaisado sobre el rollo de 62 mm
-              negro/rojo de la Brother QL-800.
+              Sale tal cual se ve: etiqueta de {ETIQUETA.w} × {ETIQUETA.h} mm en la Brother QL-800
+              (papel «{ETIQUETA.papel}»).
             </p>
           </div>
           <button type="button" className={styles.cerrar} onClick={onClose} aria-label="Cerrar">
@@ -185,7 +185,7 @@ export default function BoletoPrintModal({
                     className={styles.primarioGrande}
                     disabled={busy || (bridgeProbing && bridgeReady == null)}
                     onClick={onPrintQl}
-                    title={`Ctrl+Enter · PNG ${GEO.w}×${GEO.h} apaisado → agente local 127.0.0.1:9631 (lo gira él)`}
+                    title={`Ctrl+Enter · PNG ${GEO.w}×${GEO.h} mm → agente local 127.0.0.1:9631 · papel «${ETIQUETA.papel}»`}
                   >
                     {busy ? 'Imprimiendo…' : 'Imprimir boleto'}
                   </button>
@@ -205,7 +205,7 @@ export default function BoletoPrintModal({
                   <div className={styles.avisoChrome}>
                     <p>
                       <b>Chrome no fija el papel Brother.</b> Si usas este botón, elige a mano{' '}
-                      <b>62mm Cinta continua</b>, márgenes ninguno, encabezados/pies OFF. Puede
+                      <b>{ETIQUETA.papel}</b>, márgenes ninguno, encabezados/pies OFF. Puede
                       salir 29×90.
                     </p>
                     <button

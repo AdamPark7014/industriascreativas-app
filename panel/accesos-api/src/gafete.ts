@@ -12,25 +12,16 @@ export type BoletoPayload = {
   acento: string
 }
 
-/** Brother QL-800 cinta continua 62 mm — un corte ~100 mm. */
+/** Brother QL-800, etiqueta precortada 62 × 29 mm (DK-11209, papel «62mm x 29mm»). */
 const MM = 72 / 25.4
 const W = 62 * MM
-const H = 100 * MM
+const H = 29 * MM
 
 function acentoHex(tipo: string): string {
   const t = (tipo || '').toUpperCase()
   if (t.includes('ESTUDI') || t.includes('ALUMN')) return '#35d95c'
   if (t.includes('EMPRES') || t.includes('ELISA')) return '#ec1e63'
   return '#12b5b0'
-}
-
-function hexRgb(hex: string): { r: number; g: number; b: number } {
-  const h = hex.replace('#', '')
-  return {
-    r: parseInt(h.slice(0, 2), 16) / 255,
-    g: parseInt(h.slice(2, 4), 16) / 255,
-    b: parseInt(h.slice(4, 6), 16) / 255,
-  }
 }
 
 export async function boletoPayload(
@@ -51,133 +42,69 @@ export async function boletoPayload(
     tipo: (tipo || 'Acreditación').trim(),
     subtitulo: (subtitulo || '').trim(),
     evento: 'FICTI · Tech Capital 2026',
-    formato: '62×100 mm (cinta continua)',
+    formato: '62×29 mm (etiqueta DK-11209)',
     qrDataUrl,
     acento: acentoHex(tipo),
   }
 }
 
-/** PDF 62×100 mm print-ready para Brother QL-800 cinta continua. */
+/**
+ * PDF 62 × 29 mm print-ready (camino «Abrir PDF»): misma cara que el panel,
+ * QR a la izquierda, nombre a la derecha y folio al pie, en blanco y negro.
+ */
 export async function boletoPdf(
   nombre: string,
   folio: string,
-  tipo: string,
-  subtitulo = '',
+  _tipo: string,
+  _subtitulo = '',
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create()
-  doc.setTitle(`Gafete 62x100 — ${nombre}`)
-  doc.setSubject('Brother QL-800 · 62mm Cinta continua · 100mm')
+  doc.setTitle(`Gafete 62x29 — ${nombre}`)
+  doc.setSubject('Brother QL-800 · 62mm x 29mm')
   doc.setProducer('FICTI Accesos')
   const page = doc.addPage([W, H])
-  page.setSize(W, H)
-  const font = await doc.embedFont(StandardFonts.Helvetica)
   const bold = await doc.embedFont(StandardFonts.HelveticaBold)
-  const accent = hexRgb(acentoHex(tipo))
-  const fondo = rgb(0.02, 0.043, 0.11)
-  const panel = rgb(0.039, 0.078, 0.157)
-  const tenue = rgb(0.576, 0.651, 0.769)
-  const blanco = rgb(1, 1, 1)
+  const negro = rgb(0, 0, 0)
+  page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: rgb(1, 1, 1) })
 
-  page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: fondo })
-  const m = 6
-  page.drawRectangle({
-    x: m,
-    y: m,
-    width: W - 2 * m,
-    height: H - 2 * m,
-    borderColor: rgb(accent.r, accent.g, accent.b),
-    borderWidth: 2.2,
-  })
-
-  const bandaH = 22
-  page.drawRectangle({
-    x: m + 2,
-    y: H - m - bandaH - 2,
-    width: W - 2 * m - 4,
-    height: bandaH,
-    color: panel,
-  })
-  const brand = 'FICTI  ·  TECH CAPITAL'
-  page.drawText(brand, {
-    x: W / 2 - bold.widthOfTextAtSize(brand, 7) / 2,
-    y: H - m - 15,
-    size: 7,
-    font: bold,
-    color: blanco,
-  })
-
-  const etiqueta = (tipo || 'ACREDITACIÓN').toUpperCase()
-  page.drawText(etiqueta, {
-    x: W / 2 - bold.widthOfTextAtSize(etiqueta, 7) / 2,
-    y: H - m - bandaH - 14,
-    size: 7,
-    font: bold,
-    color: rgb(accent.r, accent.g, accent.b),
-  })
-
-  const nombreTxt = (nombre || '—').trim().toUpperCase()
-  let size = 11
-  while (size > 7 && bold.widthOfTextAtSize(nombreTxt, size) > W - 18) size -= 0.5
-  const nombreLine = nombreTxt.slice(0, 42)
-  page.drawText(nombreLine, {
-    x: W / 2 - bold.widthOfTextAtSize(nombreLine, size) / 2,
-    y: H - m - bandaH - 32,
-    size,
-    font: bold,
-    color: blanco,
-  })
-
-  let y = H - m - bandaH - 44
-  if (subtitulo) {
-    const sub = subtitulo.trim().toUpperCase().slice(0, 36)
-    page.drawText(sub, {
-      x: W / 2 - font.widthOfTextAtSize(sub, 6.5) / 2,
-      y,
-      size: 6.5,
-      font,
-      color: tenue,
-    })
-    y -= 10
-  }
-  const evento = 'FICTI · TECH CAPITAL 2026'
-  page.drawText(evento, {
-    x: W / 2 - font.widthOfTextAtSize(evento, 5.5) / 2,
-    y,
-    size: 5.5,
-    font,
-    color: tenue,
-  })
-
-  const qrPng = await QRCode.toBuffer(folio, {
-    errorCorrectionLevel: 'M',
-    margin: 2,
-    width: 320,
-    type: 'png',
-  })
+  // Misma cara que el panel (59 × 23 mm = área imprimible), centrada en la etiqueta 62 × 29.
+  const caraX = 1.5 * MM
+  const caraY = 3 * MM
+  const pad = 1 * MM
+  const qrSide = 21 * MM
+  const qrPng = await QRCode.toBuffer(folio, { errorCorrectionLevel: 'M', margin: 2, width: 320, type: 'png' })
   const qrImg = await doc.embedPng(qrPng)
-  const qrSide = 36 * MM
-  const pad = 4
-  const placa = qrSide + pad * 2
-  const px = (W - placa) / 2
-  const py = 22
-  page.drawRectangle({ x: px, y: py, width: placa, height: placa, color: blanco })
-  page.drawImage(qrImg, { x: px + pad, y: py + pad, width: qrSide, height: qrSide })
+  page.drawImage(qrImg, { x: caraX + pad, y: caraY + pad, width: qrSide, height: qrSide })
 
-  const pie = 'PRESENTA ESTE CÓDIGO EN PUERTA'
-  page.drawText(pie, {
-    x: W / 2 - font.widthOfTextAtSize(pie, 5) / 2,
-    y: 14,
-    size: 5,
-    font,
-    color: tenue,
+  // Columna de texto 34 × 21 mm: nombre (hasta 3 líneas, se reduce hasta caber) y folio al pie.
+  const colX = caraX + pad + qrSide + 2 * MM
+  const colW = 34 * MM
+  const colBottom = caraY + pad
+  const colTop = colBottom + 21 * MM
+  const palabras = (nombre || '—').trim().toUpperCase().split(/\s+/)
+  const partir = (size: number): string[] => {
+    const lineas: string[] = []
+    let actual = ''
+    for (const p of palabras) {
+      const prueba = actual ? `${actual} ${p}` : p
+      if (actual && bold.widthOfTextAtSize(prueba, size) > colW) {
+        lineas.push(actual)
+        actual = p
+      } else actual = prueba
+    }
+    if (actual) lineas.push(actual)
+    return lineas
+  }
+  let size = 5.2 * MM
+  let lineas = partir(size)
+  while (size > 2.2 * MM && (lineas.length > 3 || lineas.some((l) => bold.widthOfTextAtSize(l, size) > colW))) {
+    size -= 0.1 * MM
+    lineas = partir(size)
+  }
+  lineas.slice(0, 3).forEach((l, i) => {
+    page.drawText(l, { x: colX, y: colTop - size * 0.14 - size * 1.06 * (i + 1) + size * 0.2, size, font: bold, color: negro })
   })
-  page.drawText(folio, {
-    x: W / 2 - bold.widthOfTextAtSize(folio, 8) / 2,
-    y: 6,
-    size: 8,
-    font: bold,
-    color: blanco,
-  })
+  page.drawText(folio, { x: colX, y: colBottom + 0.4 * MM, size: 2.1 * MM, font: bold, color: negro })
 
   return doc.save()
 }

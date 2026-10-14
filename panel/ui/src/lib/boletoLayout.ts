@@ -1,19 +1,30 @@
 /**
- * Geometría y medición compartidas del boleto apaisado (80 × 59 mm).
+ * Geometría y medición compartidas del boleto apaisado (62 × 29 mm).
  *
  * La cara DOM (BoletoFace + boleto-face.css) y el PNG para el agente local
  * (renderBoletoPngBase64) toman de aquí los mismos números y eligen el tamaño
  * del nombre con la misma función: lo que se ve es lo que sale.
  *
- * Área imprimible real de la Brother QL-800 en cinta continua 62 mm:
- * 58.9 mm de ancho (cinta) × 94.2 mm de largo (corte). El agente gira 90°
- * cualquier PNG apaisado (ancho > alto) y lo encaja centrado ahí, así que el
- * panel dibuja el boleto tal cual se ve en pantalla, sin girarlo.
+ * Desde el 14-10-2026 el boleto va en la etiqueta precortada Brother DK-11209
+ * de 62 × 29 mm (papel «62mm x 29mm» del driver). Antes era 80 × 59 girado
+ * sobre un corte de 62 × 100. Como la página es apaisada, el agente local NO
+ * gira el PNG (solo gira cuando el área imprimible es vertical) y lo encaja a
+ * escala en el área imprimible, centrado.
  *
- * 80 mm de largo: es lo que cabe en el porta-gafete del evento (pedido de Evy,
- * 05-10-2026). Como el alto (59) ya llena la cinta, el agente lo deja a escala
- * ≈1 y sale de 80 mm reales.
+ * La cara mide lo que la QL-800 puede imprimir en esa etiqueta: 58.9 × 22.9 mm
+ * (PrintableArea del driver, medido el 14-10-2026). Si la cara midiera 62 × 29
+ * el agente la encogería a 49 × 23 y dejaría franjas vacías a los lados.
  */
+
+/** Etiqueta física y nombre exacto del papel en el driver Brother QL-800. */
+export const ETIQUETA = {
+  w: 62,
+  h: 29,
+  /** PaperName del driver (System.Drawing). El agente lo busca por nombre exacto. */
+  papel: '62mm x 29mm',
+  /** Nombre del trabajo en la cola de Windows. */
+  trabajo: 'ExperienceBT-QL-62x29',
+} as const
 
 /** Rojo del rollo DK-2251. El térmico solo tiene negro/rojo: se ignora `data.acento`. */
 export const BOLETO_ROJO = '#e60012'
@@ -24,32 +35,33 @@ export const BOLETO_FUENTE = "Manrope, 'Segoe UI', system-ui, sans-serif"
 
 /** Geometría en mm. Si cambias algo aquí, cambia boleto-face.css a juego. */
 export const GEO = {
-  /** Cara apaisada. */
-  w: 80,
-  h: 59,
-  /** Margen interno mínimo. */
-  pad: 3,
-  /** Lado del QR (izquierda, centrado en vertical). 38 mm se lee sin problema en puerta. */
-  qr: 38,
+  /** Cara apaisada = área imprimible de la etiqueta 62 × 29. */
+  w: 59,
+  h: 23,
+  /** Margen interno mínimo (los márgenes duros de la impresora quedan fuera). */
+  pad: 1,
+  /** Lado del QR (izquierda, centrado en vertical): todo el alto útil. */
+  qr: 21,
   /** Hueco entre el QR y la columna de texto. */
-  hueco: 3,
+  hueco: 2,
   /** Alto de la columna de texto (centrada en vertical). Ancho: COL_W. */
-  colH: 49,
-  /** Nombre: auto-ajuste max→min, hasta 4 líneas. Solo QR + nombre + folio
-      (sin banda del tipo desde 09-09-2026, sin empresa/plantel desde
-      05-10-2026): el tipo sigue legible en el folio (EMPRESARIO-465). */
-  nombreMax: 9,
-  nombreMin: 3.2,
-  nombreLh: 1.08,
-  nombreLineas: 4,
+  colH: 21,
+  /** Nombre: auto-ajuste max→min, hasta 3 líneas. Solo QR + nombre + folio:
+      el tipo sigue legible en el folio (EMPRESARIO-465). */
+  nombreMax: 5.2,
+  nombreMin: 2.2,
+  nombreLh: 1.06,
+  nombreLineas: 3,
   nombreTracking: 0.01,
+  /** Aire sobre la primera línea (em) para que no se corten los acentos de las mayúsculas (Á, É, Í). */
+  nombreAire: 0.14,
   /** Folio pequeño anclado al pie de la columna. */
-  folio: 2.8,
-  folioLh: 1.2,
+  folio: 2.1,
+  folioLh: 1.15,
   folioTracking: 0.06,
 } as const
 
-/** Ancho de la columna de texto: 80 − 2·3 − 38 − 3 = 33 mm. */
+/** Ancho de la columna de texto: 59 − 2·1 − 21 − 2 = 34 mm. */
 export const COL_W = GEO.w - 2 * GEO.pad - GEO.qr - GEO.hueco
 
 export type Ctx2D = CanvasRenderingContext2D & { letterSpacing?: string }
