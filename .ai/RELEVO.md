@@ -50,6 +50,13 @@ Detalle técnico en `docs/ACCESOS-REACT.md` → "Evento de varios días".
   Brother (en ese caso el instalador abre la web de Brother y **no arranca** el
   agente: `install.ps1` sale con código 2 antes del paso 7).
 
+- **Selector manual de impresora (12:20)**: en una laptop Windows sí mostraba la
+  QL-800 pero el agente contestaba `printerListed:false`. El panel ahora enseña
+  `printersAll` del `/health` y deja elegir la impresora a mano
+  (`localStorage ficti_print_printer` → `?printer=` en /health y `printerName`
+  en /print-label; el agente ya lo soportaba). Si la lista viene vacía, el
+  agente no pudo ejecutar `Get-Printer`: reiniciarlo con el instalador.
+
 ### Pendiente / siguiente
 
 - Confirmar con Adam que las fechas son 15-17 oct (si no: `EVENTO_DIAS` en

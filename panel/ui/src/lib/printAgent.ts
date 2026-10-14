@@ -36,6 +36,30 @@ export function setPrintAgentUrl(url: string): void {
   else localStorage.removeItem(STORAGE_KEY)
 }
 
+/**
+ * Impresora elegida a mano en esta PC (cuando la QL-800 tiene otro nombre en
+ * Windows y el agente no la reconoce sola). Vacío = detección automática.
+ */
+const PRINTER_KEY = 'ficti_print_printer'
+
+export function getPrinterOverride(): string {
+  try {
+    return (localStorage.getItem(PRINTER_KEY) ?? '').trim()
+  } catch {
+    return ''
+  }
+}
+
+export function setPrinterOverride(name: string): void {
+  const clean = name.trim()
+  try {
+    if (clean) localStorage.setItem(PRINTER_KEY, clean)
+    else localStorage.removeItem(PRINTER_KEY)
+  } catch {
+    /* sin almacenamiento: solo esta carga */
+  }
+}
+
 /** Modo de rollo que terminó funcionando en la Brother. */
 export type PrintColorMode = 'mono' | 'redblack'
 
@@ -58,6 +82,10 @@ export type PrintAgentHealth = {
   agenteResponde: boolean
   /** Windows tiene listada la impresora resuelta (driver instalado). null = agente viejo. */
   printerListed?: boolean | null
+  /** Todas las impresoras que Windows le enseña al agente (para elegir a mano). */
+  printersAll?: string[]
+  /** De dónde salió la impresora resuelta: override | env | auto | none. */
+  printerSource?: string | null
   error?: string
   printerName?: string | null
   jobName?: string | null
@@ -142,12 +170,17 @@ function explainNetworkError(base: string, cause: unknown): string {
 
 export async function probePrintAgent(baseUrl?: string): Promise<PrintAgentHealth> {
   const base = (baseUrl ?? getPrintAgentUrl()).replace(/\/$/, '')
+  // Con impresora elegida a mano, el agente la resuelve con ?printer= (si existe en Windows).
+  const elegida = getPrinterOverride()
+  const url = `${base}/health${elegida ? `?printer=${encodeURIComponent(elegida)}` : ''}`
   try {
-    const res = await fetch(`${base}/health`, loopbackInit({ signal: AbortSignal.timeout(4000) }))
+    const res = await fetch(url, loopbackInit({ signal: AbortSignal.timeout(4000) }))
     const data = (await res.json()) as {
       ok?: boolean
       reachable?: boolean
       printerListed?: boolean | null
+      printersAll?: unknown
+      printerSource?: string | null
       printerName?: string | null
       jobName?: string | null
       label?: { widthMm?: number; heightMm?: number; mediaName?: string | null }
@@ -165,6 +198,10 @@ export async function probePrintAgent(baseUrl?: string): Promise<PrintAgentHealt
       reachable: Boolean(data?.reachable),
       agenteResponde: true,
       printerListed: typeof data?.printerListed === 'boolean' ? data.printerListed : null,
+      printersAll: Array.isArray(data?.printersAll)
+        ? data.printersAll.map((p) => String(p ?? '').trim()).filter(Boolean)
+        : undefined,
+      printerSource: data?.printerSource ?? null,
       printerName: data?.printerName ?? null,
       jobName: data?.jobName ?? null,
       label: data?.label,
@@ -193,6 +230,8 @@ export type PrintDiag = {
   texto: string
   /** "HH:MM" del sondeo. */
   hora: string
+  /** Impresoras que Windows le enseña al agente (solo en sin_impresora). */
+  printersAll?: string[]
 }
 
 export function diagnosticar(h: PrintAgentHealth): PrintDiag | null {
@@ -206,11 +245,18 @@ export function diagnosticar(h: PrintAgentHealth): PrintDiag | null {
   }
   const listada = h.printerListed ?? h.reachable
   if (!listada) {
-    return {
-      tipo: 'sin_impresora',
-      hora,
-      texto: `El agente sí corre en esta PC${h.version ? ` (v${h.version})` : ''}, pero Windows no tiene ninguna Brother QL-800 instalada (comprobado a las ${hora}). Falta el driver o el cable USB.`,
+    const lista = h.printersAll ?? []
+    const version = h.version ? ` (v${h.version})` : ''
+    const elegida = getPrinterOverride()
+    let texto: string
+    if (!lista.length) {
+      texto = `El agente sí corre en esta PC${version}, pero no pudo listar NINGUNA impresora de Windows (comprobado a las ${hora}). Suele ser el agente arrancado antes de instalar el driver: vuelve a ejecutar el instalador para reiniciarlo.`
+    } else if (elegida && !lista.includes(elegida)) {
+      texto = `La impresora elegida a mano («${elegida}») ya no existe en Windows (comprobado a las ${hora}). Elige otra de la lista.`
+    } else {
+      texto = `El agente sí corre en esta PC${version} y Windows le enseña ${lista.length} impresora${lista.length === 1 ? '' : 's'}, pero ninguna se llama «QL-800» (comprobado a las ${hora}). Si tu Brother está en la lista con otro nombre, elígela abajo.`
     }
+    return { tipo: 'sin_impresora', hora, texto, printersAll: lista }
   }
   return null
 }
@@ -241,6 +287,8 @@ export async function printPngViaAgent(
           heightMm: 100,
           mediaName: '62mm Cinta continua',
           colorMode: meta.colorMode ?? 'auto',
+          // Impresora elegida a mano en esta PC (vacío = la QL-800 que detecte el agente).
+          printerName: getPrinterOverride() || undefined,
         }),
         signal: AbortSignal.timeout(45_000),
       }),
