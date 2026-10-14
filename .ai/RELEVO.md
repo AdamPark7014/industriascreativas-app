@@ -57,6 +57,12 @@ Detalle técnico en `docs/ACCESOS-REACT.md` → "Evento de varios días".
   en /print-label; el agente ya lo soportaba). Si la lista viene vacía, el
   agente no pudo ejecutar `Get-Printer`: reiniciarlo con el instalador.
 
+- **Auto-elección de la Brother (12:25)**: en la laptop de Adam la QL-800 estaba
+  en Windows con otro nombre; eligiéndola a mano el chip pasó a "lista". Ahora,
+  si el agente ve una sola impresora Brother y ninguna se llama QL-800, el
+  panel la elige solo. Adam va a instalar Claude Code en esa laptop para
+  afinar la impresión in situ (driver: papel 62mm, tipo Monocromo).
+
 ### Pendiente / siguiente
 
 - Confirmar con Adam que las fechas son 15-17 oct (si no: `EVENTO_DIAS` en

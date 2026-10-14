@@ -21,8 +21,10 @@ import {
   PRINT_BRIDGE_INSTALLER,
   describeColorMode,
   diagnosticar,
+  getPrinterOverride,
   printPngViaAgent,
   probePrintAgent,
+  setPrinterOverride,
   type PrintColorMode,
   type PrintDiag,
 } from './printAgent'
@@ -88,8 +90,18 @@ export function useBoletoImpresion({ sesion, onContador, textoCerrar }: Opciones
   const probe = useCallback(async () => {
     const seq = ++probeSeq.current
     setBridgeProbing(true)
-    const h = await probePrintAgent()
+    let h = await probePrintAgent()
     if (seq !== probeSeq.current) return
+    // El agente busca "QL-800" por nombre. Si Windows la registró con otro nombre
+    // pero es la única Brother, se elige sola (queda guardada en esta PC).
+    if (h.agenteResponde && !(h.printerListed ?? h.reachable) && !getPrinterOverride()) {
+      const brother = (h.printersAll ?? []).filter((p) => /brother|ql-?8/i.test(p))
+      if (brother.length === 1) {
+        setPrinterOverride(brother[0])
+        h = await probePrintAgent()
+        if (seq !== probeSeq.current) return
+      }
+    }
     setBridgeReady(Boolean(h.ok && h.reachable))
     setBridgePrinter(h.printerName ?? null)
     setBridgeColorMode(h.colorMode ?? null)
