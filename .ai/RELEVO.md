@@ -5,6 +5,18 @@
 - **Rama:** main
 - **HEAD:** (ver git log) — Escáner con duplicados visibles y resultado arriba; mesa = impresion1…10; claves cortas; reenvío masivo terminado. **Todo desplegado en DO.**
 
+## 2026-10-15 09:27 · Segunda purga de pruebas, antes de abrir puertas (claude-code) — APLICADO
+
+Adam: «purga la db de hoy de los escaneos e impresiones, fueron de pruebas, y un registro de
+prueba a mi nombre». Con corte en el momento del inventario (09:26 MX; nada posterior existía)
+se borraron 29 escaneos (puerta1 la noche del 14, puerta3 hoy 09:17-09:18; 5 personas), 19
+impresiones (14-10 tarde/noche y 15-10 08:00-09:00), el aforo quedó en 0 y las asistencias se
+recalcularon (0). Borrado también el registro de prueba «ADAM DEL POZO» (empresa 3457, alta en
+sitio de impresion9 a las 09:06) con su alta, su correo enviado y su descarga. Respaldo:
+`/root/backups/purga-pruebas-20261015/` (`tablas.dump`, `registro-3457.csv`, correos,
+descargas, asistencias). Si hay más pruebas antes de abrir, repetir con el mismo script
+(scratchpad `purga2.sh`, cambiando el corte).
+
 ## 2026-10-15 00:00 · Escáner: duplicados visibles y resultado arriba (claude-code) — DESPLEGADO
 
 Adam: una SALIDA repetida no avisaba (la regla de 10 s del cambio anterior ignoraba el mismo
