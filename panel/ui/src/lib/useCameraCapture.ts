@@ -30,8 +30,13 @@ const ROI_FRACTION = 0.72
 const MAX_DECODE_SIDE = 640
 /** Cada N intentos miramos el cuadro completo, por si el QR quedo fuera del marco. */
 const FULL_FRAME_EVERY = 4
-/** Mismo codigo repetido dentro de esta ventana = ignorado (la camara lee en continuo). */
-const REPEAT_WINDOW_MS = 4000
+/**
+ * Tras leer un QR, ese mismo QR no se vuelve a leer hasta que sale del cuadro:
+ * VACIOS_PARA_LIBERAR intentos seguidos sin verlo (~medio segundo). Asi la puerta
+ * no rebota con el boleto quieto frente a la camara, y un segundo escaneo de
+ * verdad (lo retiran y lo vuelven a mostrar) si llega al servidor, que lo rechaza.
+ */
+const VACIOS_PARA_LIBERAR = 12
 /**
  * Una lectura sola no basta: el mismo valor tiene que salir en lecturas seguidas
  * (menos de VENTANA_CONFIRMAR_MS entre ellas). Baja la sensibilidad: un QR de
@@ -101,7 +106,6 @@ export function useCameraCapture(options: {
   const streamRef = useRef<MediaStream | null>(null)
   const onDecodeRef = useRef(onDecode)
   const pausedRef = useRef(paused)
-  const lastValueRef = useRef<{ value: string; at: number } | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const deviceIdsRef = useRef<string[]>([])
   const deviceIndexRef = useRef(0)
@@ -291,8 +295,19 @@ export function useCameraCapture(options: {
     })()
 
     const candidato = { value: '', at: 0, hits: 0 }
+    const bloqueado = { value: '', vacios: 0 }
+
+    /** Intento sin ese QR: cuenta para liberarlo (ya salio del cuadro). */
+    const sinCodigo = () => {
+      if (bloqueado.value && ++bloqueado.vacios >= VACIOS_PARA_LIBERAR) bloqueado.value = ''
+    }
 
     const emit = (raw: string) => {
+      if (raw === bloqueado.value) {
+        bloqueado.vacios = 0
+        return
+      }
+      sinCodigo()
       const now = Date.now()
       if (candidato.value === raw && now - candidato.at < VENTANA_CONFIRMAR_MS) {
         candidato.hits += 1
@@ -303,9 +318,8 @@ export function useCameraCapture(options: {
       candidato.at = now
       if (candidato.hits < LECTURAS_PARA_CONFIRMAR) return
       candidato.hits = 0
-      const last = lastValueRef.current
-      if (last && last.value === raw && now - last.at < REPEAT_WINDOW_MS) return
-      lastValueRef.current = { value: raw, at: now }
+      bloqueado.value = raw
+      bloqueado.vacios = 0
       onDecodeRef.current(raw)
     }
 
@@ -349,6 +363,7 @@ export function useCameraCapture(options: {
           const raw = codes[0]?.rawValue?.trim()
           detectorFailures = 0
           if (raw) emit(raw)
+          else sinCodigo()
           return
         } catch {
           detectorFailures += 1
@@ -369,6 +384,7 @@ export function useCameraCapture(options: {
       })
       const raw = code?.data?.trim()
       if (raw) emit(raw)
+      else sinCodigo()
     }
 
     const video = videoRef.current as VideoFrameCallbackVideo | null

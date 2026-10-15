@@ -384,3 +384,158 @@
     padding: 14px;
   }
 }
+
+/* ---- 15-10-2026: resultado arriba, sólido y compacto (Adam: ver si pasa sin bajar) ---- */
+.station {
+  padding: 14px;
+}
+
+.diaBanner {
+  margin-bottom: 10px;
+  padding: 6px 12px;
+
+  strong {
+    font-size: 0.82rem;
+  }
+
+  span {
+    font-size: 0.68rem;
+  }
+}
+
+.resultado {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  gap: 4px;
+  border-width: 2px;
+  text-align: left;
+  color: #fff;
+
+  strong {
+    font-size: 1.45rem;
+    line-height: 1.15;
+  }
+}
+
+.resCabeza {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.resIcono {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 1.45rem;
+  font-weight: 900;
+}
+
+.exito {
+  background: #15803d;
+  border-color: #4ade80;
+  color: #fff;
+}
+
+.fallo {
+  background: #b91c1c;
+  border-color: #fb7185;
+  color: #fff;
+}
+
+.validando {
+  background: #1e293b;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+.persona {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.detalle {
+  font-size: 0.88rem;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.conteo {
+  margin-top: 2px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.espera {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.pausa {
+  margin-top: 6px;
+}
+
+.siguiente {
+  padding: 8px 16px;
+  border-color: rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.entrada,
+.salida {
+  min-height: 54px;
+  padding: 10px 12px;
+  gap: 2px;
+
+  strong {
+    font-size: 1rem;
+  }
+
+  span {
+    font-size: 0.68rem;
+  }
+}
+
+.zonas {
+  margin-top: 10px;
+}
+
+.zona,
+.zonaOn {
+  padding: 7px 10px;
+}
+
+.form {
+  margin-top: 12px;
+}
+
+.input {
+  padding: 11px 12px;
+  font-size: 1.05rem;
+}
+
+.hint {
+  margin-top: 8px;
+  font-size: 0.72rem;
+}
+
+.ajustes {
+  margin-top: 10px;
+  font-size: 0.78rem;
+  color: #6b80a3;
+
+  summary {
+    cursor: pointer;
+    padding: 4px 0;
+  }
+
+  .label {
+    margin-top: 6px;
+  }
+}

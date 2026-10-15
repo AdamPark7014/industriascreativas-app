@@ -15,8 +15,13 @@ type Modo = 'entrada' | 'salida'
  */
 const PAUSA_OK_MS = 2000
 const PAUSA_RECHAZO_MS = 3500
-/** El mismo boleto en el mismo modo y zona no se vuelve a validar en este lapso. */
-const MISMO_BOLETO_MS = 10000
+/**
+ * Los lectores USB a veces disparan dos veces la misma lectura: en este lapso se
+ * ignora en silencio. Pasado eso, repetir un boleto SI va al servidor y sale
+ * rechazado («YA DENTRO» / «SALIDA DENEGADA»): la puerta tiene que verlo.
+ * La cámara no lo necesita: no relee un QR hasta que sale del cuadro.
+ */
+const DOBLE_DISPARO_USB_MS = 1500
 
 type Origen = 'usb' | 'camara'
 
@@ -101,8 +106,6 @@ export default function EscanearPage() {
   const [pausa, setPausa] = useState<{ ms: number; clave: number } | null>(null)
   const pausadoRef = useRef(false)
   const pausaTimer = useRef(0)
-  const [aviso, setAviso] = useState<string | null>(null)
-  const avisoTimer = useRef(0)
   const modoRef = useRef<Modo>('entrada')
   const zonaRef = useRef('acreditacion')
   const deviceRef = useRef(deviceId)
@@ -116,12 +119,6 @@ export default function EscanearPage() {
   modoRef.current = modo
   zonaRef.current = zona
   deviceRef.current = deviceId
-
-  const avisar = useCallback((texto: string) => {
-    window.clearTimeout(avisoTimer.current)
-    setAviso(texto)
-    avisoTimer.current = window.setTimeout(() => setAviso(null), 2500)
-  }, [])
 
   const iniciarPausa = useCallback((ok: boolean) => {
     const ms = ok ? PAUSA_OK_MS : PAUSA_RECHAZO_MS
@@ -146,7 +143,6 @@ export default function EscanearPage() {
   useEffect(
     () => () => {
       window.clearTimeout(pausaTimer.current)
-      window.clearTimeout(avisoTimer.current)
     },
     [],
   )
@@ -234,14 +230,14 @@ export default function EscanearPage() {
       const ahora = Date.now()
       const u = ultimoRef.current
       if (
+        origen === 'usb' &&
         u.codigo === codigo &&
         u.modo === modoRef.current &&
         u.zona === zonaRef.current &&
-        ahora - u.at < MISMO_BOLETO_MS
+        ahora - u.at < DOBLE_DISPARO_USB_MS
       ) {
-        // Mismo boleto, mismo modo y zona: ya se validó. Sin pitido ni rechazo.
+        // Doble disparo del lector: la misma lectura, se ignora sin pitido.
         if (inputRef.current) inputRef.current.value = ''
-        avisar('Ese boleto ya se validó hace un momento. Para leerlo otra vez pulsa «Siguiente».')
         return
       }
       ultimoRef.current = { codigo, at: ahora, modo: modoRef.current, zona: zonaRef.current }
@@ -349,7 +345,7 @@ export default function EscanearPage() {
         enfocar()
       }
     },
-    [sonar, enfocar, registrarHistorial, avisar, iniciarPausa],
+    [sonar, enfocar, registrarHistorial, iniciarPausa],
   )
 
   if (sesion && !sesion.puedeOperar) {
@@ -360,6 +356,15 @@ export default function EscanearPage() {
   const evento = sesion?.evento
   const diaHoy = evento?.dias.find((d) => d.num === evento.hoy) ?? null
 
+  const pendiente = resultado?.codigo === 'PENDING'
+  const claseEstado = !resultado
+    ? ''
+    : pendiente
+      ? styles.validando
+      : resultado.ok
+        ? styles.exito
+        : styles.fallo
+
   return (
     <div className={styles.page}>
       <div className={styles.station}>
@@ -368,10 +373,7 @@ export default function EscanearPage() {
             {diaHoy ? (
               <>
                 <strong>{diaHoy.etiqueta}</strong>
-                <span>
-                  {diaHoy.nombre} · {evento.dias.length} días de evento · dentro/fuera y aforo se
-                  reinician cada día
-                </span>
+                <span>dentro/fuera y aforo se reinician cada día</span>
               </>
             ) : (
               <>
@@ -383,6 +385,58 @@ export default function EscanearPage() {
             )}
           </div>
         ) : null}
+
+        {/* El resultado va primero: la puerta ve si pasa o no sin bajar la pantalla. */}
+        {resultado ? (
+          <div className={`${styles.resultado} ${claseEstado}`} role="status" aria-live="assertive">
+            <div className={styles.resCabeza}>
+              <span className={styles.resIcono} aria-hidden>
+                {pendiente ? '…' : resultado.ok ? '✓' : '✕'}
+              </span>
+              <strong>{resultado.mensaje}</strong>
+            </div>
+            {resultado.nombre ? (
+              <span className={styles.persona}>
+                {resultado.nombre}
+                {resultado.tipo ? ` · ${resultado.tipo}` : ''}
+                {resultado.folio ? ` · ${resultado.folio}` : ''}
+              </span>
+            ) : null}
+            <span className={styles.detalle}>{resultado.detalles}</span>
+            {!pendiente ? (
+              <span className={styles.conteo}>
+                {(resultado.currentlyInside ?? resultado.dentro) ? 'Ahora: DENTRO' : 'Ahora: FUERA'}
+                {resultado.reentry ? ' · REINGRESO' : ''}
+                {resultado.diasPrevios?.length
+                  ? ` · ya vino: ${resultado.diasPrevios.map((n) => `día ${n}`).join(', ')}`
+                  : ''}
+                {resultado.zonaNombre
+                  ? ` · ${resultado.zonaNombre} ${resultado.zonaDentro ?? '—'}/${resultado.zonaAforo || '∞'}`
+                  : ''}
+              </span>
+            ) : null}
+            {pausa ? (
+              <div className={styles.pausa}>
+                <span className={styles.pausaPista}>
+                  <span
+                    key={pausa.clave}
+                    className={styles.pausaBarra}
+                    style={{ animationDuration: `${pausa.ms}ms` }}
+                  />
+                </span>
+                <button type="button" className={styles.siguiente} onClick={siguiente}>
+                  Siguiente
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className={styles.espera}>
+            <strong>Listo: escanea un boleto</strong>
+            <span>Elige ENTRADA o SALIDA y la zona; el resultado aparece aquí.</span>
+          </div>
+        )}
+
         <div className={styles.modes}>
           <button
             type="button"
@@ -393,7 +447,7 @@ export default function EscanearPage() {
             }}
           >
             <strong>ENTRADA</strong>
-            <span>Primer acceso o reingreso tras salida</span>
+            <span>Acceso o reingreso</span>
           </button>
           <button
             type="button"
@@ -404,7 +458,7 @@ export default function EscanearPage() {
             }}
           >
             <strong>SALIDA</strong>
-            <span>Libera cupo · habilita reingreso</span>
+            <span>Libera cupo</span>
           </button>
         </div>
 
@@ -429,22 +483,12 @@ export default function EscanearPage() {
           </div>
         ) : null}
 
-        <label className={styles.label} htmlFor="device_id">
-          Estación / PDA
-        </label>
-        <input
-          id="device_id"
-          className={styles.input}
-          type="text"
-          value={deviceId}
-          onChange={(e) => {
-            const v = e.target.value
-            setDeviceIdState(v)
-            setDeviceId(v)
-          }}
-          onBlur={() => setDeviceIdState(setDeviceId(deviceId))}
-          placeholder="ej. puerta-1"
-          autoComplete="off"
+        <CameraScan
+          active={camara}
+          onToggle={setCamara}
+          disabled={ocupado}
+          paused={Boolean(pausa)}
+          onScan={(code) => void escanear(code, 'camara')}
         />
 
         <form
@@ -477,92 +521,42 @@ export default function EscanearPage() {
           />
         </form>
 
-        <CameraScan
-          active={camara}
-          onToggle={setCamara}
-          disabled={ocupado}
-          paused={Boolean(pausa)}
-          onScan={(code) => void escanear(code, 'camara')}
-        />
-
         <p className={styles.hint}>
           {ocupado
             ? 'Validando… un momento'
             : pausa
-              ? 'Resultado en pantalla: retira el boleto. Sigue leyendo en un momento o pulsa «Siguiente».'
+              ? 'Retira el boleto: la cámara sigue en un momento o pulsa «Siguiente».'
               : modo === 'entrada'
-              ? 'Listo para ENTRADA. Si ya está dentro hoy, se rechaza hasta registrar una salida.'
-              : 'Listo para SALIDA. Libera el aforo y permite que vuelva a entrar hoy.'}
+                ? 'Listo para ENTRADA. Si ya está dentro hoy, se rechaza hasta registrar una salida.'
+                : 'Listo para SALIDA. Si ya salió hoy, se rechaza hasta registrar una entrada.'}
           {latenciaMs != null
             ? ` · cliente ${latenciaMs} ms${serverMs != null ? ` · server ${serverMs} ms` : ''}`
             : ''}
-          {resultado?.codigo && resultado.codigo !== 'PENDING' ? ` · ${resultado.codigo}` : ''}
           {zonaActiva ? ` · Zona: ${zonaActiva.nombre}` : ''}
           {!online ? ' · Sin red' : ''}
           {cola > 0 ? ` · Cola offline: ${cola}` : ''}
         </p>
 
-        {aviso ? (
-          <p className={styles.aviso} role="status">
-            {aviso}
-          </p>
-        ) : null}
-
-        {resultado ? (
-          <div
-            className={`${styles.resultado} ${
-              resultado.codigo === 'PENDING'
-                ? styles.espera
-                : resultado.ok
-                  ? styles.exito
-                  : styles.fallo
-            }`}
-            role="status"
-            aria-live="assertive"
-          >
-            <strong>{resultado.mensaje}</strong>
-            <span>{resultado.detalles}</span>
-            {resultado.nombre ? (
-              <span className={styles.persona}>
-                {resultado.nombre}
-                {resultado.tipo ? ` · ${resultado.tipo}` : ''}
-                {resultado.folio ? ` · ${resultado.folio}` : ''}
-              </span>
-            ) : null}
-            <span className={styles.conteo}>
-              {(resultado.currentlyInside ?? resultado.dentro) ? 'Ahora: DENTRO' : 'Ahora: FUERA'}
-              {resultado.reentry ? ' · REINGRESO' : ''}
-              {resultado.diasPrevios?.length
-                ? ` · ya vino: ${resultado.diasPrevios.map((n) => `día ${n}`).join(', ')}`
-                : ''}
-              {resultado.lastDirection ? ` · último ${resultado.lastDirection}` : ''}
-              {resultado.zonaNombre
-                ? ` · ${resultado.zonaNombre} ${resultado.zonaDentro ?? '—'}/${resultado.zonaAforo || '∞'}`
-                : ''}
-            </span>
-            {pausa ? (
-              <div className={styles.pausa}>
-                <span className={styles.pausaPista}>
-                  <span
-                    key={pausa.clave}
-                    className={styles.pausaBarra}
-                    style={{ animationDuration: `${pausa.ms}ms` }}
-                  />
-                </span>
-                <button type="button" className={styles.siguiente} onClick={siguiente}>
-                  Siguiente
-                </button>
-              </div>
-            ) : resultado.codigo !== 'PENDING' ? (
-              <span className={styles.listo}>Listo para el siguiente boleto</span>
-            ) : null}
-          </div>
-        ) : (
-          <div className={styles.espera}>
-            <strong>Esperando el siguiente boleto</strong>
-            <span>USB (más rápido), PDA o cámara — elige el modo y la zona primero.</span>
-          </div>
-        )}
+        <details className={styles.ajustes}>
+          <summary>Ajustes de la estación</summary>
+          <label className={styles.label} htmlFor="device_id">
+            Estación / PDA
+          </label>
+          <input
+            id="device_id"
+            className={styles.input}
+            type="text"
+            value={deviceId}
+            onChange={(e) => {
+              const v = e.target.value
+              setDeviceIdState(v)
+              setDeviceId(v)
+            }}
+            onBlur={() => setDeviceIdState(setDeviceId(deviceId))}
+            placeholder="ej. puerta-1"
+            autoComplete="off"
+          />
+        </details>
       </div>
 
       <aside className={styles.historial}>
