@@ -16,6 +16,7 @@ sitio de impresion9 a las 09:06) con su alta, su correo enviado y su descarga. R
 `/root/backups/purga-pruebas-20261015/` (`tablas.dump`, `registro-3457.csv`, correos,
 descargas, asistencias). Si hay más pruebas antes de abrir, repetir con el mismo script
 (scratchpad `purga2.sh`, cambiando el corte).
+10:01: a pedido de Adam se borró solo la impresión de prueba de CLAUDIA LETRAS (empresa 3362, impresion5, 09:59; su registro es real y se queda). Respaldo `impresion-claudia-3362.csv` en la misma carpeta. Desde las 10:01 ya hay impresiones reales (impresion6): no purgar a ciegas.
 
 ## 2026-10-15 00:00 · Escáner: duplicados visibles y resultado arriba (claude-code) — DESPLEGADO
 
