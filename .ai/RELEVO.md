@@ -1,9 +1,21 @@
 # RELEVO
 
 - **Último turno:** claude-code
-- **Fecha:** 2026-10-14
+- **Fecha:** 2026-10-15
 - **Rama:** main
-- **HEAD:** (ver git log) — Mesa = impresion1…10, instalador con prueba 62 × 29, claves cortas, escáner sin rebotes, reenvío masivo terminado. **Todo desplegado en DO.**
+- **HEAD:** (ver git log) — Escáner con duplicados visibles y resultado arriba; mesa = impresion1…10; claves cortas; reenvío masivo terminado. **Todo desplegado en DO.**
+
+## 2026-10-15 00:00 · Escáner: duplicados visibles y resultado arriba (claude-code) — DESPLEGADO
+
+Adam: una SALIDA repetida no avisaba (la regla de 10 s del cambio anterior ignoraba el mismo
+boleto en silencio) y el resultado quedaba abajo. Ahora (commit `feat(escaner): duplicados
+visibles`): la cámara bloquea el QR leído hasta que sale del cuadro (`VACIOS_PARA_LIBERAR`=12
+intentos sin verlo); la página solo ignora el doble disparo USB (<1.5 s); un duplicado real va
+al servidor y sale en rojo («YA DENTRO» / «SALIDA DENEGADA», ya existían en `scan.ts`). Tarjeta de
+resultado primero, sólida verde/roja; «Estación / PDA» en «Ajustes». Probado con Playwright
+(USB escritorio y 390 px; cámara falsa y4m: QR quieto 1 lectura, sale y vuelve 2). Deploy:
+`python .ai/_deploy_escaner.py` (rollback `:prev-escaner2-20261015`). Ojo: el marcador de
+`subir` busca `DOBLE_DISPARO_USB_MS`; si se cambia el código, actualizarlo o el build no corre.
 
 ## 2026-10-14 17:30 · Mesa = impresion1…impresion10 e instalador con prueba 62 × 29 (claude-code) — DESPLEGADO
 
