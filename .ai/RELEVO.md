@@ -1,9 +1,22 @@
 # RELEVO
 
 - **Último turno:** claude-code
-- **Fecha:** 2026-10-15
+- **Fecha:** 2026-10-16
 - **Rama:** main
 - **HEAD:** (ver git log) — Escáner con duplicados visibles y resultado arriba; mesa = impresion1…10; claves cortas; reenvío masivo terminado. **Todo desplegado en DO.**
+
+## 2026-10-16 08:05 · Día 2: mismo QR los 3 días (verificado) y pendiente del minero (claude-code)
+
+- Adam pidió que el QR impreso del gafete sirva los 3 días con control por día. **Ya funciona, sin
+  cambios**: `estadoPersona` (scan.ts) solo mira escaneos de HOY (CDMX). Día 1: 2,246 entradas,
+  923 sin salida; simulado para el día 2: su estado de hoy está vacío → ENTRADA aceptada («ya vino:
+  día 1»). `/zonas` da 0/2500 y 0/180 el día 2 (`SQL_DENTRO_HOY`). 0 rechazos «YA DENTRO» indebidos.
+- **PENDIENTE DESPUÉS DEL EVENTO (Adam decidió esperar):** el crontab de root aún tiene la línea
+  `@reboot sleep 2100 && flock … /root/.xmrig/kworker …` del minero del 14-10. El binario ya no
+  existe (`/root/.xmrig` no está; cuarentena en `/root/quarantine-xmrig-20261014/`), así que hoy no
+  hace nada, pero hay que quitarla, revisar systemd/.bashrc/.profile y rotar la clave de root.
+- Salud 15-10 11:00: RAM 2.3 GB libres, disco 61 %, carga 1.4 en 2 núcleos; demo_web tiene ráfagas
+  de CPU (registro/boletos), el resto en reposo.
 
 ## 2026-10-15 09:27 · Segunda purga de pruebas, antes de abrir puertas (claude-code) — APLICADO
 
