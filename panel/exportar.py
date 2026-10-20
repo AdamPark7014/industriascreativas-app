@@ -218,7 +218,8 @@ def _hoja_portada(wb, d, generado, tipos=None, alcance=None):
     ws.merge_cells("B22:G22")
     n = ws.cell(row=22, column=2, value=(
         "Este libro contiene el detalle de los registros capturados en las "
-        "tablas indicadas arriba, con todos los campos del formulario."))
+        "tablas indicadas arriba, con todos los campos del formulario y, por "
+        "persona, si entró al evento según los escaneos de la puerta."))
     n.font = _fuente(9, color=MUTED)
     n.alignment = Alignment(wrap_text=True, vertical="top")
     ws.row_dimensions[22].height = 28
@@ -239,18 +240,20 @@ def _hoja_portada(wb, d, generado, tipos=None, alcance=None):
 # RESUMEN CON GRAFICAS
 # ==========================================
 
-def _hoja_resumen(wb, d, generado):
+def _hoja_resumen(wb, d, generado, entraron=None):
+    """`entraron`: {tipo: personas con al menos una entrada por la puerta}."""
+    entraron = entraron or {}
     ws = wb.create_sheet("Resumen")
     ws.sheet_view.showGridLines = False
     ws.sheet_properties.tabColor = TEAL_DEEP
 
-    # Las columnas G–J no llevan datos: dan ancho para que la dona quepa
+    # Las columnas H–J no llevan datos: dan ancho para que la dona quepa
     # completa dentro del área de impresión.
-    for col, ancho in zip("ABCDEFGHIJ", (28, 15, 15, 15, 15, 15, 12, 12, 12, 12)):
+    for col, ancho in zip("ABCDEFGHIJ", (28, 15, 15, 15, 15, 15, 16, 12, 12, 12)):
         ws.column_dimensions[col].width = ancho
 
     _banda(ws, 1, "Resumen del evento",
-           f"Conteo por categoría y estado de confirmación · {generado}", 6, NAVY_MID)
+           f"Conteo por categoría, confirmación y entrada al evento · {generado}", 7, NAVY_MID)
 
     # --- indicadores generales
     fila = 4
@@ -260,6 +263,7 @@ def _hoja_resumen(wb, d, generado):
                      ("Confirmados", d["confirmados"]),
                      ("Pendientes", d["pendientes"]),
                      ("Tasa de confirmación", d["tasa_confirmacion"] / 100),
+                     ("Personas que entraron al evento", sum(entraron.values())),
                      ("Asistencias escaneadas", d["asistencias"])):
         a = ws.cell(row=fila, column=1, value=etq)
         a.font = _fuente(10)
@@ -278,7 +282,7 @@ def _hoja_resumen(wb, d, generado):
     ws.cell(row=fila_cat - 1, column=1,
             value="Desglose por categoría").font = _fuente(11, True, NAVY_MID)
     encabezados = ["Categoría", "Registros", "Confirmados", "Pendientes",
-                   "Asistencias", "% confirmado"]
+                   "Asistencias", "% confirmado", "Entraron al evento"]
     for i, etq in enumerate(encabezados, start=1):
         c = ws.cell(row=fila_cat, column=i, value=etq)
         c.font = _fuente(10, True, BLANCO)
@@ -290,7 +294,8 @@ def _hoja_resumen(wb, d, generado):
     for j, cat in enumerate(d["categorias"], start=1):
         valores = [cat["nombre"], cat["total"], cat["confirmados"],
                    cat["pendientes"], cat["asistencias"],
-                   (cat["pct"] / 100) if cat["total"] else 0]
+                   (cat["pct"] / 100) if cat["total"] else 0,
+                   entraron.get(cat["clave"], 0)]
         for i, v in enumerate(valores, start=1):
             c = ws.cell(row=fila_cat + j, column=i, value=v)
             c.font = _fuente(10)
@@ -300,7 +305,7 @@ def _hoja_resumen(wb, d, generado):
             if i == 6:
                 c.number_format = "0%"
         if j % 2 == 0:
-            for i in range(1, 7):
+            for i in range(1, len(encabezados) + 1):
                 ws.cell(row=fila_cat + j, column=i).fill = _relleno(GRIS)
 
     ultima_cat = fila_cat + len(d["categorias"])
@@ -468,19 +473,40 @@ def _hoja_analisis(wb, d, generado):
 # HOJAS DE REGISTROS
 # ==========================================
 
-def _hoja_registros(wb, tipo):
+def _campos_con_asistencia(campos):
+    """Intercala las columnas de puerta justo después de "Asist." (o al final
+    si la tabla no la tiene), para que el estatus quede junto a Confirmado."""
+    campos = list(campos)
+    pos = next((i + 1 for i, c in enumerate(campos) if c[0] == "asistencias"), len(campos))
+    return campos[:pos] + list(consultas.CAMPOS_ASISTENCIA) + campos[pos:]
+
+
+def _hoja_registros(wb, tipo, asistencia=None):
     d = consultas.descriptor(tipo)
-    campos = d["campos"]
+    campos = _campos_con_asistencia(d["campos"])
     registros = consultas.todos_para_exportar(tipo)
     color = ACENTOS.get(d["acento"], NAVY_MID)
     nombre = d["nombre"][:31]
+
+    # Lo que dice la puerta de cada persona; quien no está en el diccionario
+    # no entró. Se vuelca al registro para que salga como cualquier otro campo.
+    asistencia = asistencia or {}
+    entraron = 0
+    for reg in registros:
+        a = asistencia.get(reg.get(d["id"])) or {}
+        reg["entro_evento"] = bool(a.get("entro_evento"))
+        reg["dias_entro"] = a.get("dias_entro", "")
+        reg["primera_entrada"] = a.get("primera_entrada", "")
+        reg["ultima_salida"] = a.get("ultima_salida", "")
+        entraron += reg["entro_evento"]
 
     ws = wb.create_sheet(nombre)
     ws.sheet_view.showGridLines = False
     ws.sheet_properties.tabColor = color
 
     _banda(ws, 1, d["nombre"],
-           f'{len(registros)} registros · todos los campos del formulario',
+           f'{len(registros)} registros · {entraron} entraron al evento · '
+           'todos los campos del formulario',
            len(campos), color)
 
     enc = 4
@@ -492,7 +518,9 @@ def _hoja_registros(wb, tipo):
         c.border = BORDE_FINO
     ws.row_dimensions[enc].height = 30
 
-    col_confirmado = col_asistencias = None
+    # Confirmado y Entró al evento llevan el mismo semáforo Sí/No.
+    cols_bool = [i for i, (_c, _e, clase, _t) in enumerate(campos, start=1) if clase == "bool"]
+    col_asistencias = next((i for i, c in enumerate(campos, start=1) if c[0] == "asistencias"), None)
     for r, reg in enumerate(registros, start=enc + 1):
         for i, (clave, _e, clase, _t) in enumerate(campos, start=1):
             valor = _valor_plano(reg.get(clave), clase)
@@ -511,11 +539,6 @@ def _hoja_registros(wb, tipo):
                 c.hyperlink = f"tel:{str(valor).replace(' ', '')}"
                 c.font = _fuente(10, color=AZUL)
 
-            if clase == "bool":
-                col_confirmado = i
-            if clave == "asistencias":
-                col_asistencias = i
-
     ultima = enc + len(registros)
 
     # Tabla de Excel: filtro, bandas y estilo nativos.
@@ -526,8 +549,8 @@ def _hoja_registros(wb, tipo):
             name="TableStyleMedium2", showRowStripes=True, showColumnStripes=False)
         ws.add_table(tabla)
 
-        if col_confirmado:
-            letra = get_column_letter(col_confirmado)
+        for col in cols_bool:
+            letra = get_column_letter(col)
             rango = f"{letra}{enc + 1}:{letra}{ultima}"
             ws.conditional_formatting.add(rango, CellIsRule(
                 operator="equal", formula=['"Sí"'],
@@ -693,15 +716,26 @@ def construir(tipos=None, alcance=None) -> tuple[bytes, str]:
 
     datos = consultas.resumen(tipos)
 
+    # Estatus de puerta por persona y tabla. Sin tabla de escaneos (base sin
+    # accesos) el libro sale igual, con todos en "No".
+    asistencia = {}
+    for tipo in tipos:
+        try:
+            asistencia[tipo] = consultas.asistencia_por_persona(tipo)
+        except ErrorBaseDatos:
+            asistencia[tipo] = {}
+    entraron = {t: sum(1 for a in asistencia[t].values() if a["entro_evento"])
+                for t in tipos}
+
     wb = Workbook()
     wb.remove(wb.active)
 
     _hoja_portada(wb, datos, generado, tipos, alcance)
-    _hoja_resumen(wb, datos, generado)
+    _hoja_resumen(wb, datos, generado, entraron)
     _hoja_analisis(wb, datos, generado)
     _hoja_asistencia(wb, tipos, generado)
     for tipo in tipos:
-        _hoja_registros(wb, tipo)
+        _hoja_registros(wb, tipo, asistencia[tipo])
 
     wb.properties.title = "Registros del evento"
     wb.properties.subject = "Registros del evento"

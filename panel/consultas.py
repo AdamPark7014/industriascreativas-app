@@ -494,3 +494,52 @@ def asistencia_por_dia(tipos) -> list:
             ORDER BY 3, 4
         ''', tipos=tipos)
     return [dict(r) for r in registros]
+
+
+# Columnas que el Excel añade a cada hoja de registros a partir de los escaneos
+# de puerta. No existen en las tablas de registro: `asistencia_por_persona` las
+# calcula y `exportar._hoja_registros` las intercala después de "Asist.".
+CAMPOS_ASISTENCIA = [
+    ("entro_evento", "Entró al evento", "bool", False),
+    ("dias_entro", "Días que entró", "texto", False),
+    ("primera_entrada", "Primera entrada", "texto", False),
+    ("ultima_salida", "Última salida", "texto", False),
+]
+
+
+def asistencia_por_persona(tipo) -> dict:
+    """{registro_id: {entro_evento, entradas, dias_entro, primera_entrada,
+    ultima_salida}} según los escaneos aceptados de puerta, en hora de México.
+
+    Quien no aparece en el resultado nunca pasó por la puerta. Los días salen
+    con la etiqueta del evento («Día 1, Día 3»); una fecha fuera del evento
+    (pruebas) se muestra tal cual."""
+    if tipo not in CATALOGO:
+        return {}
+    etiquetas = {d["fecha"]: d["etiqueta"] for d in dias_evento()}
+    with conexion() as con:
+        registros = filas(con, f'''
+            SELECT registro_id,
+                   COUNT(*) FILTER (WHERE modo = 'entrada') AS entradas,
+                   ARRAY_AGG(DISTINCT TO_CHAR(creado AT TIME ZONE '{ZONA_HORARIA}', 'YYYY-MM-DD'))
+                       FILTER (WHERE modo = 'entrada') AS fechas,
+                   TO_CHAR((MIN(creado) FILTER (WHERE modo = 'entrada'))
+                           AT TIME ZONE '{ZONA_HORARIA}', 'DD/MM/YYYY HH24:MI') AS primera_entrada,
+                   TO_CHAR((MAX(creado) FILTER (WHERE modo = 'salida'))
+                           AT TIME ZONE '{ZONA_HORARIA}', 'DD/MM/YYYY HH24:MI') AS ultima_salida
+            FROM accesos_escaneos
+            WHERE ok AND tipo = :tipo
+            GROUP BY registro_id
+        ''', tipo=tipo)
+    salida = {}
+    for r in registros:
+        entradas = int(r["entradas"] or 0)
+        fechas = sorted(r["fechas"] or [])
+        salida[r["registro_id"]] = {
+            "entro_evento": entradas > 0,
+            "entradas": entradas,
+            "dias_entro": ", ".join(etiquetas.get(f, f) for f in fechas),
+            "primera_entrada": r["primera_entrada"] or "",
+            "ultima_salida": r["ultima_salida"] or "",
+        }
+    return salida
