@@ -100,6 +100,9 @@ CATALOGO = {
         "tabla": "Registro_elisaCarrillo",
         "id": "idUsuario",
         "acento": "teal",
+        # Fuera del libro completo (Adam, 19-10-2026): la tabla está vacía y
+        # confunde en portada, resumen y hojas. Su Excel propio sigue saliendo.
+        "en_excel": False,
         "tarjeta": {"titulo": ["Nombre"],
                     "subtitulo": "Correo",
                     "meta": ["Telefono"]},

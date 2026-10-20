@@ -5,23 +5,35 @@
 - **Rama:** main
 - **HEAD:** (ver git log) — Excel con estatus de entrada al evento por persona; escáner con duplicados visibles; mesa = impresion1…10; claves cortas. **Todo desplegado en DO.**
 
-## 2026-10-19 20:50 · Excel con «Entró al evento» por persona (claude-code) — DESPLEGADO
+## 2026-10-19 20:50 · Excel con «Entró al evento», hoja «No asistieron» y sin Elisa (claude-code) — DESPLEGADO
 
 Adam: «que cuando descargue la base me aparezca el estatus de si entró o no al evento; más que
-nada dame el Excel». Commit `feat(excel): estatus de entrada al evento por persona`:
-- Cada hoja de registros (Empresas, Estudiantes, Elisa) lleva, justo después de «Asist.», las
-  columnas **Entró al evento** (Sí/No con semáforo), **Días que entró** («Día 1, Día 3»),
-  **Primera entrada** y **Última salida** (hora de México). Salen de `accesos_escaneos` (solo
-  `ok`, `modo='entrada'`/`'salida'`): `consultas.asistencia_por_persona(tipo)` +
-  `consultas.CAMPOS_ASISTENCIA`; `exportar._campos_con_asistencia` las intercala. El Resumen suma
-  «Personas que entraron al evento» (general y por categoría). «Asist.» sigue siendo el contador
-  histórico de la tabla de registro (puede diferir si hubo purgas).
-- Cifras del libro del 19-10 20:49: 10,188 registros, **5,303 personas entraron** (2,685 empresas,
-  2,618 estudiantes); por días: la mayoría un solo día, 36 los tres.
+nada dame el Excel» y después «quita el evento de Elisa Carrillo del Excel y pon también quienes no
+asistieron». Commits `feat(excel): estatus de entrada al evento por persona` y
+`feat(excel): hoja No asistieron y sin Elisa Carrillo`:
+- Cada hoja de registros (Empresas, Estudiantes) lleva, justo después de «Asist.», las columnas
+  **Entró al evento** (Sí/No con semáforo), **Días que entró** («Día 1, Día 3»), **Primera
+  entrada** y **Última salida** (hora de México). Salen de `accesos_escaneos` (solo `ok`,
+  `modo='entrada'`/`'salida'`): `consultas.asistencia_por_persona(tipo)` +
+  `consultas.CAMPOS_ASISTENCIA`; `exportar._anotar_asistencia` las vuelca al registro y
+  `_campos_con_asistencia` las intercala. «Asist.» sigue siendo el contador histórico de la tabla
+  de registro (puede diferir si hubo purgas).
+- Hoja **No asistieron** (después de «Asistencia»): registrados sin ninguna entrada, con Tipo,
+  Folio, Nombre, Empresa/Institución, Correo, Teléfono, Confirmado y fecha de registro (los
+  registros anteriores a la migración 001 no tienen fecha). El Resumen suma «Personas que entraron
+  al evento» y «Personas que no asistieron», en general y por categoría.
+- **Elisa Carrillo fuera del libro completo**: `CATALOGO["elisa"]["en_excel"] = False`;
+  `construir` la omite cuando hay más de una tabla (su `/api/exportar/elisa.xlsx` sigue saliendo).
+  El panel en pantalla no cambió.
+- Cifras del libro del 19-10 20:55: 10,188 registros, **5,303 entraron** (2,685 empresas, 2,618
+  estudiantes), **4,885 no asistieron** (2,506 / 2,379; 4,622 de ellos confirmados). Por días: la
+  mayoría un solo día, 36 los tres.
 - Deploy: `python .ai/_deploy_excel.py subir|excel|promover|rollback` (solo `panel_web`;
-  `accesos_api` no se tocó). Rollback a `eventos-panel-web:prev-excel-20261019`. La fase `excel`
-  genera el libro en un canario de la imagen nueva contra la BD real y lo baja a `.ai/exportes/`
-  (gitignored; copia en el servidor en `/root/exportes/`). Panel recreado 02:51 UTC, healthy.
+  `accesos_api` no se tocó). Rollback: `prev-excel-20261019` = imagen anterior a todo esto,
+  `prev-excel2-20261019` = solo con las columnas (sin hoja No asistieron); pasar `ETIQUETA=` al
+  script. La fase `excel` genera el libro en un canario de la imagen nueva contra la BD real y lo
+  baja a `.ai/exportes/` (gitignored; copia en el servidor en `/root/exportes/`). Panel recreado
+  02:58 UTC, healthy, login 200.
 - Prueba local sin BD: scratchpad `smoke_excel.py` (stubs de consultas) — sirve de plantilla.
 - **Seguridad:** Adam volvió a pegar la contraseña de root en el chat (19-10). No se usó (entró la
   llave `id_ed25519_do_experiencebt_auto`). Sigue pendiente **rotar root**, quitar la línea del

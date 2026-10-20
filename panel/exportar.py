@@ -247,13 +247,13 @@ def _hoja_resumen(wb, d, generado, entraron=None):
     ws.sheet_view.showGridLines = False
     ws.sheet_properties.tabColor = TEAL_DEEP
 
-    # Las columnas H–J no llevan datos: dan ancho para que la dona quepa
+    # Las columnas I–J no llevan datos: dan ancho para que la dona quepa
     # completa dentro del área de impresión.
-    for col, ancho in zip("ABCDEFGHIJ", (28, 15, 15, 15, 15, 15, 16, 12, 12, 12)):
+    for col, ancho in zip("ABCDEFGHIJ", (28, 15, 15, 15, 15, 15, 16, 14, 12, 12)):
         ws.column_dimensions[col].width = ancho
 
     _banda(ws, 1, "Resumen del evento",
-           f"Conteo por categoría, confirmación y entrada al evento · {generado}", 7, NAVY_MID)
+           f"Conteo por categoría, confirmación y entrada al evento · {generado}", 8, NAVY_MID)
 
     # --- indicadores generales
     fila = 4
@@ -264,6 +264,7 @@ def _hoja_resumen(wb, d, generado, entraron=None):
                      ("Pendientes", d["pendientes"]),
                      ("Tasa de confirmación", d["tasa_confirmacion"] / 100),
                      ("Personas que entraron al evento", sum(entraron.values())),
+                     ("Personas que no asistieron", d["total"] - sum(entraron.values())),
                      ("Asistencias escaneadas", d["asistencias"])):
         a = ws.cell(row=fila, column=1, value=etq)
         a.font = _fuente(10)
@@ -282,7 +283,7 @@ def _hoja_resumen(wb, d, generado, entraron=None):
     ws.cell(row=fila_cat - 1, column=1,
             value="Desglose por categoría").font = _fuente(11, True, NAVY_MID)
     encabezados = ["Categoría", "Registros", "Confirmados", "Pendientes",
-                   "Asistencias", "% confirmado", "Entraron al evento"]
+                   "Asistencias", "% confirmado", "Entraron al evento", "No asistieron"]
     for i, etq in enumerate(encabezados, start=1):
         c = ws.cell(row=fila_cat, column=i, value=etq)
         c.font = _fuente(10, True, BLANCO)
@@ -295,7 +296,8 @@ def _hoja_resumen(wb, d, generado, entraron=None):
         valores = [cat["nombre"], cat["total"], cat["confirmados"],
                    cat["pendientes"], cat["asistencias"],
                    (cat["pct"] / 100) if cat["total"] else 0,
-                   entraron.get(cat["clave"], 0)]
+                   entraron.get(cat["clave"], 0),
+                   cat["total"] - entraron.get(cat["clave"], 0)]
         for i, v in enumerate(valores, start=1):
             c = ws.cell(row=fila_cat + j, column=i, value=v)
             c.font = _fuente(10)
@@ -481,24 +483,28 @@ def _campos_con_asistencia(campos):
     return campos[:pos] + list(consultas.CAMPOS_ASISTENCIA) + campos[pos:]
 
 
-def _hoja_registros(wb, tipo, asistencia=None):
-    d = consultas.descriptor(tipo)
-    campos = _campos_con_asistencia(d["campos"])
-    registros = consultas.todos_para_exportar(tipo)
-    color = ACENTOS.get(d["acento"], NAVY_MID)
-    nombre = d["nombre"][:31]
-
-    # Lo que dice la puerta de cada persona; quien no está en el diccionario
-    # no entró. Se vuelca al registro para que salga como cualquier otro campo.
+def _anotar_asistencia(registros, id_col, asistencia):
+    """Vuelca lo que dice la puerta en cada registro, como un campo más.
+    Quien no está en `asistencia` no entró. Devuelve cuántos entraron."""
     asistencia = asistencia or {}
     entraron = 0
     for reg in registros:
-        a = asistencia.get(reg.get(d["id"])) or {}
+        a = asistencia.get(reg.get(id_col)) or {}
         reg["entro_evento"] = bool(a.get("entro_evento"))
         reg["dias_entro"] = a.get("dias_entro", "")
         reg["primera_entrada"] = a.get("primera_entrada", "")
         reg["ultima_salida"] = a.get("ultima_salida", "")
         entraron += reg["entro_evento"]
+    return entraron
+
+
+def _hoja_registros(wb, tipo, registros):
+    """`registros` ya trae las columnas de puerta (ver `_anotar_asistencia`)."""
+    d = consultas.descriptor(tipo)
+    campos = _campos_con_asistencia(d["campos"])
+    color = ACENTOS.get(d["acento"], NAVY_MID)
+    nombre = d["nombre"][:31]
+    entraron = sum(1 for r in registros if r.get("entro_evento"))
 
     ws = wb.create_sheet(nombre)
     ws.sheet_view.showGridLines = False
@@ -506,7 +512,7 @@ def _hoja_registros(wb, tipo, asistencia=None):
 
     _banda(ws, 1, d["nombre"],
            f'{len(registros)} registros · {entraron} entraron al evento · '
-           'todos los campos del formulario',
+           f'{len(registros) - entraron} no asistieron · todos los campos del formulario',
            len(campos), color)
 
     enc = 4
@@ -699,6 +705,83 @@ def _hoja_asistencia(wb, tipos, generado):
 
 
 # ==========================================
+# NO ASISTIERON
+# ==========================================
+
+def _hoja_no_asistieron(wb, tipos, registros_por_tipo, generado):
+    """Registrados que nunca pasaron por la puerta, con sus datos de contacto:
+    es la lista para dar seguimiento después del evento."""
+    cabecera = ["Tipo", "Folio", "Nombre", "Empresa / Institución", "Correo",
+                "Teléfono", "Confirmado", "Fecha y hora de registro"]
+    filas_ = []
+    for tipo in tipos:
+        d = consultas.CATALOGO[tipo]
+        tarjeta = d["tarjeta"]
+        for reg in registros_por_tipo.get(tipo, []):
+            if reg.get("entro_evento"):
+                continue
+            nombre = " ".join(str(reg.get(f) or "").strip() for f in tarjeta["titulo"]).strip()
+            org = reg.get(tarjeta["subtitulo"]) if tarjeta["subtitulo"] not in ("Correo",) else ""
+            filas_.append([d["corto"], consultas.folio(tipo, reg.get(d["id"])), nombre,
+                           org or "", reg.get("Correo") or "", reg.get("Telefono") or "",
+                           "Sí" if reg.get("confirmado") else "No",
+                           reg.get("FechaRegistro") or ""])
+
+    ws = wb.create_sheet("No asistieron")
+    ws.sheet_view.showGridLines = False
+    ws.sheet_properties.tabColor = ROSA
+    _banda(ws, 1, "No asistieron",
+           f"{len(filas_)} registrados sin ninguna entrada por la puerta · {generado}",
+           len(cabecera), ROSA)
+
+    enc = 4
+    for i, etq in enumerate(cabecera, start=1):
+        c = ws.cell(row=enc, column=i, value=etq)
+        c.font = _fuente(10, True, BLANCO)
+        c.fill = _relleno(NAVY)
+        c.alignment = Alignment(vertical="center", wrap_text=True)
+        c.border = BORDE_FINO
+    ws.row_dimensions[enc].height = 30
+
+    for r, valores in enumerate(filas_, start=enc + 1):
+        for i, v in enumerate(valores, start=1):
+            c = ws.cell(row=r, column=i, value=v)
+            c.font = _fuente(10)
+            c.border = BORDE_FINO
+            c.alignment = Alignment(vertical="top", horizontal="center" if i in (1, 7) else "left")
+            if i == 5 and v:
+                c.hyperlink = f"mailto:{v}"
+                c.font = _fuente(10, color=AZUL)
+            elif i == 6 and v:
+                c.hyperlink = f"tel:{str(v).replace(' ', '')}"
+                c.font = _fuente(10, color=AZUL)
+
+    ultima = enc + len(filas_)
+    if filas_:
+        ref = f"A{enc}:{get_column_letter(len(cabecera))}{ultima}"
+        tabla = Table(displayName="tbl_no_asistieron", ref=ref)
+        tabla.tableStyleInfo = TableStyleInfo(
+            name="TableStyleMedium2", showRowStripes=True, showColumnStripes=False)
+        ws.add_table(tabla)
+        rango = f"G{enc + 1}:G{ultima}"
+        ws.conditional_formatting.add(rango, CellIsRule(
+            operator="equal", formula=['"Sí"'],
+            fill=_relleno(VERDE_BG), font=Font(name=FUENTE, size=10, bold=True, color=VERDE)))
+        ws.conditional_formatting.add(rango, CellIsRule(
+            operator="equal", formula=['"No"'],
+            fill=_relleno(ROJO_BG), font=Font(name=FUENTE, size=10, bold=True, color=ROJO)))
+    else:
+        ws.cell(row=enc + 1, column=1,
+                value="Todos los registrados entraron al evento.").font = _fuente(10, italic=True, color=MUTED)
+
+    for i, a in enumerate((11, 18, 36, 34, 34, 16, 12, 22), start=1):
+        ws.column_dimensions[get_column_letter(i)].width = a
+    ws.freeze_panes = ws.cell(row=enc + 1, column=4)
+    _imprimir(ws, len(cabecera), fila_enc=enc)
+    return len(filas_)
+
+
+# ==========================================
 # CONSTRUCCION
 # ==========================================
 
@@ -711,21 +794,27 @@ def construir(tipos=None, alcance=None) -> tuple[bytes, str]:
     fuera del panel, se sepa de qué vista salió el libro.
     """
     tipos = list(tipos) if tipos else list(consultas.CATALOGO)
+    # El libro completo omite las tablas marcadas `en_excel: False` (Elisa
+    # Carrillo); pedida sola por su ruta, la tabla sigue saliendo.
+    if len(tipos) > 1:
+        tipos = [t for t in tipos if consultas.CATALOGO[t].get("en_excel", True)] or tipos
     ahora = datetime.now(TZ)
     generado = ahora.strftime("%d/%m/%Y %H:%M")
 
     datos = consultas.resumen(tipos)
 
-    # Estatus de puerta por persona y tabla. Sin tabla de escaneos (base sin
-    # accesos) el libro sale igual, con todos en "No".
-    asistencia = {}
+    # Registros de cada tabla con su estatus de puerta. Sin tabla de escaneos
+    # (base sin accesos) el libro sale igual, con todos en "No".
+    registros = {}
+    entraron = {}
     for tipo in tipos:
+        registros[tipo] = consultas.todos_para_exportar(tipo)
         try:
-            asistencia[tipo] = consultas.asistencia_por_persona(tipo)
+            asistencia = consultas.asistencia_por_persona(tipo)
         except ErrorBaseDatos:
-            asistencia[tipo] = {}
-    entraron = {t: sum(1 for a in asistencia[t].values() if a["entro_evento"])
-                for t in tipos}
+            asistencia = {}
+        entraron[tipo] = _anotar_asistencia(
+            registros[tipo], consultas.CATALOGO[tipo]["id"], asistencia)
 
     wb = Workbook()
     wb.remove(wb.active)
@@ -734,8 +823,9 @@ def construir(tipos=None, alcance=None) -> tuple[bytes, str]:
     _hoja_resumen(wb, datos, generado, entraron)
     _hoja_analisis(wb, datos, generado)
     _hoja_asistencia(wb, tipos, generado)
+    _hoja_no_asistieron(wb, tipos, registros, generado)
     for tipo in tipos:
-        _hoja_registros(wb, tipo, asistencia[tipo])
+        _hoja_registros(wb, tipo, registros[tipo])
 
     wb.properties.title = "Registros del evento"
     wb.properties.subject = "Registros del evento"
