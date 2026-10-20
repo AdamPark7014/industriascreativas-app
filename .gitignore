@@ -27,3 +27,4 @@ panel/accesos-api/dist/
 .ai/index/
 .ai/drafts/
 .ai/exportes/
+panel/*.log

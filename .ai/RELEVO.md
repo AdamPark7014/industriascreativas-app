@@ -1,9 +1,31 @@
 # RELEVO
 
 - **Último turno:** claude-code
-- **Fecha:** 2026-10-16
+- **Fecha:** 2026-10-19
 - **Rama:** main
-- **HEAD:** (ver git log) — Escáner con duplicados visibles y resultado arriba; mesa = impresion1…10; claves cortas; reenvío masivo terminado. **Todo desplegado en DO.**
+- **HEAD:** (ver git log) — Excel con estatus de entrada al evento por persona; escáner con duplicados visibles; mesa = impresion1…10; claves cortas. **Todo desplegado en DO.**
+
+## 2026-10-19 20:50 · Excel con «Entró al evento» por persona (claude-code) — DESPLEGADO
+
+Adam: «que cuando descargue la base me aparezca el estatus de si entró o no al evento; más que
+nada dame el Excel». Commit `feat(excel): estatus de entrada al evento por persona`:
+- Cada hoja de registros (Empresas, Estudiantes, Elisa) lleva, justo después de «Asist.», las
+  columnas **Entró al evento** (Sí/No con semáforo), **Días que entró** («Día 1, Día 3»),
+  **Primera entrada** y **Última salida** (hora de México). Salen de `accesos_escaneos` (solo
+  `ok`, `modo='entrada'`/`'salida'`): `consultas.asistencia_por_persona(tipo)` +
+  `consultas.CAMPOS_ASISTENCIA`; `exportar._campos_con_asistencia` las intercala. El Resumen suma
+  «Personas que entraron al evento» (general y por categoría). «Asist.» sigue siendo el contador
+  histórico de la tabla de registro (puede diferir si hubo purgas).
+- Cifras del libro del 19-10 20:49: 10,188 registros, **5,303 personas entraron** (2,685 empresas,
+  2,618 estudiantes); por días: la mayoría un solo día, 36 los tres.
+- Deploy: `python .ai/_deploy_excel.py subir|excel|promover|rollback` (solo `panel_web`;
+  `accesos_api` no se tocó). Rollback a `eventos-panel-web:prev-excel-20261019`. La fase `excel`
+  genera el libro en un canario de la imagen nueva contra la BD real y lo baja a `.ai/exportes/`
+  (gitignored; copia en el servidor en `/root/exportes/`). Panel recreado 02:51 UTC, healthy.
+- Prueba local sin BD: scratchpad `smoke_excel.py` (stubs de consultas) — sirve de plantilla.
+- **Seguridad:** Adam volvió a pegar la contraseña de root en el chat (19-10). No se usó (entró la
+  llave `id_ed25519_do_experiencebt_auto`). Sigue pendiente **rotar root**, quitar la línea del
+  minero del crontab y, si se puede, apagar PasswordAuthentication.
 
 ## 2026-10-16 08:05 · Día 2: mismo QR los 3 días (verificado) y pendiente del minero (claude-code)
 
