@@ -5,7 +5,10 @@ mecánica de puerta que FICTI: **entrada, salida y reingreso**, estado dentro/fu
 pausa de confirmación, cámara, lector de PDA y cola sin red. Base de datos propia: no comparte
 nada con la de FICTI.
 
-- **URL:** https://panel.experiencebt.com.mx/pumpkin/ (nginx compartido, `panel/deploy/zz-panel.conf`).
+- **URL:** https://panel.experiencebt.com.mx (desde el 29-10-2026 todo el dominio es de PUMPKIN:
+  la raíz, `/login` y las rutas viejas de FICTI redirigen a `/pumpkin/`). nginx compartido,
+  `panel/deploy/zz-panel.conf`. FICTI sigue corriendo sin ruta pública; para volver a publicarlo,
+  ver el encabezado de `panel/deploy/zz-panel.ficti.conf`.
 - **Servidor:** droplet `147.182.128.128`, `/opt/pumpkin-accesos`, contenedores
   `pumpkin_accesos_web` (API Hono + SPA React, puerto 3090) y `pumpkin_accesos_db` (Postgres 16).
 - **Credenciales:** `C:\dev\secrets\pumpkin-accesos\` (PDF, Excel, TXT). Nunca en git: este repo es público.

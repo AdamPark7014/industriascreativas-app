@@ -3,8 +3,24 @@
 - **Último turno:** claude-code
 - **Fecha:** 2026-10-29
 - **Rama:** main
-- **HEAD:** (ver git log) — **PUMPKIN Accesos** (`pumpkin/`) desplegado en DO en
-  https://panel.experiencebt.com.mx/pumpkin/ con base propia; FICTI intacto en su URL.
+- **HEAD:** (ver git log) — **panel.experiencebt.com.mx es de PUMPKIN Accesos** (`pumpkin/`)
+  desde el 29-10; el panel de FICTI sigue vivo sin ruta pública (`zz-panel.ficti.conf`).
+
+## 2026-10-29 21:00 UTC · panel.experiencebt.com.mx pasa a PUMPKIN; FICTI aislado (claude-code)
+
+Adam: «mueve ficti de esas urls, ponlo en un contenedor aislado y mete ahí este sistema en las
+mismas urls»; confirmó «sí, muévelo» después de saber que el panel de FICTI se usó ese día.
+- `panel/deploy/zz-panel.conf`: solo `/pumpkin/` va a `pumpkin_accesos_web`; `/`, `/login`,
+  `/logout`, `/accesos*` y todo lo demás redirigen a `/pumpkin/` (`/accesos*` al escáner).
+  Recargado con `nginx -s reload` (el inodo ya coincidía tras el reinicio de la mañana).
+- FICTI: `eventos_panel_web`, `eventos_accesos_api` y `eventos_demo_db` siguen corriendo y sanos,
+  sin ruta pública. **Para volver a publicarlo:** encabezado de `panel/deploy/zz-panel.ficti.conf`
+  (respaldo también en `/root/backups/zz-panel.conf.ficti-con-pumpkin-20261029`).
+- **demo.experiencebt.com.mx no se tocó**: registro público y enlaces `/boleto/<token>` de los
+  correos de FICTI siguen ahí.
+- Credenciales (Excel, PDF, TXT) regeneradas con la URL `https://panel.experiencebt.com.mx`.
+- Una sesión aparte arregla el `WORKER TIMEOUT` del Excel de FICTI; se le avisó que pruebe por la
+  red interna (`http://eventos_panel_web:5000`) y que no toque `zz-panel*.conf`.
 
 ## 2026-10-29 · PUMPKIN Accesos: 250 pases QR con la puerta de FICTI (claude-code) — DESPLEGADO
 
