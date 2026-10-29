@@ -7,6 +7,7 @@ condicional, hipervínculos y configuración de impresión.
 """
 import io
 import os
+from copy import copy
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -58,6 +59,30 @@ def _fuente(size=10, bold=False, color=TEXTO, italic=False):
 
 def _relleno(color):
     return PatternFill("solid", fgColor=color)
+
+
+class _Molde:
+    """Estilo de celda que se arma una vez y se copia a cada celda.
+
+    Asignar Font/Border/Alignment celda por celda obliga a openpyxl a crear y
+    hashear esos objetos en cada asignación: con ~10 mil registros el libro
+    tardaba minutos y gunicorn cortaba la descarga (29-10-2026). La primera
+    celda recibe el estilo por la vía normal; las demás copian su arreglo de
+    índices (`_style`), que es justo lo que openpyxl escribe en el archivo.
+    """
+
+    def __init__(self, **estilo):
+        self.estilo = estilo
+        self._arreglo = None
+
+    def aplicar(self, celda):
+        if self._arreglo is None:
+            for atributo, valor in self.estilo.items():
+                setattr(celda, atributo, valor)
+            self._arreglo = copy(celda._style)
+        else:
+            celda._style = copy(self._arreglo)
+        return celda
 
 
 def _etiquetas(valor=True, porcentaje=False):
@@ -527,23 +552,28 @@ def _hoja_registros(wb, tipo, registros):
     # Confirmado y Entró al evento llevan el mismo semáforo Sí/No.
     cols_bool = [i for i, (_c, _e, clase, _t) in enumerate(campos, start=1) if clase == "bool"]
     col_asistencias = next((i for i, c in enumerate(campos, start=1) if c[0] == "asistencias"), None)
+    # Por columna: el estilo normal y el azul de los enlaces (correo, teléfono).
+    columnas = []
+    for clave, _e, clase, _t in campos:
+        alineacion = Alignment(
+            vertical="top",
+            horizontal="center" if clase in ("entero", "bool") else "left",
+            wrap_text=clase == "lista")
+        columnas.append((clave, clase,
+                         _Molde(font=_fuente(10), border=BORDE_FINO, alignment=alineacion),
+                         _Molde(font=_fuente(10, color=AZUL), border=BORDE_FINO, alignment=alineacion)))
     for r, reg in enumerate(registros, start=enc + 1):
-        for i, (clave, _e, clase, _t) in enumerate(campos, start=1):
+        for i, (clave, clase, normal, enlace) in enumerate(columnas, start=1):
             valor = _valor_plano(reg.get(clave), clase)
             c = ws.cell(row=r, column=i, value=valor)
-            c.font = _fuente(10)
-            c.border = BORDE_FINO
-            c.alignment = Alignment(
-                vertical="top",
-                horizontal="center" if clase in ("entero", "bool") else "left",
-                wrap_text=clase == "lista")
-
             if clase == "correo" and valor:
                 c.hyperlink = f"mailto:{valor}"
-                c.font = _fuente(10, color=AZUL)
+                enlace.aplicar(c)
             elif clase == "tel" and valor:
                 c.hyperlink = f"tel:{str(valor).replace(' ', '')}"
-                c.font = _fuente(10, color=AZUL)
+                enlace.aplicar(c)
+            else:
+                normal.aplicar(c)
 
     ultima = enc + len(registros)
 
@@ -666,6 +696,8 @@ def _hoja_asistencia(wb, tipos, generado):
     ws.row_dimensions[enc].height = 30
 
     personas = sorted(por_persona.values(), key=lambda p: (p["nombre"], p["id"]))
+    texto = _Molde(font=_fuente(10), border=BORDE_FINO)
+    centrado = _Molde(font=_fuente(10), border=BORDE_FINO, alignment=Alignment(horizontal="center"))
     for r, p in enumerate(personas, start=enc + 1):
         nombre_tipo = consultas.CATALOGO[p["tipo"]]["corto"] if p["tipo"] in consultas.CATALOGO else p["tipo"]
         valores = [nombre_tipo, consultas.folio(p["tipo"], p["id"]), p["nombre"]]
@@ -679,11 +711,7 @@ def _hoja_asistencia(wb, tipos, generado):
             valores += [(a or {}).get("primera_entrada") or "", (a or {}).get("ultima_salida") or "", n]
         valores += [dias_asistidos, accesos]
         for i, v in enumerate(valores, start=1):
-            c = ws.cell(row=r, column=i, value=v)
-            c.font = _fuente(10)
-            c.border = BORDE_FINO
-            if i > 3:
-                c.alignment = Alignment(horizontal="center")
+            (centrado if i > 3 else texto).aplicar(ws.cell(row=r, column=i, value=v))
 
     ultima = enc + len(personas)
     if personas:
@@ -743,18 +771,24 @@ def _hoja_no_asistieron(wb, tipos, registros_por_tipo, generado):
         c.border = BORDE_FINO
     ws.row_dimensions[enc].height = 30
 
+    # Por columna: el estilo normal y el azul de los enlaces (correo, teléfono).
+    moldes = []
+    for i in range(1, len(cabecera) + 1):
+        alineacion = Alignment(vertical="top", horizontal="center" if i in (1, 7) else "left")
+        moldes.append((_Molde(font=_fuente(10), border=BORDE_FINO, alignment=alineacion),
+                       _Molde(font=_fuente(10, color=AZUL), border=BORDE_FINO, alignment=alineacion)))
     for r, valores in enumerate(filas_, start=enc + 1):
         for i, v in enumerate(valores, start=1):
             c = ws.cell(row=r, column=i, value=v)
-            c.font = _fuente(10)
-            c.border = BORDE_FINO
-            c.alignment = Alignment(vertical="top", horizontal="center" if i in (1, 7) else "left")
+            normal, enlace = moldes[i - 1]
             if i == 5 and v:
                 c.hyperlink = f"mailto:{v}"
-                c.font = _fuente(10, color=AZUL)
+                enlace.aplicar(c)
             elif i == 6 and v:
                 c.hyperlink = f"tel:{str(v).replace(' ', '')}"
-                c.font = _fuente(10, color=AZUL)
+                enlace.aplicar(c)
+            else:
+                normal.aplicar(c)
 
     ultima = enc + len(filas_)
     if filas_:

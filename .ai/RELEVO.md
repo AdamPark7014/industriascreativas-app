@@ -6,6 +6,32 @@
 - **HEAD:** (ver git log) — **panel.experiencebt.com.mx es de PUMPKIN Accesos** (`pumpkin/`)
   desde el 29-10; el panel de FICTI sigue vivo sin ruta pública (`zz-panel.ficti.conf`).
 
+## 2026-10-29 21:20 UTC · Excel de FICTI: de WORKER TIMEOUT a ~19 s (claude-code) — DESPLEGADO
+
+El 29-10 a las 15:40 UTC gunicorn cortó dos veces `GET /api/exportar.xlsx` (`--timeout 60`).
+- **Causa, medida contra la BD real** (contenedor efímero con `--entrypoint python`, solo SELECT):
+  las consultas tardan < 2 s en total (`asistencia_por_persona` 0.1 s por tabla, sin consultas por
+  fila). El tiempo se iba en openpyxl: ~360 mil celdas (5,191 empresas × 31 col, 4,997 alumnos
+  × 17, Asistencia y No asistieron) y por cada una un `Font`/`Border`/`Alignment` nuevo que
+  openpyxl hashea al asignarlo (`IndexedList.add` → `Serialisable.__hash__`). 403 s con perfilador
+  en el droplet; 126 s en la laptop sin perfilador.
+- **Arreglo** en `panel/exportar.py`: `_Molde` arma cada estilo una vez por columna y copia el
+  arreglo `_style` a las demás celdas (hojas de registros, Asistencia y No asistieron). Laptop:
+  126 s → 4.8 s. Con datos sintéticos del tamaño real el libro sale **idéntico byte a byte** al de
+  antes (todas las partes del .xlsx salvo la fecha de `docProps/core.xml`). Contra el libro del
+  19-10: mismas 7 hojas, mismos rangos de tabla y columnas.
+- `panel/entrypoint.sh`: `--timeout 120` solo como red de seguridad (el droplet es ~4× más lento
+  que la laptop y ahora también corre PUMPKIN). lxml se probó: ahorra ~0.4 s, no se agregó.
+- **Deploy** con `.ai/_deploy_excel_rapido.py` (gitignored, como los demás `_deploy_*`): `subir` →
+  `canario` (descarga por HTTP contra gunicorn con cookie firmada dentro del contenedor, usuario
+  `verificacion-claude`) → `promover` (repite la descarga contra `eventos_panel_web`). Canario
+  17.8 s; producción **HTTP 200 en 19.2 s**, 2.7 MB, sin `WORKER TIMEOUT` en el log.
+  **Rollback:** `python .ai/_deploy_excel_rapido.py rollback` → `eventos-panel-web:prev-excel-20261029`
+  (`ea786cf4bed5`, la imagen del 19-10).
+- Libros de prueba en `/root/exportes/` y `.ai/exportes/` (gitignored: traen datos personales).
+- El panel de FICTI ya no tiene ruta pública (sección siguiente): para que el cliente baje el Excel
+  desde el navegador hay que volver a publicarlo con `zz-panel.ficti.conf`, o mandarle el archivo.
+
 ## 2026-10-29 21:00 UTC · panel.experiencebt.com.mx pasa a PUMPKIN; FICTI aislado (claude-code)
 
 Adam: «mueve ficti de esas urls, ponlo en un contenedor aislado y mete ahí este sistema en las
