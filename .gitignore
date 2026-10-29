@@ -28,3 +28,11 @@ panel/accesos-api/dist/
 .ai/drafts/
 .ai/exportes/
 panel/*.log
+
+# PUMPKIN Accesos
+pumpkin/ui/node_modules/
+pumpkin/ui/dist/
+pumpkin/api/node_modules/
+pumpkin/api/dist/
+pumpkin/.env
+pumpkin/entregables/

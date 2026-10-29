@@ -1,0 +1,233 @@
+.barraFiltros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+
+  > p {
+    margin: 0;
+  }
+}
+
+.filtro {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  span {
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #5b6b82;
+  }
+
+  select,
+  input {
+    min-width: 150px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid #d5deea;
+    background: #fff;
+    color: #132039;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  input {
+    min-width: 90px;
+    width: 110px;
+  }
+}
+
+.buscar {
+  flex: 1 1 260px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  border: 1px solid #d5deea;
+  background: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #132039;
+
+  &:focus {
+    outline: 3px solid rgba(242, 107, 29, 0.3);
+    border-color: #f26b1d;
+  }
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid #d5deea;
+  background: #fff;
+  color: #132039;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+
+  b {
+    margin-left: 4px;
+    color: #a8430c;
+  }
+}
+
+.chipOn {
+  background: #1c1009;
+  border-color: #1c1009;
+  color: #fff;
+
+  b {
+    color: #f9b98f;
+  }
+}
+
+.aviso {
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #fdeaea;
+  border: 1px solid #f3c6c6;
+  color: #9b1c1c;
+  font-weight: 700;
+}
+
+.scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+
+  th {
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #5b6b82;
+    border-bottom: 1px solid #e2e8f0;
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 9px 12px;
+    border-bottom: 1px solid #eef2f7;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  small {
+    color: #6b7a90;
+    font-weight: 600;
+  }
+
+  tbody tr:hover {
+    background: #fbfcfe;
+  }
+}
+
+.mal {
+  color: #b42318;
+  font-weight: 800;
+}
+
+.filaBloqueada {
+  background: #fff6f5;
+}
+
+.badge {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  background: #eef2f7;
+  color: #3b4a61;
+}
+
+.badgeOk,
+.badge_dentro {
+  background: #e8f6ee;
+  color: #1b7a45;
+}
+
+.badge_salio {
+  background: #fde6d6;
+  color: #a8430c;
+}
+
+.badge_sin_entrar {
+  background: #eef2f7;
+  color: #5b6b82;
+}
+
+.badgeMal {
+  background: #fdeaea;
+  color: #b42318;
+}
+
+.editable {
+  width: 190px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  color: #132039;
+
+  &:hover {
+    border-color: #d5deea;
+  }
+
+  &:focus {
+    border-color: #f26b1d;
+    background: #fff;
+    outline: none;
+  }
+}
+
+.botonChico {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #d5deea;
+  background: #fff;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #132039;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    border-color: #f26b1d;
+    color: #a8430c;
+  }
+}
+
+.botonPrimario {
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: #f26b1d;
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.9rem;
+  text-decoration: none;
+  white-space: nowrap;
+
+  &:hover {
+    background: #d95a10;
+  }
+}

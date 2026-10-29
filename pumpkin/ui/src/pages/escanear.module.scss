@@ -1,0 +1,541 @@
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 460px) minmax(220px, 1fr);
+  gap: 18px;
+  padding: 18px 24px 40px;
+  min-height: calc(100vh - 76px);
+  background:
+    radial-gradient(1200px 500px at 10% -10%, rgba(18, 181, 176, 0.18), transparent 55%),
+    linear-gradient(180deg, #050b1c 0%, #071026 55%, #050b1c 100%);
+  color: #fff;
+}
+
+.station {
+  padding: 22px 18px;
+  background: #0a1428;
+  border: 1px solid #1b2b4d;
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+.diaBanner {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(18, 181, 176, 0.14);
+  border: 1px solid rgba(18, 181, 176, 0.5);
+
+  strong {
+    font-size: 1rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #5ff0ea;
+  }
+
+  span {
+    font-size: 0.74rem;
+    color: #93a6c4;
+    text-transform: lowercase;
+
+    &::first-letter {
+      text-transform: uppercase;
+    }
+  }
+}
+
+.diaBannerOff {
+  background: rgba(255, 171, 64, 0.12);
+  border-color: rgba(255, 171, 64, 0.5);
+
+  strong {
+    color: #ffc266;
+  }
+}
+
+.modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.entrada,
+.salida {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 12px;
+  border-radius: 14px;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  min-height: 76px;
+
+  strong {
+    font-size: 1.05rem;
+    letter-spacing: 0.08em;
+  }
+
+  span {
+    font-size: 0.72rem;
+    opacity: 0.85;
+  }
+}
+
+.entrada.on {
+  background: #35d95c;
+  color: #050b1c;
+}
+
+.salida.on {
+  background: #ec1e63;
+  color: #fff;
+}
+
+.entrada.off {
+  background: transparent;
+  border-color: #35d95c;
+  color: #35d95c;
+}
+
+.salida.off {
+  background: transparent;
+  border-color: #ec1e63;
+  color: #ec1e63;
+}
+
+.zonas {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.zona,
+.zonaOn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid #1b2b4d;
+  background: transparent;
+  color: #93a6c4;
+  cursor: pointer;
+  text-align: left;
+
+  strong {
+    font-size: 0.84rem;
+    color: inherit;
+  }
+
+  span {
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.zonaOn {
+  border-color: #12b5b0;
+  background: rgba(18, 181, 176, 0.12);
+  color: #fff;
+}
+
+.form {
+  margin-top: 16px;
+}
+
+.label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #6b80a3;
+}
+
+.input {
+  width: 100%;
+  padding: 16px 14px;
+  border-radius: 12px;
+  border: 1.5px solid #1b2b4d;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-size: 1.2rem;
+  letter-spacing: 0.04em;
+  text-align: center;
+  outline: none;
+
+  &:focus {
+    border-color: #22d3ee;
+    box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.16);
+  }
+
+  &::placeholder {
+    color: #6b80a3;
+    letter-spacing: 0.02em;
+    font-size: 0.95rem;
+  }
+}
+
+.hint {
+  margin: 10px 0 0;
+  font-size: 0.78rem;
+  color: #6b80a3;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.resultado {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 16px;
+  padding: 18px 16px;
+  border-radius: 14px;
+  border: 1.5px solid;
+  text-align: center;
+
+  strong {
+    font-size: 1.6rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+  }
+}
+
+/* Confirmación: barra que se vacía mientras la cámara espera, y «Siguiente». */
+.pausa {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.pausaPista {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.pausaBarra {
+  display: block;
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  background: currentColor;
+  transform-origin: left center;
+  animation: vaciar linear forwards;
+}
+
+@keyframes vaciar {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.siguiente {
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.16);
+  }
+}
+
+.listo {
+  margin-top: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #8fa3c7;
+}
+
+.aviso {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 193, 7, 0.12);
+  border: 1px solid rgba(255, 193, 7, 0.45);
+  color: #ffd25e;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pausaBarra {
+    animation: none;
+  }
+}
+
+.exito {
+  border-color: #35d95c;
+  background: rgba(53, 217, 92, 0.12);
+  color: #5cf07f;
+}
+
+.fallo {
+  border-color: #ec1e63;
+  background: rgba(236, 30, 99, 0.12);
+  color: #ff3d7f;
+}
+
+.persona {
+  color: #fff;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.conteo {
+  margin-top: 4px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.espera {
+  margin-top: 16px;
+  padding: 28px 16px;
+  border-radius: 14px;
+  border: 1px dashed #1b2b4d;
+  text-align: center;
+  color: #6b80a3;
+  font-size: 0.88rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  strong {
+    color: #93a6c4;
+    font-size: 0.95rem;
+  }
+
+  span {
+    font-size: 0.78rem;
+  }
+}
+
+.historial {
+  padding: 18px 16px;
+  background: rgba(10, 20, 40, 0.7);
+  border: 1px solid #1b2b4d;
+  border-radius: 18px;
+
+  h2 {
+    margin: 0 0 12px;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #6b80a3;
+  }
+
+  ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  li {
+    display: grid;
+    grid-template-columns: 4.5rem 1fr auto;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid #1b2b4d;
+    font-size: 0.84rem;
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+}
+
+.histVacio {
+  margin: 0;
+  color: #6b80a3;
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.filaOk span:last-child {
+  color: #35d95c;
+  font-weight: 800;
+}
+
+.filaMal span:last-child {
+  color: #ec1e63;
+  font-weight: 800;
+}
+
+@media (max-width: 900px) {
+  .page {
+    grid-template-columns: 1fr;
+    padding: 14px;
+  }
+}
+
+/* ---- 15-10-2026: resultado arriba, sólido y compacto (Adam: ver si pasa sin bajar) ---- */
+.station {
+  padding: 14px;
+}
+
+.diaBanner {
+  margin-bottom: 10px;
+  padding: 6px 12px;
+
+  strong {
+    font-size: 0.82rem;
+  }
+
+  span {
+    font-size: 0.68rem;
+  }
+}
+
+.resultado {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  gap: 4px;
+  border-width: 2px;
+  text-align: left;
+  color: #fff;
+
+  strong {
+    font-size: 1.45rem;
+    line-height: 1.15;
+  }
+}
+
+.resCabeza {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.resIcono {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 1.45rem;
+  font-weight: 900;
+}
+
+.exito {
+  background: #15803d;
+  border-color: #4ade80;
+  color: #fff;
+}
+
+.fallo {
+  background: #b91c1c;
+  border-color: #fb7185;
+  color: #fff;
+}
+
+.validando {
+  background: #1e293b;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+.persona {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.detalle {
+  font-size: 0.88rem;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.conteo {
+  margin-top: 2px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.espera {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.pausa {
+  margin-top: 6px;
+}
+
+.siguiente {
+  padding: 8px 16px;
+  border-color: rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.entrada,
+.salida {
+  min-height: 54px;
+  padding: 10px 12px;
+  gap: 2px;
+
+  strong {
+    font-size: 1rem;
+  }
+
+  span {
+    font-size: 0.68rem;
+  }
+}
+
+.zonas {
+  margin-top: 10px;
+}
+
+.zona,
+.zonaOn {
+  padding: 7px 10px;
+}
+
+.form {
+  margin-top: 12px;
+}
+
+.input {
+  padding: 11px 12px;
+  font-size: 1.05rem;
+}
+
+.hint {
+  margin-top: 8px;
+  font-size: 0.72rem;
+}
+
+.ajustes {
+  margin-top: 10px;
+  font-size: 0.78rem;
+  color: #6b80a3;
+
+  summary {
+    cursor: pointer;
+    padding: 4px 0;
+  }
+
+  .label {
+    margin-top: 6px;
+  }
+}

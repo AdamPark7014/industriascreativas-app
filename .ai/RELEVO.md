@@ -1,9 +1,40 @@
 # RELEVO
 
 - **Último turno:** claude-code
-- **Fecha:** 2026-10-19
+- **Fecha:** 2026-10-29
 - **Rama:** main
-- **HEAD:** (ver git log) — Excel con estatus de entrada al evento por persona; escáner con duplicados visibles; mesa = impresion1…10; claves cortas. **Todo desplegado en DO.**
+- **HEAD:** (ver git log) — **PUMPKIN Accesos** (`pumpkin/`) desplegado en DO en
+  https://panel.experiencebt.com.mx/pumpkin/ con base propia; FICTI intacto en su URL.
+
+## 2026-10-29 · PUMPKIN Accesos: 250 pases QR con la puerta de FICTI (claude-code) — DESPLEGADO
+
+Adam: meter los 250 QR de `Downloads\250-QRS.pdf` en un desarrollo con el control de acceso de
+FICTI para PUMPKIN, PDA con acceso directo y ~6 usuarios. Ver `pumpkin/README.md`.
+- **El PDF del cliente no sirve para escanear:** las 250 celdas traen el mismo dibujo vectorial y
+  no es un QR válido (OpenCV y ZXing no lo leen). Los IDs `QR-001…QR-250` sí están en la base y
+  `pumpkin/herramientas/generar_qrs.py` hace el PDF imprimible con QR reales (5 hojas, mismo
+  acomodo 5 × 10). Verificado: ZXing 250/250 (también con la hoja entera a 150 dpi) y jsQR 250/250.
+  Copia en `Downloads\250-QRS-PUMPKIN-reales.pdf`; `pumpkin/entregables/` está gitignored.
+- **Mini app aparte, no dentro del panel de FICTI:** `pumpkin/api` (Hono + pg, scan portado de
+  `panel/accesos-api/src/scan.ts`) y `pumpkin/ui` (escáner portado de `panel/ui`: mismo
+  `useCameraCapture`, cola sin red, pausa/Siguiente; resumen, pases e historial para supervisión).
+  Contenedores `pumpkin_accesos_web` + `pumpkin_accesos_db` en `/opt/pumpkin-accesos`, red
+  `interna` + `eventos-demo-net` (solo para que nginx la alcance).
+- **Cuentas:** `admin` (supervisión) y `puerta1–6` (solo escáner). Claves, enlaces de acceso
+  directo, PDF con tarjetas QR por PDA y Excel en `C:\dev\secrets\pumpkin-accesos\`. El `.env` del
+  servidor es copia de `servidor.env`.
+- **nginx:** `location ^~ /pumpkin/` en `panel/deploy/zz-panel.conf`. El contenedor
+  `nginx_registro_proxy` tenía el archivo «pegado» a un inodo viejo (el host lo reemplazó en sep.):
+  escribir con `cat >` no basta, hubo que `docker restart` (antes `nginx -t` en un contenedor
+  desechable con los mismos montajes). Respaldo `/root/backups/zz-panel.conf.prev-pumpkin-20261029`.
+- Humo contra producción: 27/27 (entrada, duplicado, ya dentro, salida, salida denegada, reingreso,
+  QR fuera del lote, basura, dos PDA a la vez, bloqueo, titular, CSV, enlace directo). Después se
+  vació `escaneos` y se limpiaron titulares/bloqueos: la base quedó en 250 pases, 0 escaneos.
+- **Pendiente de Adam:** (1) si PUMPKIN debe ocupar la raíz de panel.experiencebt.com.mx: el panel
+  de FICTI se sigue usando (29-10: resumen hasta 11:15 y un Excel a las 9:40 que falló con
+  `WORKER TIMEOUT` en `/api/exportar.xlsx`). (2) **Seguridad:** la contraseña de root que Adam pega
+  en el chat está en `.ai/_smoke_accesos.py`, publicado en GitHub (repo público), y sshd acepta
+  contraseña para root (2,422 intentos fallidos en 24 h). Apagar `PasswordAuthentication` y rotar.
 
 ## 2026-10-19 20:50 · Excel con «Entró al evento», hoja «No asistieron» y sin Elisa (claude-code) — DESPLEGADO
 

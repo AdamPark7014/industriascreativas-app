@@ -1,0 +1,75 @@
+.marca {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+
+  strong {
+    display: block;
+    font-size: 1.15rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    line-height: 1;
+  }
+
+  small {
+    display: block;
+    margin-top: 3px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #f9b98f;
+  }
+}
+
+.calabaza {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px 12px 14px 14px;
+  background: radial-gradient(circle at 35% 30%, #ffa45c, #f26b1d 55%, #b9470b);
+  color: transparent;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18);
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: -5px;
+    left: 50%;
+    width: 4px;
+    height: 8px;
+    border-radius: 2px;
+    background: #4a7a2a;
+    transform: translateX(-50%) rotate(12deg);
+  }
+}
+
+.chica {
+  strong {
+    font-size: 0.95rem;
+  }
+
+  .calabaza {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+.botonSalir {
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.enlaceSalir {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

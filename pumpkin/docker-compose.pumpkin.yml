@@ -1,0 +1,65 @@
+# PUMPKIN Accesos en el droplet de ExperienceBT (147.182.128.128), en /opt/pumpkin-accesos.
+# Base propia: no comparte nada con la de FICTI (eventos_demo_db). nginx_registro_proxy la
+# alcanza por eventos-demo-net y la publica en https://panel.experiencebt.com.mx/pumpkin/.
+name: pumpkin-accesos
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: pumpkin_accesos_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pumpkin
+      POSTGRES_USER: pumpkin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      TZ: America/Mexico_City
+    volumes:
+      - pumpkin_db:/var/lib/postgresql/data
+    networks:
+      - interna
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pumpkin -d pumpkin"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  web:
+    build: .
+    image: pumpkin-accesos-web:latest
+    container_name: pumpkin_accesos_web
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Host por nombre de contenedor: en eventos-demo-net hay otras bases.
+      DATABASE_URL: postgres://pumpkin:${POSTGRES_PASSWORD}@pumpkin_accesos_db:5432/pumpkin
+      PUMPKIN_SECRET: ${PUMPKIN_SECRET:?Set PUMPKIN_SECRET}
+      # "usuario:clave:rol:Nombre;…" (rol admin|puerta). Quien no esté queda desactivado.
+      PUMPKIN_USUARIOS: ${PUMPKIN_USUARIOS:?Set PUMPKIN_USUARIOS}
+      PUMPKIN_AFORO: ${PUMPKIN_AFORO:-0}
+      PUMPKIN_CORTE_HORA: ${PUMPKIN_CORTE_HORA:-6}
+      PUMPKIN_BASE_URL: ${PUMPKIN_BASE_URL:-https://panel.experiencebt.com.mx/pumpkin}
+      PORT: "3090"
+    expose:
+      - "3090"
+    networks:
+      - interna
+      - eventos-demo-net
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3090/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  pumpkin_db:
+
+networks:
+  interna: {}
+  eventos-demo-net:
+    external: true
+    name: eventos-demo-net
