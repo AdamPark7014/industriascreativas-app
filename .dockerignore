@@ -13,3 +13,5 @@ backend/.env
 *.png
 !backend/assets/logo-gabor.png
 !web/public/logo-gabor.svg
+# respaldos nocturnos de produccion (no van a imagenes)
+.respaldos-prod
